@@ -1,8 +1,13 @@
 import 'dart:math' as math;
+import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
+import '../sesi.dart';
+import '../services/rincian_produk_metode.dart';
+import '../services/rincian_produk_cache.dart';
 import '../services/diff_daftar_lokal.dart';
 import '../services/dynamic_report.dart';
 import '../services/master_offline.dart';
@@ -333,7 +338,7 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
   final _paymentKey = GlobalKey<_TabPaymentState>();
   final _penjualanKasirKey = GlobalKey<_TabPenjualanKasirState>();
   final _penerimaanKasirKey = GlobalKey<_TabPenerimaanKasirState>();
-  final _rincianProdukKey = GlobalKey<_TabRincianProdukState>();
+  final _rincianProdukKey = GlobalKey<RincianProdukTabState>();
   final Map<int, DynamicReportModel> _reportModels = {};
   bool _menyiapkanLaporan = false;
 
@@ -537,7 +542,7 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
                   key: _penjualanKasirKey, statistik: _statistik),
               _TabPenerimaanKasir(
                   key: _penerimaanKasirKey, statistik: _statistik),
-              _TabRincianProduk(key: _rincianProdukKey, statistik: _statistik),
+              RincianProdukTab(key: _rincianProdukKey, statistik: _statistik),
             ]),
           ),
         ],
@@ -3800,7 +3805,8 @@ String kodeKanonisRekapProduk(Object? kodeMentah, Object? namaMentah) {
 
 @visibleForTesting
 List<Map<String, dynamic>> rekapProdukDariRincian(
-    List<Map<String, dynamic>> baris) {
+    List<Map<String, dynamic>> baris,
+    {bool pisahMetode = false}) {
   final peta = <String, Map<String, dynamic>>{};
   final nota = <String, Set<String>>{};
   for (final b in baris) {
@@ -3815,14 +3821,17 @@ List<Map<String, dynamic>> rekapProdukDariRincian(
     // Kode kanonis didahulukan karena data historis dapat mempunyai beberapa
     // produkId untuk barang yang sama. ID tetap menjadi cadangan saat kode
     // benar-benar tidak tersedia.
-    final kunci = kodeKanonis.isNotEmpty
+    final kunciProduk = kodeKanonis.isNotEmpty
         ? 'k:$kodeKanonis'
         : (produkId != null ? 'id:$produkId' : 'n:${nama.toLowerCase()}');
+    final metode = kelompokMetodeProduk(b['metode']);
+    final kunci = pisahMetode ? jsonEncode([kunciProduk, metode]) : kunciProduk;
     final row = peta.putIfAbsent(
         kunci,
         () => <String, dynamic>{
               'produkKode': kodeKanonis,
               'produkNama': nama.isEmpty ? 'Produk tanpa nama' : nama,
+              if (pisahMetode) 'metode': metode,
               'satuan': (b['satuan'] ?? '').toString(),
               'qty': 0.0,
               'total': 0.0,
@@ -3853,7 +3862,91 @@ List<Map<String, dynamic>> rekapProdukDariRincian(
 class HasilBarisRincian {
   final List<Map<String, dynamic>> baris;
   final bool terpotong;
-  const HasilBarisRincian(this.baris, this.terpotong);
+  final bool dariCache;
+  const HasilBarisRincian(this.baris, this.terpotong, {this.dariCache = false});
+}
+
+/// Kunci berhalaman, dipisahkan menurut akses dan filter. Tidak memuat token.
+@visibleForTesting
+String kunciCacheRincianProduk(
+  Map<String, dynamic> payload, {
+  required String server,
+  required String user,
+  required int? tenant,
+  required int? toko,
+  required bool admin,
+  required bool supervisor,
+}) {
+  final keys = payload.keys.toList()..sort();
+  return 'laporan:rincian-produk:v3:${jsonEncode([
+        server,
+        user,
+        tenant,
+        toko,
+        admin,
+        supervisor,
+        {for (final k in keys) k: payload[k]},
+      ])}';
+}
+
+String _kunciSnapshotRincian(Map<String, dynamic> payload) {
+  final sesi = Sesi.instance;
+  return kunciCacheRincianProduk(payload,
+      server: ApiClient.baseUrl,
+      user: sesi.userId,
+      tenant: sesi.tenantId,
+      toko: sesi.idTokoTerpilih,
+      admin: sesi.isAdmin,
+      supervisor: sesi.supervisorPedagang);
+}
+
+Future<Map<String, dynamic>> _halamanRincianServer(
+    Map<String, dynamic> payload, bool hanyaCache) {
+  if (hanyaCache) throw StateError('Gunakan snapshot SQLite untuk baca lokal.');
+  // READ-ONLY: tidak membuat transaksi/mutasi; cache diganti atomik oleh layar
+  // hanya setelah semua halaman berhasil, bukan satu halaman demi halaman.
+  return ApiClient.instance.aksi('laporan_rincian_produk', payload);
+}
+
+@visibleForTesting
+String snapshotSqlRincianProduk(HasilBarisRincian hasil) {
+  final rows = <Map<String, dynamic>>[];
+  for (var i = 0; i < hasil.baris.length; i++) {
+    final r = hasil.baris[i];
+    final nama =
+        (r['produkNamaRekap'] ?? r['produkNama'] ?? 'Produk tanpa nama')
+            .toString()
+            .trim();
+    final kode =
+        kodeKanonisRekapProduk(r['produkKodeRekap'] ?? r['produkKode'], nama);
+    final id = r['idTransaksi'] ?? r['kodeNota'] ?? r['nomorNota'];
+    rows.add({
+      ...r,
+      '_nota': id == null || '$id'.trim().isEmpty ? 'baris:$i' : 'nota:$id',
+      '_produk': kode.isNotEmpty
+          ? 'k:$kode'
+          : r['produkId'] != null
+              ? 'id:${r['produkId']}'
+              : 'n:${nama.toLowerCase()}',
+      '_kode': kode,
+      '_nama': nama.isEmpty ? 'Produk tanpa nama' : nama,
+      '_metode': kelompokMetodeProduk(r['metode']),
+    });
+  }
+  return jsonEncode({'rows': rows, 'terpotong': hasil.terpotong});
+}
+
+/// Dipanggil melalui compute agar filter/rekap besar tidak menahan thread UI.
+@visibleForTesting
+Map<String, dynamic> susunTampilanRincianProduk(Map<String, dynamic> input) {
+  final rows = saringMetodeRincianProduk(
+      (input['rows'] as List).cast<Map<String, dynamic>>(),
+      input['metode'] as String? ?? '');
+  return {
+    ...halamanRincianProduk(rows, input['halaman'] as int? ?? 1, 10),
+    'rekap': rekapProdukDariRincian(rows, pisahMetode: true),
+    'rows': rows,
+  };
 }
 
 /// Mengambil SELURUH halaman rincian produk untuk ekspor.
@@ -3865,21 +3958,33 @@ class HasilBarisRincian {
 /// pertama dan sisa halaman tidak pernah terunduh -- PDF/Excel akan tampak
 /// "berhasil" padahal isinya terpotong. Di sini batas berhentinya adalah nomor
 /// halaman, dihitung dari jumlah transaksi.
-Future<HasilBarisRincian> _ambilSemuaBarisRincianProduk(
-    Map<String, dynamic> payload) async {
+Future<HasilBarisRincian> ambilSemuaBarisRincianProduk(
+  Map<String, dynamic> payload, {
+  bool hanyaCache = false,
+  Future<Map<String, dynamic>> Function(Map<String, dynamic>, bool)?
+      ambilHalaman,
+}) async {
   const ukuranHalaman = 100;
   const batasHalaman =
       1000; // pengaman; disentuh berarti hasilnya TIDAK lengkap
   final hasil = <Map<String, dynamic>>[];
   var halaman = 1;
   var totalHalaman = 1;
+  var dariCache = hanyaCache;
   // (batas berhenti dihitung oleh totalHalamanRincian -- diuji terpisah)
   do {
-    final respons = await ApiClient.instance.aksi('laporan_rincian_produk', {
+    final respons = await (ambilHalaman ?? _halamanRincianServer)({
       ...payload,
       'page': halaman,
       'pageSize': ukuranHalaman,
-    });
+    }, hanyaCache);
+    if (respons['data'] is! List ||
+        respons['total'] is! num ||
+        (respons['total'] as num) < 0) {
+      throw const FormatException(
+          'Respons rincian produk tidak lengkap. Cache sebelumnya dipertahankan.');
+    }
+    dariCache = dariCache || respons['offline'] == true;
     hasil.addAll(
         ((respons['data'] as List?) ?? const []).cast<Map<String, dynamic>>());
     final totalTransaksi = (respons['total'] as num?)?.toInt() ?? 0;
@@ -3888,21 +3993,24 @@ Future<HasilBarisRincian> _ambilSemuaBarisRincianProduk(
     // Halaman kosong TIDAK menghentikan pengambilan: sebuah transaksi bisa saja
     // tidak punya baris item, sedangkan halaman sesudahnya masih berisi.
   } while (halaman <= totalHalaman && halaman <= batasHalaman);
-  return HasilBarisRincian(hasil, totalHalaman > batasHalaman);
+  return HasilBarisRincian(hasil, totalHalaman > batasHalaman,
+      dariCache: dariCache);
 }
 
 /// Rekap produk terjual kumulatif -- permintaan An Nahl (6 September 2026):
 /// tampilan awal menjumlahkan produk yang sama dari seluruh transaksi pada filter
 /// aktif. Mode rincian per-nota tetap tersedia untuk penelusuran/audit.
-class _TabRincianProduk extends StatefulWidget {
+class RincianProdukTab extends StatefulWidget {
   final Map<String, dynamic>? statistik;
+  @visibleForTesting
+  final Future<HasilBarisRincian> Function(Map<String, dynamic>, bool)? pemuat;
 
-  const _TabRincianProduk({super.key, required this.statistik});
+  const RincianProdukTab({super.key, required this.statistik, this.pemuat});
   @override
-  State<_TabRincianProduk> createState() => _TabRincianProdukState();
+  State<RincianProdukTab> createState() => RincianProdukTabState();
 }
 
-class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
+class RincianProdukTabState extends State<RincianProdukTab> with JejakGalat {
   // Paginasi dihitung dalam TRANSAKSI (sama seperti Report Order); satu halaman
   // memuat seluruh item milik transaksi di halaman itu supaya sebuah nota tidak
   // pernah terpotong di tengah.
@@ -3916,12 +4024,30 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
   DateTime? _sampai;
   String _cariProduk = '';
   String _cariKasir = '';
+  String _metodeProduk = '';
+  Map<String, dynamic> _filterAktif = {};
+  String _metodeAktif = '';
+  List<Map<String, dynamic>> _semuaRincian = [];
+  bool _dariCache = false;
+  int _permintaan = 0;
+  int _permintaanHalaman = 0;
+  int _halamanRekap = 1;
+  int _totalRekap = 0;
+  num _nilaiRekap = 0;
   // Mode rekap merangkum baris rincian yang sama, sehingga angkanya tidak pernah
   // berselisih dengan mode rincian pada filter yang sama.
   bool _modeRekap = true;
-  bool _memuatRekap = false;
   bool _terpotong = false;
   List<Map<String, dynamic>> _rekap = [];
+
+  @visibleForTesting
+  Future<DynamicReportData> laporanUntukTest() => _reportData();
+
+  Future<HasilBarisRincian> _ambil(Map<String, dynamic> filter,
+          {bool hanyaCache = false}) =>
+      widget.pemuat != null
+          ? widget.pemuat!(filter, hanyaCache)
+          : ambilSemuaBarisRincianProduk(filter, hanyaCache: hanyaCache);
 
   @override
   void initState() {
@@ -3932,8 +4058,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
     final kini = DateTime.now();
     _mulai = DateTime(kini.year, kini.month, kini.day);
     _sampai = _mulai;
-    _muat();
-    _muatRekap();
+    _terapkan();
   }
 
   Map<String, dynamic> get _filter => {
@@ -3944,54 +4069,150 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
       };
 
   Future<void> _muat() async {
+    final permintaan = ++_permintaan;
+    final filter = Map<String, dynamic>.from(_filterAktif);
+    final metode = _metodeAktif;
+    final cacheKey = _kunciSnapshotRincian(filter);
+    var adaLokal = false;
     setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
-    try {
-      final hasil = await ApiClient.instance.aksi('laporan_rincian_produk', {
-        ..._filter,
-        'page': _halaman,
-        'pageSize': _pageSize,
-      });
+    Future<void> tampilkan(Map<String, dynamic> tampilan,
+        {required bool dariCache, required bool terpotong}) async {
+      if (!mounted ||
+          permintaan != _permintaan ||
+          cacheKey != _kunciSnapshotRincian(_filterAktif)) {
+        return;
+      }
       setStateIfMounted(() {
-        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _totalTransaksi = (hasil['total'] as num?)?.toInt() ?? 0;
+        _semuaRincian = (tampilan['rows'] as List).cast<Map<String, dynamic>>();
+        _data = (tampilan['data'] as List).cast<Map<String, dynamic>>();
+        _rekap = (tampilan['rekap'] as List).cast<Map<String, dynamic>>();
+        _halamanRekap = tampilan['halamanRekap'] as int? ?? 1;
+        _totalRekap = tampilan['totalRekap'] as int? ?? _rekap.length;
+        _nilaiRekap = tampilan['nilaiRekap'] as num? ??
+            _rekap.fold<num>(0, (a, r) => a + (r['total'] as num));
+        _totalTransaksi = tampilan['total'] as int;
+        _halaman = tampilan['halaman'] as int? ?? _halaman;
+        _terpotong = terpotong;
+        _dariCache = dariCache;
+        _memuat = false;
       });
+    }
+
+    Future<void> tampilkanHasil(HasilBarisRincian hasil) async {
+      final Map<String, dynamic> tampilan;
+      if (widget.pemuat == null) {
+        final snapshot = await compute(snapshotSqlRincianProduk, hasil);
+        if (!mounted ||
+            permintaan != _permintaan ||
+            cacheKey != _kunciSnapshotRincian(_filterAktif)) {
+          return;
+        }
+        await RincianProdukCache.simpan(cacheKey, snapshot);
+        tampilan = (await RincianProdukCache.baca(cacheKey, metode,
+            halaman: _halaman))!;
+      } else {
+        tampilan = await compute(susunTampilanRincianProduk, {
+          'rows': hasil.baris,
+          'metode': metode,
+          'halaman': _halaman,
+        });
+      }
+      await tampilkan(tampilan,
+          dariCache: hasil.dariCache, terpotong: hasil.terpotong);
+    }
+
+    // Baca SQLite per halaman sebelum jaringan. Jangan merender cache toko,
+    // akun, periode atau metode lain sebagai hasil filter yang baru.
+    try {
+      if (widget.pemuat == null) {
+        final lokal =
+            await RincianProdukCache.baca(cacheKey, metode, halaman: _halaman);
+        if (lokal == null) throw StateError('Belum ada snapshot laporan.');
+        await tampilkan(lokal,
+            dariCache: true, terpotong: lokal['terpotong'] == true);
+      } else {
+        await tampilkanHasil(await _ambil(filter, hanyaCache: true));
+      }
+      adaLokal = true;
+    } catch (_) {
+      // Cache belum lengkap: lanjut mengambil server; bukan laporan kosong.
+    }
+    if (!mounted || permintaan != _permintaan) return;
+    try {
+      await tampilkanHasil(await _ambil(filter));
     } catch (e) {
-      setStateIfMounted(() => _error = terapkanGalat(e));
+      if (!mounted || permintaan != _permintaan) return;
+      if (adaLokal && MasterOffline.dapatDicobaUlang(e)) {
+        setStateIfMounted(() => _dariCache = true);
+      } else {
+        setStateIfMounted(() => _error = terapkanGalat(e));
+      }
     } finally {
-      if (mounted) setStateIfMounted(() => _memuat = false);
+      if (mounted && permintaan == _permintaan) {
+        setStateIfMounted(() => _memuat = false);
+      }
     }
   }
 
   Future<void> _pindah(int h) async {
-    setStateIfMounted(() => _halaman = h);
-    await _muat();
+    final permintaan = _permintaan;
+    final permintaanHalaman = ++_permintaanHalaman;
+    final hasil = widget.pemuat == null
+        ? (await RincianProdukCache.baca(
+            _kunciSnapshotRincian(_filterAktif), _metodeAktif,
+            halaman: h))!
+        : await compute(susunTampilanRincianProduk, {
+            'rows': _semuaRincian,
+            'halaman': h,
+          });
+    if (!mounted ||
+        permintaan != _permintaan ||
+        permintaanHalaman != _permintaanHalaman) {
+      return;
+    }
+    setStateIfMounted(() {
+      _halaman = hasil['halaman'] as int? ?? h;
+      _data = (hasil['data'] as List).cast<Map<String, dynamic>>();
+    });
+  }
+
+  Future<void> _pindahRekap(int h) async {
+    final permintaan = _permintaan;
+    final giliran = ++_permintaanHalaman;
+    final hasil = await RincianProdukCache.baca(
+        _kunciSnapshotRincian(_filterAktif), _metodeAktif,
+        halamanRekap: h);
+    if (!mounted ||
+        hasil == null ||
+        permintaan != _permintaan ||
+        giliran != _permintaanHalaman) {
+      return;
+    }
+    setStateIfMounted(() {
+      _halamanRekap = hasil['halamanRekap'] as int;
+      _rekap = (hasil['rekap'] as List).cast<Map<String, dynamic>>();
+    });
   }
 
   Future<void> _terapkan() async {
-    setStateIfMounted(() => _halaman = 1);
-    await _muat();
-    if (_modeRekap) await _muatRekap();
-  }
-
-  /// Rekap memerlukan SELURUH baris pada filter aktif, bukan hanya halaman yang
-  /// sedang tampil -- karena itu pengambilannya dipisah dan diberi penanda muat
-  /// tersendiri agar pengguna tahu angkanya sedang dihitung.
-  Future<void> _muatRekap() async {
-    setStateIfMounted(() => _memuatRekap = true);
-    try {
-      final semua = await _ambilSemuaBarisRincianProduk(_filter);
-      setStateIfMounted(() {
-        _rekap = rekapProdukDariRincian(semua.baris);
-        _terpotong = semua.terpotong;
-      });
-    } catch (e) {
-      setStateIfMounted(() => _error = terapkanGalat(e));
-    } finally {
-      if (mounted) setStateIfMounted(() => _memuatRekap = false);
+    if (_mulai != null && _sampai != null && _sampai!.isBefore(_mulai!)) {
+      setStateIfMounted(
+          () => _error = 'Tanggal akhir tidak boleh sebelum tanggal mulai.');
+      return;
     }
+    setStateIfMounted(() {
+      _halaman = 1;
+      _filterAktif = Map<String, dynamic>.from(_filter);
+      _metodeAktif = _metodeProduk;
+      _data = [];
+      _rekap = [];
+      _semuaRincian = [];
+      _terpotong = false;
+    });
+    await _muat();
   }
 
   int get _totalHalaman => _totalTransaksi <= 0
@@ -4003,44 +4224,72 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
 
   String get _subjudulFilter {
     final bagian = <String>[
-      if (_cariProduk.trim().isNotEmpty) 'Produk "${_cariProduk.trim()}"',
-      if (_cariKasir.trim().isNotEmpty) 'Kasir "${_cariKasir.trim()}"',
+      'Periode ${_filterAktif['tglMulai'] ?? '-'} s.d. ${_filterAktif['tglSampai'] ?? '-'}',
+      if (_filterAktif['produk'] != null) 'Produk "${_filterAktif['produk']}"',
+      if (_filterAktif['kasir'] != null) 'Kasir "${_filterAktif['kasir']}"',
+      'Metode: ${_metodeAktif.isEmpty ? 'Semua metode' : _metodeAktif}',
     ];
     return bagian.isEmpty ? '' : ' · ${bagian.join(' · ')}';
   }
 
   Future<DynamicReportData> _reportData() async {
-    final hasil = await _ambilSemuaBarisRincianProduk(_filter);
-    final rows = hasil.baris;
-    if (mounted) setStateIfMounted(() => _terpotong = hasil.terpotong);
-    final catatanPotong = hasil.terpotong
-        ? ' · SEBAGIAN: data melebihi batas unduhan, persempit rentang tanggal'
-        : '';
-    if (_modeRekap) {
+    if (_memuat || _error != null) {
+      throw StateError(
+          'Tunggu laporan selesai dimuat atau perbaiki filter terlebih dahulu.');
+    }
+    final filter = Map<String, dynamic>.from(_filterAktif);
+    final metode = _metodeAktif;
+    final modeRekap = _modeRekap;
+    final subjudul = _subjudulFilter;
+    final Map<String, dynamic> tampilan;
+    final bool terpotong;
+    final bool dariCache = _dariCache;
+    if (widget.pemuat == null) {
+      // Ekspor snapshot yang sama dengan layar, tanpa menyisipkan data refresh
+      // dari filter lain atau menghilangkan cache saat sedang offline.
+      final lokal = await RincianProdukCache.baca(
+          _kunciSnapshotRincian(filter), metode,
+          ekspor: true);
+      if (lokal == null) throw StateError('Laporan belum tersedia lokal.');
+      tampilan = lokal;
+      terpotong = lokal['terpotong'] == true;
+    } else {
+      final hasil = await _ambil(filter);
+      tampilan = await compute(
+          susunTampilanRincianProduk, {'rows': hasil.baris, 'metode': metode});
+      terpotong = hasil.terpotong;
+    }
+    final rows = (tampilan['rows'] as List).cast<Map<String, dynamic>>();
+    final catatanPotong = (terpotong
+            ? ' · SEBAGIAN: data melebihi batas unduhan, persempit rentang tanggal'
+            : '') +
+        (dariCache ? ' · SALINAN LOKAL: belum terverifikasi ulang server' : '');
+    if (modeRekap) {
       return DynamicReportData(
         title: 'Rekap Produk Terjual',
-        subtitle:
-            'Total per produk pada filter aktif$_subjudulFilter$catatanPotong',
+        subtitle: 'Total per produk dan metode bayar$subjudul$catatanPotong',
         columns: const [
           DynamicReportColumn('produkKode', 'Kode'),
           DynamicReportColumn('produkNama', 'Produk'),
+          DynamicReportColumn('metode', 'Metode Pembayaran'),
           DynamicReportColumn('satuan', 'Satuan'),
           DynamicReportColumn('qty', 'Qty Terjual', numeric: true),
           DynamicReportColumn('jumlahTransaksi', 'Jml Transaksi',
               numeric: true),
           DynamicReportColumn('total', 'Total', numeric: true),
         ],
-        rows: rekapProdukDariRincian(rows),
+        rows: (tampilan['rekap'] as List).cast<Map<String, dynamic>>(),
       );
     }
     return DynamicReportData(
       title: 'Rincian Produk Terjual',
       subtitle:
-          'Satu baris per produk pada tiap transaksi$_subjudulFilter$catatanPotong',
+          'Satu baris per produk pada tiap transaksi$subjudul$catatanPotong',
       columns: const [
         DynamicReportColumn('waktuTampil', 'Waktu'),
         DynamicReportColumn('nomorNota', 'Nota'),
         DynamicReportColumn('kasir', 'Kasir'),
+        DynamicReportColumn('metode', 'Metode Pembayaran'),
         DynamicReportColumn('produkKode', 'Kode'),
         DynamicReportColumn('produkNama', 'Produk'),
         DynamicReportColumn('qtyTampil', 'Qty'),
@@ -4059,11 +4308,26 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
 
   Widget _tabelRekap() {
     return AppDataTable(
-      minWidth: 860,
+      pagination: _totalRekap > 50
+          ? AppTablePagination(
+              halaman: _halamanRekap,
+              totalHalaman: (_totalRekap + 49) ~/ 50,
+              totalData: _totalRekap,
+              labelData: 'produk/metode',
+              onSebelumnya: _halamanRekap > 1
+                  ? () => _pindahRekap(_halamanRekap - 1)
+                  : null,
+              onBerikutnya: _halamanRekap * 50 < _totalRekap
+                  ? () => _pindahRekap(_halamanRekap + 1)
+                  : null,
+            )
+          : null,
+      minWidth: 1060,
       emptyText: 'Belum ada produk terjual pada filter ini.',
       columns: const [
         AppTableColumn('Kode', flex: 2),
         AppTableColumn('Produk', flex: 4),
+        AppTableColumn('Metode Pembayaran', flex: 3),
         AppTableColumn('Qty', flex: 2, align: TextAlign.right),
         AppTableColumn('Transaksi', flex: 2, align: TextAlign.right),
         AppTableColumn('Total', flex: 3, align: TextAlign.right),
@@ -4075,6 +4339,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
                   AppTableCell.text('${row['produkNama'] ?? '-'}',
                       flex: 4,
                       style: const TextStyle(fontWeight: FontWeight.w700)),
+                  AppTableCell.text('${row['metode'] ?? '-'}', flex: 3),
                   AppTableCell.text(
                       '${_angkaRingkasRekap(row['qty'])}'
                       '${(row['satuan'] ?? '').toString().isEmpty ? '' : ' ${row['satuan']}'}',
@@ -4106,6 +4371,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
       columns: const [
         AppTableColumn('Nota', flex: 3),
         AppTableColumn('Produk', flex: 4),
+        AppTableColumn('Metode Pembayaran', flex: 3),
         AppTableColumn('Qty', flex: 2),
         AppTableColumn('Harga', flex: 2, align: TextAlign.right),
         AppTableColumn('Total', flex: 2, align: TextAlign.right),
@@ -4123,6 +4389,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
               flex: 4,
               style: const TextStyle(fontSize: 12.5),
             ),
+            AppTableCell.text('${row['metode'] ?? '-'}', flex: 3),
             AppTableCell.text('${row['qtyTampil'] ?? row['qty'] ?? '-'}',
                 flex: 2),
             AppTableCell.text(_formatRupiah.format(row['hargaSatuan'] ?? 0),
@@ -4137,6 +4404,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
                     'Nota': '${row['nomorNota'] ?? '-'}',
                     'Waktu': _formatWaktu(row['waktu']),
                     'Kasir': '${row['kasir'] ?? '-'}',
+                    'Metode pembayaran': '${row['metode'] ?? '-'}',
                     'Jumlah': '${row['qtyTampil'] ?? row['qty'] ?? '-'}',
                     'Harga satuan':
                         _formatRupiah.format(row['hargaSatuan'] ?? 0),
@@ -4208,6 +4476,45 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: DropdownButtonFormField<String>(
+              key: const Key('filter-metode-rincian-produk'),
+              value: _metodeProduk,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Metode Pembayaran',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              items: [
+                const DropdownMenuItem(value: '', child: Text('Semua metode')),
+                ...metodeRincianProduk
+                    .map((m) => DropdownMenuItem(value: m, child: Text(m))),
+              ],
+              onChanged: (v) {
+                setStateIfMounted(() => _metodeProduk = v ?? '');
+                _terapkan();
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Text(
+              'Rekap dipisahkan: Voucher Santri, Voucher Pejuang, dan '
+              'Tunai/Transfer/QRIS. Pembayaran lintas kelompok masuk Campuran '
+              '(split), bukan dihitung ulang di tiap kelompok. '
+              'Nilai adalah penjualan produk, bukan nominal penerimaan pembayaran.',
+              style: TextStyle(
+                  fontSize: 12, color: AppColors.textSecondaryOf(context)),
+            ),
+          ),
+          if (_dariCache && !_memuat)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Text(
+                  'Salinan lokal — data belum terverifikasi ulang dari server.'),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             child: Wrap(spacing: 8, children: [
               ChoiceChip(
                 label: const Text('Rincian'),
@@ -4219,7 +4526,6 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
                 selected: _modeRekap,
                 onSelected: (_) {
                   setStateIfMounted(() => _modeRekap = true);
-                  _muatRekap();
                 },
               ),
             ]),
@@ -4244,19 +4550,16 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
           if (_memuat || _error != null)
             _kartuStatusMuat(memuat: _memuat, error: _error, onCoba: _muat)
           else if (_modeRekap) ...[
-            if (_memuatRekap)
-              _kartuStatusMuat(memuat: true, error: null, onCoba: _muatRekap)
-            else
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: _tabelRekap(),
-              ),
-            if (!_memuatRekap && _rekap.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: _tabelRekap(),
+            ),
+            if (_rekap.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
                 child: Text(
-                  '${_rekap.length} produk · total '
-                  '${_formatRupiah.format(_rekap.fold<double>(0, (j, r) => j + (r['total'] as double)))}'
+                  '$_totalRekap baris produk/metode · total '
+                  '${_formatRupiah.format(_nilaiRekap)}'
                   ' — dihitung dari seluruh transaksi pada filter aktif',
                   style: TextStyle(
                       fontSize: 12, color: AppColors.textSecondaryOf(context)),

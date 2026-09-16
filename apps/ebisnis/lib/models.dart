@@ -49,6 +49,9 @@ class Produk {
 
   final String? gambarUrl;
   final double hargaBeli;
+
+  /// Cache lama tidak membawa HPP. Nilai yang belum dibaca bukan harga nol.
+  final bool hargaBeliTersedia;
   final String keterangan;
   final bool izinkanJualMinusStok;
   final bool aktif;
@@ -116,6 +119,7 @@ class Produk {
     this.faktorPackKeDasar,
     required this.gambarUrl,
     this.hargaBeli = 0,
+    this.hargaBeliTersedia = true,
     this.keterangan = '',
     this.izinkanJualMinusStok = false,
     this.aktif = true,
@@ -153,6 +157,7 @@ class Produk {
         faktorPackKeDasar: (j['faktorPackKeDasar'] as num?)?.toDouble(),
         gambarUrl: j['gambarUrl'] as String?,
         hargaBeli: (j['hargaBeli'] as num?)?.toDouble() ?? 0,
+        hargaBeliTersedia: j['hargaBeli'] is num,
         keterangan: (j['keterangan'] ?? '') as String,
         izinkanJualMinusStok: j['izinkanJualMinusStok'] == true,
         // katalog tidak mengirim "aktif" eksplisit (hanya baris aktif yg dikembalikan kecuali admin
@@ -177,6 +182,30 @@ class Produk {
   /// dan ProdukScreen (keduanya menyegarkan cache lokal yg sama dari respons
   /// `katalog` yang identik) supaya pemetaan JSON->kolom SQLite tidak dobel.
   static Map<String, Object?> baseKeCacheRow(Map<String, dynamic> j) => {
+        if (j['hargaBeli'] is num)
+          'detail_json': jsonEncode({
+            for (final key in const [
+              'hargaBeli',
+              'hargaBeliManual',
+              'bahanBaku',
+              'keterangan',
+              'pemasokNama',
+              'satuanId',
+              'satuanNama',
+              'satuanPembelianId',
+              'satuanPembelianNama',
+              'kebijakanReturId',
+              'kebijakanReturNama',
+              'rute',
+              'perluQc',
+              'packAktif',
+              'satuanPackId',
+              'satuanPackNama',
+              'hargaPack',
+              'faktorPackKeDasar',
+            ])
+              if (j.containsKey(key)) key: j[key],
+          }),
         'id': j['id'],
         'kode': j['kode'] ?? '',
         'barcode': j['barcode'] ?? '',
@@ -206,6 +235,7 @@ class Produk {
   /// cache saat offline (koreksi transaksi, dialog cari produk Sales) supaya
   /// pemetaan kolom SQLite->JSON tidak digandakan di tiap layar.
   static Map<String, dynamic> cacheRowKeJson(Map<String, Object?> b) => {
+        ..._bacaDetailProduk(b['detail_json']),
         'id': b['id'],
         'kode': b['kode'] ?? '',
         'barcode': b['barcode'] ?? '',
@@ -223,6 +253,14 @@ class Produk {
         'fotoUrls': _bacaDaftarTeks(b['foto_urls']),
         'izinkanJualMinusStok': b['izinkan_jual_minus_stok'] == 1,
       };
+
+  static Map<String, dynamic> _bacaDetailProduk(Object? nilai) {
+    try {
+      return Map<String, dynamic>.from(jsonDecode('$nilai') as Map);
+    } catch (_) {
+      return {}; // Jangan membuat HPP nol untuk cache lama/rusak.
+    }
+  }
 
   static List<int> _bacaDaftarAngka(Object? mentah) {
     try {

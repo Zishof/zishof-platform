@@ -20,6 +20,7 @@ import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import 'tab_mutasi_tabungan.dart' show PilihAnggotaSheet;
 import '../../widgets/jejak_galat.dart';
+import 'histori_pelunasan_screen.dart';
 
 final _formatRpMutasiHutang =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -179,7 +180,10 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
     final tersimpan = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => const _FormBayarHutang(),
+      builder: (_) => FormPelunasanPiutang(
+        idAnggotaAwal: _idAnggotaFilter,
+        namaAnggotaAwal: _namaAnggotaFilter,
+      ),
     );
     if (tersimpan == true) await _muat();
   }
@@ -470,6 +474,19 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
                 IconButton(
                     icon: const Icon(Icons.close, size: 18),
                     onPressed: _hapusFilterAnggota),
+              OutlinedButton.icon(
+                onPressed: () =>
+                    Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => HistoriPelunasanScreen(
+                    dari: _dari,
+                    sampai: _sampai,
+                    idAnggota: _idAnggotaFilter,
+                    namaAnggota: _namaAnggotaFilter,
+                  ),
+                )),
+                icon: const Icon(Icons.history, size: 18),
+                label: const Text('Histori Pembayaran'),
+              ),
               if (Sesi.instance.bolehEntryPelunasanPiutang)
                 ElevatedButton.icon(
                   onPressed: _bukaFormBayarHutang,
@@ -704,22 +721,56 @@ class _KartuTotalHutang extends StatelessWidget {
   }
 }
 
-class _FormBayarHutang extends StatefulWidget {
-  const _FormBayarHutang();
+class FormPelunasanPiutang extends StatefulWidget {
+  final int? idAnggotaAwal;
+  final String? namaAnggotaAwal;
+
+  /// Injeksi penyimpanan untuk uji form tanpa membuat pembayaran sungguhan.
+  final Future<void> Function(Map<String, dynamic>)? simpanUntukTest;
+  const FormPelunasanPiutang(
+      {super.key,
+      this.idAnggotaAwal,
+      this.namaAnggotaAwal,
+      this.simpanUntukTest});
 
   @override
-  State<_FormBayarHutang> createState() => _FormBayarHutangState();
+  State<FormPelunasanPiutang> createState() => _FormBayarHutangState();
 }
 
-class _FormBayarHutangState extends State<_FormBayarHutang> with JejakGalat {
+class _FormBayarHutangState extends State<FormPelunasanPiutang>
+    with JejakGalat {
   final _formKey = GlobalKey<FormState>();
   final _nominal = TextEditingController();
   final _keterangan = TextEditingController();
   int? _idAnggota;
   String? _namaAnggota;
-  final DateTime _waktu = DateTime.now();
+  DateTime _waktu = DateTime.now();
+  // Satu identitas per form, tetap sama saat retry; jangan membuat pembayaran
+  // kedua hanya karena pengguna menekan Simpan ulang setelah gangguan jaringan.
+  final String _kunciSimpan =
+      'hutang_bayar:baru:${DateTime.now().microsecondsSinceEpoch}';
   bool _menyimpan = false;
   String? _pesanError;
+
+  @override
+  void initState() {
+    super.initState();
+    _idAnggota = widget.idAnggotaAwal;
+    _namaAnggota = widget.namaAnggotaAwal;
+  }
+
+  Future<void> _pilihTanggal() async {
+    final tanggal = await showDatePicker(
+      context: context,
+      initialDate: _waktu,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+      helpText: 'Tanggal pembayaran piutang',
+    );
+    if (tanggal == null || !mounted) return;
+    setState(() => _waktu = DateTime(tanggal.year, tanggal.month, tanggal.day,
+        _waktu.hour, _waktu.minute, _waktu.second));
+  }
 
   @override
   void dispose() {
@@ -742,6 +793,7 @@ class _FormBayarHutangState extends State<_FormBayarHutang> with JejakGalat {
   }
 
   Future<void> _simpan() async {
+    if (_menyimpan) return;
     if (!_formKey.currentState!.validate()) return;
     if (_idAnggota == null) {
       setStateIfMounted(() => _pesanError = 'Anggota wajib dipilih.');
@@ -756,17 +808,22 @@ class _FormBayarHutangState extends State<_FormBayarHutang> with JejakGalat {
       // dikirim. Tanpa cacheKey: kunci cache daftar mutasi bergantung penyaring
       // tanggal milik layar INDUK, sehingga menebaknya dari lembar ini justru
       // berisiko menulis ke cache yang salah. Barisnya muncul setelah tersinkron.
-      await prosesSimpanMaster(
-        context,
-        aksi: 'hutang_bayar_simpan',
-        body: {
-          'id_member': _idAnggota,
-          'nominal': double.tryParse(_nominal.text.trim()) ?? 0,
-          'keterangan': _keterangan.text.trim(),
-          'waktu': DateFormat('yyyy-MM-dd HH:mm:ss').format(_waktu),
-        },
-        kunci: 'hutang_bayar:baru:${DateTime.now().microsecondsSinceEpoch}',
-      );
+      final body = <String, dynamic>{
+        'id_member': _idAnggota,
+        'nominal': double.tryParse(_nominal.text.trim()) ?? 0,
+        'keterangan': _keterangan.text.trim(),
+        'waktu': DateFormat('yyyy-MM-dd HH:mm:ss').format(_waktu),
+      };
+      if (widget.simpanUntukTest != null) {
+        await widget.simpanUntukTest!(body);
+      } else {
+        await prosesSimpanMaster(
+          context,
+          aksi: 'hutang_bayar_simpan',
+          body: body,
+          kunci: _kunciSimpan,
+        );
+      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _pesanError = terapkanGalat(e));
@@ -781,7 +838,7 @@ class _FormBayarHutangState extends State<_FormBayarHutang> with JejakGalat {
       padding:
           EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: DraggableScrollableSheet(
-        initialChildSize: 0.55,
+        initialChildSize: 0.7,
         maxChildSize: 0.85,
         expand: false,
         builder: (context, scrollController) => Form(
@@ -821,12 +878,22 @@ class _FormBayarHutangState extends State<_FormBayarHutang> with JejakGalat {
             children: [
               AppFormSection(judul: 'Pelanggan', children: [
                 OutlinedButton.icon(
-                  onPressed: _pilihAnggota,
+                  onPressed: _menyimpan ? null : _pilihAnggota,
                   icon: const Icon(Icons.person_search, size: 18),
                   label: Text(_namaAnggota ?? 'Pilih Pelanggan...'),
                 ),
               ]),
               AppFormSection(judul: 'Pembayaran', children: [
+                OutlinedButton.icon(
+                  key: const ValueKey('tanggal-pelunasan'),
+                  onPressed: _menyimpan ? null : _pilihTanggal,
+                  icon: const Icon(Icons.calendar_month_outlined),
+                  label: Text(
+                      'Tanggal pembayaran: ${DateFormat('dd/MM/yyyy').format(_waktu)}'),
+                ),
+                const Text(
+                    'Pilih tanggal pembayaran sebenarnya. Tanggal sebelumnya diperbolehkan; tanggal mendatang tidak.'),
+                const SizedBox(height: 12),
                 AppFormTextField(
                   label: 'Nominal *',
                   controller: _nominal,
@@ -834,6 +901,7 @@ class _FormBayarHutangState extends State<_FormBayarHutang> with JejakGalat {
                       const TextInputType.numberWithOptions(decimal: true),
                   validator: (v) => (v == null ||
                           double.tryParse(v.trim()) == null ||
+                          !double.parse(v.trim()).isFinite ||
                           double.parse(v.trim()) <= 0)
                       ? 'Nominal wajib diisi'
                       : null,

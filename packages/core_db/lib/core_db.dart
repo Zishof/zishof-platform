@@ -119,7 +119,7 @@ class CoreDb {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 20,
+        version: 21,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -300,6 +300,14 @@ class CoreDb {
   /// sebelumnya, kolom sudah terlanjur ada) -- padanan cara migrasi
   /// `local-db.js` versi Electron.
   Future<void> _upgradeSkema(Database db, int versiLama, int versiBaru) async {
+    if (versiLama < 21) {
+      // Jangan mengisi HPP cache lama dengan nol: belum tersedia bukan Rp0.
+      final kolom = await db.rawQuery('PRAGMA table_info(produk_cache)');
+      if (!kolom.any((r) => r['name'] == 'detail_json')) {
+        await db
+            .execute('ALTER TABLE produk_cache ADD COLUMN detail_json TEXT');
+      }
+    }
     if (versiLama < 2) {
       try {
         await db.execute('ALTER TABLE produk_cache ADD COLUMN jenis_item TEXT');
@@ -611,7 +619,8 @@ class CoreDb {
         ekstra_pilihan TEXT,
         foto_urls TEXT,
         kemasan TEXT,
-        izinkan_jual_minus_stok INTEGER DEFAULT 0
+        izinkan_jual_minus_stok INTEGER DEFAULT 0,
+        detail_json TEXT
       )
     ''');
     await db
@@ -947,6 +956,10 @@ class CoreDb {
             // satu objek hanya boleh mempunyai satu versi lokal yang aktif.
             where: "status IN ('PENDING','GAGAL') AND kunci = ?",
             whereArgs: [kunci]);
+      }
+      if (aksi == 'produk_simpan') {
+        await _terapkanDetailProdukLokal(
+            txn, Map<String, dynamic>.from(jsonDecode(payloadJson) as Map));
       }
       return txn.insert('outbox_master', {
         'aksi': aksi,
@@ -1348,6 +1361,7 @@ class CoreDb {
             lokal,
             conflictAlgorithm: ConflictAlgorithm.replace,
           );
+          await _terapkanDetailProdukLokal(txn, payload);
         } catch (_) {
           // Payload rusak tetap dipertahankan di outbox untuk diagnosis; satu
           // baris tidak boleh menggagalkan refresh katalog lainnya.
@@ -1392,6 +1406,10 @@ class CoreDb {
         await txn.update('produk_cache', {'stok': stokFisik},
             where: 'id = ?', whereArgs: [produkId]);
       }
+      if (aksi == 'produk_simpan') {
+        await _terapkanDetailProdukLokal(
+            txn, Map<String, dynamic>.from(jsonDecode(payloadJson) as Map));
+      }
       return id;
     });
   }
@@ -1429,12 +1447,79 @@ class CoreDb {
   Future<void> upsertProdukCache(List<Map<String, Object?>> baris) async {
     if (baris.isEmpty) return;
     final database = await db;
-    final batch = database.batch();
-    for (final b in baris) {
-      batch.insert('produk_cache', b,
-          conflictAlgorithm: ConflictAlgorithm.replace);
+    await database.transaction((txn) async {
+      final batch = txn.batch();
+      for (final b in baris) {
+        // Kolom yang tidak dikirim tidak boleh dihapus oleh refresh parsial.
+        batch.update('produk_cache', b, where: 'id = ?', whereArgs: [b['id']]);
+        batch.insert('produk_cache', b,
+            conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+      await batch.commit(noResult: true);
+      final ids = baris.map((r) => r['id']).toSet();
+      final antrean = await txn.query('outbox_master',
+          columns: ['payload_json'],
+          where: "aksi = 'produk_simpan' AND status IN ('PENDING','GAGAL')",
+          orderBy: 'id ASC');
+      for (final row in antrean) {
+        Map<String, dynamic> payload;
+        try {
+          payload = Map<String, dynamic>.from(
+              jsonDecode('${row['payload_json']}') as Map);
+        } catch (_) {
+          continue; // Outbox rusak tetap dipertahankan untuk audit.
+        }
+        if (ids.contains(payload['id'])) {
+          await _terapkanDetailProdukLokal(txn, payload);
+        }
+      }
+    });
+  }
+
+  /// HPP/resep dan outbox harus committed bersama, sebelum jaringan dicoba.
+  /// Helper ini juga melapis ulang snapshot server dengan edit PENDING/GAGAL.
+  static Future<void> _terapkanDetailProdukLokal(
+      DatabaseExecutor txn, Map<String, dynamic> payload) async {
+    final id = (payload['id'] as num?)?.toInt();
+    if (id == null) return;
+    final rows = await txn.query('produk_cache',
+        columns: ['detail_json'], where: 'id = ?', whereArgs: [id], limit: 1);
+    if (rows.isEmpty) return;
+    var detail = <String, dynamic>{};
+    try {
+      detail = Map<String, dynamic>.from(
+          jsonDecode('${rows.single['detail_json']}') as Map);
+    } catch (_) {
+      // Cache lama/rusak: hanya isi nilai yang benar-benar dikirim pengguna.
     }
-    await batch.commit(noResult: true);
+    const fields = {
+      'harga_beli': 'hargaBeli',
+      'harga_beli_manual': 'hargaBeliManual',
+      'bahan_baku': 'bahanBaku',
+      'keterangan': 'keterangan',
+      'pemasok_nama': 'pemasokNama',
+      'satuan_id': 'satuanId',
+      'satuan_pembelian_id': 'satuanPembelianId',
+      'kebijakan_retur_id': 'kebijakanReturId',
+      'rute': 'rute',
+      'perlu_qc': 'perluQc',
+      'pack_aktif': 'packAktif',
+      'satuan_pack_id': 'satuanPackId',
+      'harga_pack': 'hargaPack',
+    };
+    for (final field in fields.entries) {
+      if (payload.containsKey(field.key)) {
+        detail[field.value] = payload[field.key];
+      }
+    }
+    await txn.update(
+        'produk_cache',
+        {
+          'detail_json': jsonEncode(detail),
+          if (payload.containsKey('stok')) 'stok': payload['stok'],
+        },
+        where: 'id = ?',
+        whereArgs: [id]);
   }
 
   /// Dipakai semua konteks JUAL/penjualan (Kasir, Pesanan, picker pencarian

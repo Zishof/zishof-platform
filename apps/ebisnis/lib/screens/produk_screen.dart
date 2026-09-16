@@ -724,6 +724,13 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
   }
 
   Future<void> _bukaFormProduk({Produk? produk}) async {
+    if (produk != null && !produk.hargaBeliTersedia) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'HPP/detail produk belum tersimpan lengkap di perangkat. Hubungkan '
+              'internet lalu Muat Ulang sebelum mengedit. Data server tidak diubah.')));
+      return;
+    }
     // Daftar relasi resep/ekstra bukan tabel utama, namun tetap dimuat secara
     // terukur (maks. 100 per jenis) agar paging katalog 15 baris tidak membuat
     // pilihan Bahan/Ekstra hanya berisi produk pada halaman yang sedang terlihat.
@@ -2269,7 +2276,10 @@ class _BarisTabelProduk extends StatelessWidget {
                     style: const TextStyle(fontSize: 12.5))),
             Expanded(
                 flex: 2,
-                child: Text(_formatRupiah.format(produk.hargaBeli),
+                child: Text(
+                    produk.hargaBeliTersedia
+                        ? _formatRupiah.format(produk.hargaBeli)
+                        : 'Belum dimuat',
                     textAlign: TextAlign.right,
                     style: TextStyle(
                         color: AppColors.textSecondaryOf(context),
@@ -2648,7 +2658,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
         text: p?.hargaPack == null ? '' : '${p!.hargaPack}');
     for (final b in p?.bahanBaku ?? const <Map<String, dynamic>>[]) {
       _bahanBaku.add(_BahanBakuBaris(
-        produkId: (b['produkId'] as num?)?.toInt(),
+        produkId: ((b['produkId'] ?? b['produk_id']) as num?)?.toInt(),
         nama: (b['nama'] as String?) ?? '-',
         qtyAwal: '${b['qty'] ?? 1}',
         hargaAwal: '${b['harga'] ?? 0}',
@@ -3235,6 +3245,11 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   }
 
   Future<void> _simpan() async {
+    if (widget.produk != null && !widget.produk!.hargaBeliTersedia) {
+      setStateIfMounted(() => _pesanError =
+          'HPP belum terbaca. Muat ulang produk sebelum menyimpan agar nilai server tidak tertimpa.');
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
     setStateIfMounted(() {
       _menyimpan = true;
@@ -3365,6 +3380,31 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'nama': _nama.text.trim(),
           'hargaJual': _angka(_hargaJual.text),
           'stok': stokUntukCache,
+          'hargaBeli':
+              _bahanBaku.isNotEmpty ? _totalHpp : _angka(_hargaBeli.text),
+          'hargaBeliManual': _hargaBeliManual,
+          'bahanBaku': _bahanBaku
+              .map((b) => {
+                    'produkId': b.produkId,
+                    'nama': b.nama,
+                    'qty': _angka(b.qty.text),
+                    'harga': _angka(b.harga.text),
+                  })
+              .toList(),
+          'keterangan': _keterangan.text.trim(),
+          'pemasokNama': _pemasok.text.trim(),
+          'satuanId': _satuanId,
+          'satuanNama': _namaUom(_satuanId),
+          'satuanPembelianId': _satuanPembelianId,
+          'satuanPembelianNama': _namaUom(_satuanPembelianId),
+          'kebijakanReturId': _kebijakanReturId,
+          'rute': _rute,
+          'perluQc': _perluQc,
+          'packAktif': _packAktif,
+          'satuanPackId': _satuanPackId,
+          'satuanPackNama': _namaUom(_satuanPackId),
+          'hargaPack': _packAktif ? _angka(_hargaPack.text) : null,
+          'faktorPackKeDasar': widget.produk?.faktorPackKeDasar,
           'kategoriId': _kategoriId,
           'kategoriNama': widget.produk?.kategoriNama ?? '',
           'gambarUrl': widget.produk?.gambarUrl ?? '',
