@@ -83,14 +83,16 @@ def build(variant):
     doc.styles['Normal'].paragraph_format.space_after = Pt(6)
     doc.styles['Title'].font.size = Pt(26)
     doc.styles['Heading 1'].font.size = Pt(17)
+    for border in doc.styles.element.xpath('.//w:pBdr'):
+        border.getparent().remove(border)
     footer = sec.footer.paragraphs[0]
     footer.add_run(f'{NAMES[variant]} | UAT lokal 1.34.40 build 203 | 17 September 2026     ')
     field = OxmlElement('w:fldSimple'); field.set(qn('w:instr'), 'PAGE'); footer._p.append(field)
     for r in footer.runs: r.font.size = Pt(9)
     doc.add_heading('Laporan UAT pascarilis', 0)
     doc.add_paragraph(f'{NAMES[variant]}\nVersi 1.34.40 build 203', style='Subtitle')
-    revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-    doc.add_paragraph(f'Revisi sumber {revision[:12]} | Eksekusi 17 September 2026')
+    revision = subprocess.check_output(['git', 'log', '-1', '--format=%H', '--', 'apps/ebisnis/lib', 'packages/core_db/lib'], cwd=ROOT, text=True).strip()
+    doc.add_paragraph(f'Revisi perubahan aplikasi {revision[:12]} | Eksekusi 17 September 2026')
     doc.add_heading('Keputusan pengujian', 1)
     doc.add_paragraph('LULUS pada lingkup UAT lokal yang disetujui. Seluruh skenario otomatis dan bukti layar yang tercantum di laporan ini lulus. Ini bukan persetujuan operasional dari petugas toko atau hasil pengujian server produksi.')
     table(doc, ['Kelompok pengujian', 'Hasil', 'Bukti'], [
@@ -119,10 +121,10 @@ def build(variant):
     doc.add_paragraph('Sebelum memasang, cadangkan data lokal dan pastikan antrean tersimpan. Jika modul inti gagal, hentikan distribusi varian terkait dan kumpulkan log tanpa menghapus cache/outbox. Jangan menurunkan versi langsung pada database v21; gunakan perbaikan maju atau pemulihan cadangan pra-upgrade yang telah direkonsiliasi. Perubahan ini tidak menyebarkan patch backend produksi.')
     for i, item in enumerate(evidence, 1):
         doc.add_page_break()
-        doc.add_heading(f'{i:02d} {item["judul"]}', 1)
+        doc.add_heading(f'{i:02d} {item["judul"].replace("/", " ")}', 1)
         doc.add_paragraph(STEPS.get(item['id'], item['judul']))
         p = doc.add_paragraph(); p.paragraph_format.space_after = Pt(3)
-        p.add_run().add_picture(str(OUT / variant / item['screenshot']), width=Inches(8.05))
+        p.add_run().add_picture(str(OUT / variant / item['screenshot']), width=Inches(9.0))
         p = doc.add_paragraph(f'LULUS — {item["hasil"]}')
         p.paragraph_format.space_after = Pt(0)
         for r in p.runs: r.font.size = Pt(10)
