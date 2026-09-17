@@ -59,9 +59,10 @@ Alokasi per nota membutuhkan perubahan skema dan keputusan akuntansi tersendiri.
 
 ## Batasan paket
 
-- **Paket UAT internal.** APK bertanda tangan **debug**
-  (`CN=Android Debug`), sesuai praktik paket UAT di repo ini. Distribusi
-  produksi tetap menuntut sertifikat resmi organisasi.
+- **Paket UAT internal.** APK bertanda tangan **debug** (`CN=Android Debug`)
+  dan installer Windows **belum bertanda tangan Authenticode**
+  (`Get-AuthenticodeSignature` -> `NotSigned`), sesuai praktik paket UAT di
+  repo ini. Distribusi produksi tetap menuntut sertifikat resmi organisasi.
 - Belum diuji pada perangkat nyata dalam rilis ini; pengujian yang dilaporkan di
   atas adalah uji otomatis dan analisis statis.
 
@@ -69,7 +70,8 @@ Alokasi per nota membutuhkan perubahan skema dan keputusan akuntansi tersendiri.
 
 | Berkas | Ukuran | SHA-256 |
 |---|---|---|
-| `app-albahjah-release.apk` | 190.997.413 bytes | `f44d2840ac00a90848c8f765edb2d10939e4a084c8b1937830382e6a0c331833` |
+| `Al-Bahjah-POS-1.34.41-build204.apk` | 190.997.413 bytes | `f44d2840ac00a90848c8f765edb2d10939e4a084c8b1937830382e6a0c331833` |
+| `Al-Bahjah-POS-Setup-1.34.41.exe` | 86.022.951 bytes | `59921118df15a85ec45e280fcd8de61fe2eca3edc6d5a00f4fdc61a530eb418e` |
 
 `package=id.zishof.ebisnis.albahjah`, `versionName=1.34.41`,
 `versionCode=204`, label `Al-Bahjah POS`.

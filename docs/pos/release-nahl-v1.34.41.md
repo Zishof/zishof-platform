@@ -66,9 +66,10 @@ Alokasi per nota membutuhkan perubahan skema dan keputusan akuntansi tersendiri.
 
 ## Batasan paket
 
-- **Paket UAT internal.** APK bertanda tangan **debug** (`CN=Android Debug`),
-  sesuai praktik paket UAT di repo ini. Distribusi produksi tetap menuntut
-  sertifikat resmi organisasi.
+- **Paket UAT internal.** APK bertanda tangan **debug** (`CN=Android Debug`)
+  dan installer Windows **belum bertanda tangan Authenticode**
+  (`Get-AuthenticodeSignature` -> `NotSigned`), sesuai praktik paket UAT di
+  repo ini. Distribusi produksi tetap menuntut sertifikat resmi organisasi.
 - Belum diuji pada perangkat nyata dalam rilis ini; pengujian yang dilaporkan di
   atas adalah uji otomatis dan analisis statis.
 
@@ -76,7 +77,8 @@ Alokasi per nota membutuhkan perubahan skema dan keputusan akuntansi tersendiri.
 
 | Berkas | Ukuran | SHA-256 |
 |---|---|---|
-| `app-nahl-release.apk` | 191.531.061 bytes | `8f0b3de2165b30b0e99de50d21b8a93855b1cf58ef5d76125576d310f8151b57` |
+| `TokoQu-AlBahjah-AnNahl-1.34.41-build204.apk` | 191.531.061 bytes | `8f0b3de2165b30b0e99de50d21b8a93855b1cf58ef5d76125576d310f8151b57` |
+| `TokoQu-Al-Bahjah-An-Nahl-Setup-1.34.41.exe` | 86.179.649 bytes | `e7ad788c41bb3b7f874b50d4f414c9f696d34b919260c5f8b8e664991bab0133` |
 
 `package=id.zishof.ebisnis.nahl`, `versionName=1.34.41`, `versionCode=204`,
 label `TokoQu Al-Bahjah An Nahl`.
