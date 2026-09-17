@@ -23,7 +23,7 @@ Mutasi Voucher — berada di sisi server dan **tidak** ikut dalam APK ini.
   membuka lembar pelunasan sudah terisi nominal dan keterangannya, masih dapat
   disunting, dan tetap tunduk pada izin `bolehEntryPelunasanPiutang`.
 
-## Yang menunggu deploy server (SVN r91690)
+## Yang datang lewat server (SVN r91690, sudah ter-deploy)
 
 - **Keterangan Mutasi Voucher memakai nama produk.** Sebelumnya menampilkan kode
   nota, yang tidak berarti bagi wali santri. Sekarang dirakit dari nama produk
@@ -35,8 +35,9 @@ Mutasi Voucher — berada di sisi server dan **tidak** ikut dalam APK ini.
   membaca sumber data yang sama dengan cetak PDF agar keduanya tidak pernah
   bercerita berbeda.
 
-Keduanya baru terlihat setelah WAR/server diperbarui. Deploy server bukan bagian
-dari paket ini.
+Keduanya sudah **ter-deploy pada 18 September 2026** dan aktif tanpa perlu
+memasang APK. Pemasangan APK tetap diperlukan untuk kolom Bruto/Diskon dan
+tombol Lunasi.
 
 ## Yang sengaja tidak dijanjikan
 

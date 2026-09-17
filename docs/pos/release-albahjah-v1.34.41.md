@@ -17,12 +17,12 @@ tanggal 17 September 2026. Rincian teknis keempat keluhan ada di
   tombol yang membuka lembar pelunasan sudah terisi nominal dan keterangannya,
   masih dapat disunting, dan tetap tunduk pada izin `bolehEntryPelunasanPiutang`.
 
-## Yang TIDAK ikut di APK ini
+## Yang datang lewat server, bukan lewat APK
 
 Perbaikan layar **Mutasi Voucher** (keterangan memakai nama produk, dan tombol
 unduh Word) berada di sisi server — `_mutasi_tabungan.jsp`, SVN r91690. Keduanya
-baru terlihat setelah WAR/server diperbarui. Deploy server bukan bagian dari
-paket ini.
+sudah **ter-deploy pada 18 September 2026** dan aktif tanpa perlu memasang APK.
+Pemasangan APK tetap diperlukan untuk kolom Bruto/Diskon dan tombol Lunasi.
 
 ## Yang sengaja tidak dijanjikan
 
