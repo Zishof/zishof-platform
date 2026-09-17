@@ -80,6 +80,22 @@ if ($SkipAndroid -and $SkipWindows) { throw 'SkipAndroid dan SkipWindows sekalig
 
 $mulai = Get-Date
 $gagal = @()
+# Sidik jari tiap artefak; dipakai penerima untuk memastikan berkas tidak berubah di jalan.
+# Get-FileHash tidak ada di Windows PowerShell 2.0 (dan pada sebagian sesi non-interaktif
+# skrip ini pernah berhenti persis di sini setelah SEMUA varian selesai dibangun), jadi
+# sediakan jalur cadangan lewat certutil yang selalu ada di Windows.
+function Sidik-Jari([string]$berkas) {
+    if (Get-Command Get-FileHash -ErrorAction SilentlyContinue) {
+        return (Get-FileHash -LiteralPath $berkas -Algorithm SHA256).Hash.ToLower()
+    }
+    $keluaran = & certutil -hashfile $berkas SHA256
+    if ($LASTEXITCODE -ne 0) { throw "certutil gagal menghitung SHA256 untuk $berkas" }
+    return (($keluaran | Where-Object { $_ -match '^[0-9a-fA-F ]{40,}$' } | Select-Object -First 1) -replace '\s', '').ToLower()
+}
+
+# Sidik jari app.so per varian -- dipakai membuktikan bundel Dart tidak tertukar.
+$aotPerVarian = @{}
+
 foreach ($variant in $variants) {
     $defineArgs = @()
     if ($variant.Define) { $defineArgs = @("--dart-define=EBISNIS_VARIANT=$($variant.Define)") }
@@ -100,6 +116,36 @@ foreach ($variant in $variants) {
         Write-Host "==== Windows $($variant.Kode) ===="
         & $flutter build windows --release -t $variant.Target @defineArgs
         if ($LASTEXITCODE -ne 0) { $gagal += "Windows $($variant.Kode)"; continue }
+
+        # BUKTI VARIAN sebelum dikemas. Semua varian memakai direktori Release yang
+        # SAMA dan app.so di-cache flutter per (target, dart-define); bila cache
+        # meleset, installer varian ini memuat kode Dart varian lain tanpa satu pun
+        # pesan galat -- yang terlihat hanya nama produk benar di atas aplikasi salah.
+        # Stempel waktu tidak dapat dipakai: app.so dipulihkan dari cache dengan mtime
+        # ASLINYA, sehingga build yang benar pun menghasilkan berkas "lama".
+        if ($variant.Define) {
+            $genConfig = Join-Path $appDir 'windows\flutter\ephemeral\generated_config.cmake'
+            $token = [Convert]::ToBase64String(
+                [Text.Encoding]::UTF8.GetBytes("EBISNIS_VARIANT=$($variant.Define)")).TrimEnd('=')
+            if (-not (Test-Path $genConfig) -or
+                    (Get-Content $genConfig -Raw) -notmatch [regex]::Escape($token)) {
+                $gagal += "Varian tidak terbukti di generated_config: $($variant.Kode)"
+                continue
+            }
+        }
+        $aot = Join-Path $appDir 'build\windows\app.so'
+        if (-not (Test-Path $aot)) {
+            $gagal += "app.so tidak dihasilkan: $($variant.Kode)"
+            continue
+        }
+        $sidikAot = Sidik-Jari $aot
+        $kembar = $aotPerVarian.Keys | Where-Object { $aotPerVarian[$_] -eq $sidikAot }
+        if ($kembar) {
+            $gagal += "Bundel Dart $($variant.Kode) IDENTIK dengan $kembar -- cache AOT meleset"
+            continue
+        }
+        $aotPerVarian[$variant.Kode] = $sidikAot
+
         & $iscc "/DAppVersion=$versi" $variant.Iss
         if ($LASTEXITCODE -ne 0) { $gagal += "Installer $($variant.Kode)"; continue }
         $setupHasil = Join-Path $appDir "installer\dist\$($variant.Setup)"
@@ -111,18 +157,6 @@ foreach ($variant in $variants) {
     }
 }
 
-# Sidik jari tiap artefak; dipakai penerima untuk memastikan berkas tidak berubah di jalan.
-# Get-FileHash tidak ada di Windows PowerShell 2.0 (dan pada sebagian sesi non-interaktif
-# skrip ini pernah berhenti persis di sini setelah SEMUA varian selesai dibangun), jadi
-# sediakan jalur cadangan lewat certutil yang selalu ada di Windows.
-function Sidik-Jari([string]$berkas) {
-    if (Get-Command Get-FileHash -ErrorAction SilentlyContinue) {
-        return (Get-FileHash -LiteralPath $berkas -Algorithm SHA256).Hash.ToLower()
-    }
-    $keluaran = & certutil -hashfile $berkas SHA256
-    if ($LASTEXITCODE -ne 0) { throw "certutil gagal menghitung SHA256 untuk $berkas" }
-    return (($keluaran | Where-Object { $_ -match '^[0-9a-fA-F ]{40,}$' } | Select-Object -First 1) -replace '\s', '').ToLower()
-}
 
 Get-ChildItem -LiteralPath $artifactDir -File | Where-Object { $_.Name -notlike '*.sha256.txt' } | ForEach-Object {
     "$(Sidik-Jari $_.FullName)  $($_.Name)" | Set-Content -LiteralPath "$($_.FullName).sha256.txt" -Encoding ascii
