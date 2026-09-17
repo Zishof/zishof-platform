@@ -3722,9 +3722,24 @@ List<Map<String, dynamic>> rekapProdukDariRincian(
               'satuan': (b['satuan'] ?? '').toString(),
               'qty': 0.0,
               'total': 0.0,
+              'diskonRekap': 0.0,
+              'brutoRekap': 0.0,
               'jumlahTransaksi': 0,
             });
     row['qty'] = (row['qty'] as double) + ((b['qty'] as num?)?.toDouble() ?? 0);
+    // Diskon IKUT direkap, bukan hanya diserap ke dalam total.
+    //
+    // Laporan An Nahl 17-09-2026: "Roti bakar 7.000 x 4 = 28.000 tapi jadi
+    // 24.000". Hitungannya benar -- KantinHelper menyimpan
+    // total = (harga * qty) - diskon -- tetapi rekap ini hanya menampilkan
+    // total bersihnya, sehingga selisih 4.000 itu tidak dapat dijelaskan dari
+    // apa pun yang tampil di layar. Bruto dan Diskon sekarang ikut, supaya
+    // aritmatikanya utuh: Bruto - Diskon = Total.
+    final diskonBaris = (b['diskon'] as num?)?.toDouble() ?? 0;
+    final totalBaris = (b['total'] as num?)?.toDouble() ?? 0;
+    row['diskonRekap'] = (row['diskonRekap'] as double) + diskonBaris;
+    row['brutoRekap'] =
+        (row['brutoRekap'] as double) + totalBaris + diskonBaris;
     row['total'] =
         (row['total'] as double) + ((b['total'] as num?)?.toDouble() ?? 0);
     nota
@@ -3924,6 +3939,8 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
           DynamicReportColumn('qty', 'Qty Terjual', numeric: true),
           DynamicReportColumn('jumlahTransaksi', 'Jml Transaksi',
               numeric: true),
+          DynamicReportColumn('brutoRekap', 'Bruto', numeric: true),
+          DynamicReportColumn('diskonRekap', 'Diskon', numeric: true),
           DynamicReportColumn('total', 'Total', numeric: true),
         ],
         rows: rekapProdukDariRincian(rows),

@@ -175,11 +175,13 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
     }).toList();
   }
 
-  Future<void> _bukaFormBayarHutang() async {
+  Future<void> _bukaFormBayarHutang(
+      {double? nominalAwal, String? keteranganAwal}) async {
     final tersimpan = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => const _FormBayarHutang(),
+      builder: (_) => _FormBayarHutang(
+          nominalAwal: nominalAwal, keteranganAwal: keteranganAwal),
     );
     if (tersimpan == true) await _muat();
   }
@@ -643,6 +645,19 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
                         icon: const Icon(Icons.visibility_outlined, size: 17),
                         label: const Text('Lihat Detail'),
                       ),
+                      // Tombol Lunasi hanya pada baris yang MENAMBAH piutang; baris
+                      // pembayaran tidak punya sisa untuk dilunasi.
+                      if (((r['bertambah'] as num?) ?? 0) > 0 &&
+                          Sesi.instance.bolehEntryPelunasanPiutang)
+                        TextButton.icon(
+                          onPressed: () => _bukaFormBayarHutang(
+                              nominalAwal: ((r['bertambah'] as num?) ?? 0).toDouble(),
+                              keteranganAwal: 'Pelunasan '
+                                  '${r['jenisMutasi'] ?? 'piutang'}'
+                                  '${waktu == null ? '' : ' ${DateFormat('dd/MM/yyyy').format(waktu)}'}'),
+                          icon: const Icon(Icons.price_check_outlined, size: 17),
+                          label: const Text('Lunasi'),
+                        ),
                       if ('${r['barisId'] ?? ''}'.startsWith('C') &&
                           Sesi.instance.bolehEntryPelunasanPiutang)
                         IconButton(
@@ -705,7 +720,16 @@ class _KartuTotalHutang extends StatelessWidget {
 }
 
 class _FormBayarHutang extends StatefulWidget {
-  const _FormBayarHutang();
+  // Nilai awal opsional: dipakai tombol "Lunasi" pada baris piutang
+  // supaya kasir tidak perlu mengetik ulang nominalnya (permintaan
+  // 17-09-2026: "kalau di entry pelunasan ini kita harus manual yaa").
+  // Tetap dapat disunting sebelum disimpan -- server mencatat pelunasan
+  // pada SALDO anggota, bukan dialokasikan ke satu nota, jadi angka
+  // terisi ini bantuan pengisian, bukan janji alokasi per transaksi.
+  const _FormBayarHutang({this.nominalAwal, this.keteranganAwal});
+
+  final double? nominalAwal;
+  final String? keteranganAwal;
 
   @override
   State<_FormBayarHutang> createState() => _FormBayarHutangState();
@@ -720,6 +744,19 @@ class _FormBayarHutangState extends State<_FormBayarHutang> with JejakGalat {
   final DateTime _waktu = DateTime.now();
   bool _menyimpan = false;
   String? _pesanError;
+
+  @override
+  void initState() {
+    super.initState();
+    final n = widget.nominalAwal;
+    if (n != null && n > 0) {
+      _nominal.text = n == n.roundToDouble()
+          ? n.round().toString()
+          : n.toString();
+    }
+    final k = widget.keteranganAwal;
+    if (k != null && k.trim().isNotEmpty) _keterangan.text = k.trim();
+  }
 
   @override
   void dispose() {
