@@ -3369,7 +3369,30 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           await _unggahBaris(baris, produkIdBaru);
         }
       }
-      if (mounted) Navigator.of(context).pop(true);
+      // Server TIDAK menimpa stok produk dari form ini: angkanya dicatat
+      // sebagai stok opname atomik supaya Hitung Ulang Stok (yang bersumber
+      // dari ledger) tidak menghapusnya. Tanpa pesan ini form tertutup diam-
+      // diam dan pengguna tidak pernah tahu satu dokumen stok opname baru saja
+      // tercipta atas namanya -- auditor kelak menemukan opname yang "tidak
+      // dibuat siapa pun". Hanya muncul bila server benar-benar membuat
+      // opname (stok diminta berbeda dari ledger); saat offline field ini
+      // belum ada karena opnamenya pun belum terjadi.
+      final stokDisesuaikan = hasil['stokDisesuaikan'] == true;
+      final idOpname = (hasil['stokOpnameId'] as num?)?.toInt();
+      if (mounted) {
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        Navigator.of(context).pop(true);
+        if (stokDisesuaikan && messenger != null) {
+          final nomor = idOpname == null ? '' : ' #$idOpname';
+          messenger.showSnackBar(SnackBar(
+            content: Text(ubah
+                ? 'Tersimpan. Perubahan stok dicatat sebagai stok opname$nomor '
+                    'agar riwayat persediaan tetap utuh.'
+                : 'Tersimpan. Stok awal dicatat sebagai stok opname$nomor.'),
+            duration: const Duration(seconds: 6),
+          ));
+        }
+      }
     } catch (e) {
       // Gerbang harga modal punya jalan keluar yang sah (barang promo rugi,
       // klaim garansi) dan pesan servernya menyuruh memakainya. Tanpa blok
