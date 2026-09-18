@@ -3621,15 +3621,40 @@ Future<void> _lihatRincianPenerimaan(
                         separatorBuilder: (_, __) => const Divider(height: 1),
                         itemBuilder: (_, i) {
                           final row = data[i];
+                          final ekspor =
+                              barisEksporRincianPenerimaan(ringkasan, row);
+                          final nominalMetode = (ekspor['penerimaanMetode']
+                                  as num?) ??
+                              (row['totalBiaya'] as num?) ??
+                              0;
+                          final totalNota = (ekspor['totalNota'] as num?) ??
+                              (row['totalBiaya'] as num?) ??
+                              0;
+                          final adaSplit = totalNota != nominalMetode;
                           return ListTile(
                             dense: true,
                             title: Text('${row['nomorNota'] ?? '-'}'),
                             subtitle: Text(
-                                '${_formatWaktu(row['waktu'])} · ${row['pembeli'] ?? 'Umum'}'),
-                            trailing: Text(
-                                _formatRupiah.format(row['totalBiaya'] ?? 0),
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w800)),
+                                '${_formatWaktu(row['waktu'])} · ${row['pembeli'] ?? 'Umum'}${adaSplit && row['metode'] != null ? " · ${row['metode']}" : ""}'),
+                            trailing: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  _formatRupiah.format(nominalMetode),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w800),
+                                ),
+                                if (adaSplit)
+                                  Text(
+                                    'Total nota: ${_formatRupiah.format(totalNota)}',
+                                    style: TextStyle(
+                                      fontSize: 10.5,
+                                      color: AppColors.textSecondaryOf(context),
+                                    ),
+                                  ),
+                              ],
+                            ),
                             onTap: () =>
                                 _lihatDetailPenjualanKasir(dialogContext, row),
                           );
@@ -3714,11 +3739,15 @@ List<Map<String, dynamic>> rekapProdukDariRincian(
     final kunci = kodeKanonis.isNotEmpty
         ? 'k:$kodeKanonis'
         : (produkId != null ? 'id:$produkId' : 'n:${nama.toLowerCase()}');
+    final kat = (b['kategori'] ?? b['kategoriNama'] ?? b['jenisProduk'] ?? '')
+        .toString()
+        .trim();
     final row = peta.putIfAbsent(
         kunci,
         () => <String, dynamic>{
               'produkKode': kodeKanonis,
               'produkNama': nama.isEmpty ? 'Produk tanpa nama' : nama,
+              'kategori': kat,
               'satuan': (b['satuan'] ?? '').toString(),
               'qty': 0.0,
               'total': 0.0,
@@ -3726,6 +3755,9 @@ List<Map<String, dynamic>> rekapProdukDariRincian(
               'brutoRekap': 0.0,
               'jumlahTransaksi': 0,
             });
+    if ((row['kategori'] as String).isEmpty && kat.isNotEmpty) {
+      row['kategori'] = kat;
+    }
     row['qty'] = (row['qty'] as double) + ((b['qty'] as num?)?.toDouble() ?? 0);
     // Diskon IKUT direkap, bukan hanya diserap ke dalam total.
     //
@@ -3935,6 +3967,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
         columns: const [
           DynamicReportColumn('produkKode', 'Kode'),
           DynamicReportColumn('produkNama', 'Produk'),
+          DynamicReportColumn('kategori', 'Kategori'),
           DynamicReportColumn('satuan', 'Satuan'),
           DynamicReportColumn('qty', 'Qty Terjual', numeric: true),
           DynamicReportColumn('jumlahTransaksi', 'Jml Transaksi',
@@ -3977,6 +4010,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
       columns: const [
         AppTableColumn('Kode', flex: 2),
         AppTableColumn('Produk', flex: 4),
+        AppTableColumn('Kategori', flex: 2),
         AppTableColumn('Qty', flex: 2, align: TextAlign.right),
         AppTableColumn('Transaksi', flex: 2, align: TextAlign.right),
         AppTableColumn('Total', flex: 3, align: TextAlign.right),
@@ -3988,6 +4022,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
                   AppTableCell.text('${row['produkNama'] ?? '-'}',
                       flex: 4,
                       style: const TextStyle(fontWeight: FontWeight.w700)),
+                  AppTableCell.text('${row['kategori'] ?? '-'}', flex: 2),
                   AppTableCell.text(
                       '${_angkaRingkasRekap(row['qty'])}'
                       '${(row['satuan'] ?? '').toString().isEmpty ? '' : ' ${row['satuan']}'}',

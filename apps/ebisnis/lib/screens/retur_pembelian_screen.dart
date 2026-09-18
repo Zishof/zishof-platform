@@ -183,34 +183,107 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
       }
       final dipilih = await showDialog<Map<String, dynamic>>(
         context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Pilih Faktur Pembelian'),
-          content: SizedBox(
-            width: 680,
-            height: 480,
-            child: ListView.separated(
-              itemCount: faktur.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (_, index) {
-                final f = faktur[index];
-                return ListTile(
-                  title: Text('${f['nomorFaktur'] ?? '-'}',
-                      style: const TextStyle(fontWeight: FontWeight.w700)),
-                  subtitle: Text(
-                      '${f['tanggalFaktur'] ?? '-'} · ${f['namaSupplier'] ?? 'Tanpa supplier'} · ${f['jumlahItem'] ?? 0} item'),
-                  trailing: Text(_formatRupiah
-                      .format(f['totalFakturFinal'] ?? f['totalHitung'] ?? 0)),
-                  onTap: () => Navigator.of(dialogContext).pop(f),
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Batal')),
-          ],
-        ),
+        builder: (dialogContext) {
+          String kataKunci = '';
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              final query = kataKunci.trim().toLowerCase();
+              final fakturTersaring = query.isEmpty
+                  ? faktur
+                  : faktur.where((f) {
+                      final no =
+                          (f['nomorFaktur'] ?? '').toString().toLowerCase();
+                      final sup =
+                          (f['namaSupplier'] ?? '').toString().toLowerCase();
+                      final tgl =
+                          (f['tanggalFaktur'] ?? '').toString().toLowerCase();
+                      return no.contains(query) ||
+                          sup.contains(query) ||
+                          tgl.contains(query);
+                    }).toList();
+
+              return AlertDialog(
+                title: const Text('Pilih Faktur Pembelian'),
+                content: SizedBox(
+                  width: 680,
+                  height: 520,
+                  child: Column(
+                    children: [
+                      TextField(
+                        autofocus: true,
+                        decoration: InputDecoration(
+                          hintText: 'Cari nomor faktur atau supplier...',
+                          prefixIcon: const Icon(Icons.search, size: 20),
+                          isDense: true,
+                          filled: true,
+                          fillColor: AppColors.pageBgOf(context),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide:
+                                BorderSide(color: AppColors.borderOf(context)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide:
+                                BorderSide(color: AppColors.borderOf(context)),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                        ),
+                        onChanged: (val) {
+                          setDialogState(() {
+                            kataKunci = val;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: fakturTersaring.isEmpty
+                            ? Center(
+                                child: Text(
+                                  query.isEmpty
+                                      ? 'Belum ada faktur pembelian'
+                                      : 'Faktur tidak ditemukan untuk "$kataKunci"',
+                                  style: TextStyle(
+                                    color: AppColors.textSecondaryOf(context),
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              )
+                            : ListView.separated(
+                                itemCount: fakturTersaring.length,
+                                separatorBuilder: (_, __) =>
+                                    const Divider(height: 1),
+                                itemBuilder: (_, index) {
+                                  final f = fakturTersaring[index];
+                                  return ListTile(
+                                    title: Text('${f['nomorFaktur'] ?? '-'}',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w700)),
+                                    subtitle: Text(
+                                        '${f['tanggalFaktur'] ?? '-'} · ${f['namaSupplier'] ?? 'Tanpa supplier'} · ${f['jumlahItem'] ?? 0} item'),
+                                    trailing: Text(_formatRupiah.format(
+                                        f['totalFakturFinal'] ??
+                                            f['totalHitung'] ??
+                                            0)),
+                                    onTap: () =>
+                                        Navigator.of(dialogContext).pop(f),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      child: const Text('Batal')),
+                ],
+              );
+            },
+          );
+        },
       );
       if (dipilih == null || !mounted) return;
       final detail = await MasterOffline.objekDenganCache(

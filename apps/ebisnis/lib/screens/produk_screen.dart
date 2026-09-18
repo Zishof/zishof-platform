@@ -2102,7 +2102,9 @@ class _BarisProduk extends StatelessWidget {
             ),
           ),
           subtitle: Text(
-              '${produk.kode} · ${produk.kategoriNama.isEmpty ? "Tanpa Kategori" : produk.kategoriNama}'),
+              '${produk.kode} · ${produk.kategoriNama.isEmpty ? "Tanpa Kategori" : produk.kategoriNama}'
+              '${produk.satuanNama.isNotEmpty ? " · ${produk.satuanNama}" : ""}'
+              '${produk.pemasokNama.isNotEmpty ? " · ${produk.pemasokNama}" : ""}'),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -2181,6 +2183,10 @@ class _TabelProduk extends StatelessWidget {
                     child: Text('SKU / BARCODE', style: gayaHeaderTabel)),
                 Expanded(
                     flex: 2, child: Text('KATEGORI', style: gayaHeaderTabel)),
+                Expanded(
+                    flex: 1, child: Text('SATUAN', style: gayaHeaderTabel)),
+                Expanded(
+                    flex: 2, child: Text('SUPPLIER', style: gayaHeaderTabel)),
                 Expanded(
                     flex: 2,
                     child: Text('HPP',
@@ -2334,6 +2340,20 @@ class _BarisTabelProduk extends StatelessWidget {
                 flex: 2,
                 child: Text(
                     produk.kategoriNama.isEmpty ? '-' : produk.kategoriNama,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12.5))),
+            Expanded(
+                flex: 1,
+                child: Text(
+                    produk.satuanNama.isEmpty ? '-' : produk.satuanNama,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12.5))),
+            Expanded(
+                flex: 2,
+                child: Text(
+                    produk.pemasokNama.isEmpty ? '-' : produk.pemasokNama,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 12.5))),
