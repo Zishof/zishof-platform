@@ -3101,14 +3101,26 @@ class _KartuProdukState extends State<_KartuProduk> {
   /// pending ditambahkan ke slideshow tanpa menunggu server pulih.
   Future<void> _susunSumberFoto() async {
     final produkId = widget.produk.id;
-    final server = widget.produk.fotoUrls
-        .where((e) => e.trim().isNotEmpty)
-        .map((url) => _SumberFotoKartu(
-              url: normalisasiUrlMedia(url),
-              idServer: _idFotoDariUrl(url),
-              kunci: 'server:$url',
-            ))
-        .toList();
+    final List<String> daftarUrl = [
+      ...widget.produk.fotoUrls.where((e) => e.trim().isNotEmpty),
+      if (widget.produk.fotoUrls.isEmpty &&
+          widget.produk.gambarUrl != null &&
+          widget.produk.gambarUrl!.trim().isNotEmpty)
+        widget.produk.gambarUrl!.trim(),
+    ];
+    final server = daftarUrl.map((url) {
+      if (url.startsWith('assets/')) {
+        return _SumberFotoKartu(
+          asset: url,
+          kunci: 'asset:$url',
+        );
+      }
+      return _SumberFotoKartu(
+        url: normalisasiUrlMedia(url),
+        idServer: _idFotoDariUrl(url),
+        kunci: 'server:$url',
+      );
+    }).toList();
     var gabungan = server;
     try {
       final lokal = await muatGambarLokalTertunda(
@@ -3275,26 +3287,53 @@ class _KartuProdukState extends State<_KartuProduk> {
                                         ),
                                       ),
                                     )
-                                  : Image.network(
-                                      sumberFoto.url!,
-                                      key: ValueKey(sumberFoto.kunci),
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Container(
-                                        color:
-                                            AppColors.latarLembut(warnaAvatar),
-                                        child: Center(
-                                          child: Text(
-                                            produk.nama.isNotEmpty
-                                                ? produk.nama[0].toUpperCase()
-                                                : '?',
-                                            style: TextStyle(
-                                                color: warnaAvatar,
-                                                fontSize: 26,
-                                                fontWeight: FontWeight.w800),
+                                  : sumberFoto.asset != null
+                                      ? Image.asset(
+                                          sumberFoto.asset!,
+                                          key: ValueKey(sumberFoto.kunci),
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) =>
+                                              Container(
+                                            color: AppColors.latarLembut(
+                                                warnaAvatar),
+                                            child: Center(
+                                              child: Text(
+                                                produk.nama.isNotEmpty
+                                                    ? produk.nama[0]
+                                                        .toUpperCase()
+                                                    : '?',
+                                                style: TextStyle(
+                                                    color: warnaAvatar,
+                                                    fontSize: 26,
+                                                    fontWeight:
+                                                        FontWeight.w800),
+                                              ),
+                                            ),
+                                          ),
+                                        )
+                                      : Image.network(
+                                          sumberFoto.url!,
+                                          key: ValueKey(sumberFoto.kunci),
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) =>
+                                              Container(
+                                            color: AppColors.latarLembut(
+                                                warnaAvatar),
+                                            child: Center(
+                                              child: Text(
+                                                produk.nama.isNotEmpty
+                                                    ? produk.nama[0]
+                                                        .toUpperCase()
+                                                    : '?',
+                                                style: TextStyle(
+                                                    color: warnaAvatar,
+                                                    fontSize: 26,
+                                                    fontWeight:
+                                                        FontWeight.w800),
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    ),
                             )
                           : Container(
                               color: AppColors.latarLembut(warnaAvatar),
@@ -3447,15 +3486,17 @@ class _KartuProdukState extends State<_KartuProduk> {
 class _SumberFotoKartu {
   final Uint8List? bytes;
   final String? url;
+  final String? asset;
   final int? idServer;
   final String kunci;
 
   const _SumberFotoKartu({
     this.bytes,
     this.url,
+    this.asset,
     this.idServer,
     required this.kunci,
-  }) : assert(bytes != null || url != null);
+  }) : assert(bytes != null || url != null || asset != null);
 }
 
 /// Form Tutup Kas -- KPI sesi (dari `sesi_kas_status`) + input Uang Fisik
