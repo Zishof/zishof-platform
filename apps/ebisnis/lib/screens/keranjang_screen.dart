@@ -1153,10 +1153,19 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         (member.wajibBiometricWajah || member.wajibBiometricFingerprint);
   }
 
+  bool get _hutangAkanDipakai {
+    if (_caraBayarTerpilih?.masukSebagaiHutang == true) return true;
+    if (_splitAktif) {
+      return _splitBayar
+          .any((s) => s.caraBayar.masukSebagaiHutang && s.nominal > 0);
+    }
+    return false;
+  }
+
   bool get _verifikasiMemberWajibServer {
     final member = _memberTerpilih;
     return member != null &&
-        (_saldoAkanDipotong || _pinWajibUntukMetodeTerpilih);
+        (_saldoAkanDipotong || _pinWajibUntukMetodeTerpilih || _hutangAkanDipakai);
   }
 
   Future<int?> _verifikasiBiometrik(PosBiometricCaptureBridge bridge,

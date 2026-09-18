@@ -797,6 +797,14 @@ class _KasirScreenState extends State<KasirScreen> {
             'tersebut tetap masuk ke kasir dan shift yang benar.',
           ),
           actions: [
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _sinkronkanSekarang();
+              },
+              icon: const Icon(Icons.sync, size: 16),
+              label: const Text('Sinkronkan Sekarang'),
+            ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Mengerti'),

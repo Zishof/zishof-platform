@@ -728,7 +728,17 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
     // terukur (maks. 100 per jenis) agar paging katalog 15 baris tidak membuat
     // pilihan Bahan/Ekstra hanya berisi produk pada halaman yang sedang terlihat.
     final pilihanRelasi = <int, Produk>{for (final p in _semuaProduk) p.id: p};
-    for (final jenis in const ['BAHAN', 'EKSTRA']) {
+    try {
+      final barisJual = await CoreDb.instance.produkCacheMaster(
+        jenisItem: 'JUAL',
+        limit: 300,
+      );
+      for (final b in barisJual) {
+        final p = Produk.fromJson(Produk.cacheRowKeJson(b));
+        pilihanRelasi[p.id] = p;
+      }
+    } catch (_) {}
+    for (final jenis in const ['BAHAN', 'EKSTRA', 'JUAL']) {
       try {
         final hasil = await ApiClient.instance.aksi('katalog', {
           'page': 1,
@@ -1369,6 +1379,10 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                                           value: 'EKSTRA',
                                                           label:
                                                               Text('Ekstra')),
+                                                      ButtonSegment(
+                                                          value: 'PAKET',
+                                                          label:
+                                                              Text('Produk Paket')),
                                                     ],
                                                     selected: {
                                                       _filterJenisItem
@@ -2057,8 +2071,35 @@ class _BarisProduk extends StatelessWidget {
             kunci: '${produk.id}',
             idBaru: idBaru,
             idBerubah: idBerubah,
-            child: Text(produk.nama,
-                style: const TextStyle(fontWeight: FontWeight.w600)),
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(produk.nama,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                if (produk.jenisItem == 'PAKET') ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.4)),
+                    ),
+                    child: Text(
+                      'PAKET',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
           subtitle: Text(
               '${produk.kode} · ${produk.kategoriNama.isEmpty ? "Tanpa Kategori" : produk.kategoriNama}'),
@@ -2241,11 +2282,40 @@ class _BarisTabelProduk extends StatelessWidget {
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                        child: Text(produk.nama,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w600, fontSize: 13))),
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: Text(produk.nama,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600, fontSize: 13)),
+                          ),
+                          if (produk.jenisItem == 'PAKET') ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                    color:
+                                        AppColors.primary.withValues(alpha: 0.4)),
+                              ),
+                              child: Text(
+                                'PAKET',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -2872,6 +2942,26 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
         ),
       ),
     );
+  }
+
+  Future<void> _tambahKomponenPaket() async {
+    final dipilih = await showDialog<Produk>(
+      context: context,
+      builder: (_) => _DialogPilihProduk(
+        title: 'Pilih Komponen Paket (Produk Dijual)',
+        tampilkanHargaJual: true,
+        daftar: widget.semuaProduk
+            .where((p) =>
+                p.id != widget.produk?.id &&
+                (p.jenisItem == 'JUAL' || p.jenisItem.isEmpty))
+            .toList(),
+      ),
+    );
+    if (dipilih == null) return;
+    setStateIfMounted(() => _bahanBaku.add(_BahanBakuBaris(
+        produkId: dipilih.id,
+        nama: dipilih.nama,
+        hargaAwal: dipilih.hargaBeli.toStringAsFixed(0))));
   }
 
   Future<void> _tambahBahanBaku() async {
@@ -3591,6 +3681,8 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                           value: 'JUAL', label: Text('Produk (Dijual)')),
                       ButtonSegment(value: 'BAHAN', label: Text('Bahan Baku')),
                       ButtonSegment(value: 'EKSTRA', label: Text('Ekstra')),
+                      ButtonSegment(
+                          value: 'PAKET', label: Text('Produk Paket')),
                     ],
                     selected: {_jenisItem},
                     onSelectionChanged: (s) =>
@@ -3829,7 +3921,9 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                                 enabled: _bahanBaku.isEmpty,
                                 keyboardType: TextInputType.number,
                                 helperText: _bahanBaku.isNotEmpty
-                                    ? 'Otomatis dari Bahan Baku (${_formatRupiah.format(_totalHpp)})'
+                                    ? (_jenisItem == 'PAKET'
+                                        ? 'Otomatis dari Komponen Paket (${_formatRupiah.format(_totalHpp)})'
+                                        : 'Otomatis dari Bahan Baku (${_formatRupiah.format(_totalHpp)})')
                                     : null,
                               )
                             : AppHargaTerkunci(
@@ -3842,11 +3936,9 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                       Expanded(
                         child: Sesi.instance.bolehUbahHarga
                             ? AppFormTextField(
-                                label: 'Harga Jual *',
+                                label: 'Harga Jual',
                                 controller: _hargaJual,
                                 keyboardType: TextInputType.number,
-                                validator: (v) =>
-                                    _angka(v ?? '') <= 0 ? 'Wajib > 0' : null,
                               )
                             : AppHargaTerkunci(
                                 label: 'Harga Jual',
@@ -3870,14 +3962,20 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
               ),
               const SizedBox(height: 12),
               AppSectionCard(
-                judul: 'Bahan Baku (Resep) & HPP Otomatis',
+                judul: _jenisItem == 'PAKET'
+                    ? 'Komponen Paket & HPP Otomatis'
+                    : 'Bahan Baku (Resep) & HPP Otomatis',
                 aksiJudul: TextButton.icon(
-                    onPressed: _tambahBahanBaku,
+                    onPressed: _jenisItem == 'PAKET'
+                        ? _tambahKomponenPaket
+                        : _tambahBahanBaku,
                     icon: const Icon(Icons.add, size: 16),
                     label: const Text('Tambah')),
                 child: _bahanBaku.isEmpty
                     ? Text(
-                        'Belum ada resep -- Harga Beli diisi manual. Tambahkan komponen di sini kalau produk ini dirakit dari bahan lain (HPP dihitung otomatis).',
+                        _jenisItem == 'PAKET'
+                            ? 'Belum ada komponen -- Harga Beli diisi manual. Tambahkan produk dijual di sini sebagai komponen paket (HPP dihitung otomatis).'
+                            : 'Belum ada resep -- Harga Beli diisi manual. Tambahkan komponen di sini kalau produk ini dirakit dari bahan lain (HPP dihitung otomatis).',
                         style: TextStyle(
                             fontSize: 12,
                             color: AppColors.textSecondaryOf(context)))
