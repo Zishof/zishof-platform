@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -22,6 +23,116 @@ import '../../widgets/jejak_galat.dart';
 final _formatRpMutasiTabungan =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _formatTglMutasiTabungan = DateFormat('dd MMM yyyy HH:mm', 'id_ID');
+
+/// Ringkasan Mutasi Voucher yang dipakai BERSAMA oleh kartu di layar dan berkas
+/// Word. Satu sumber angka: kalau suatu saat rumusnya berubah, keduanya berubah
+/// bersama dan tidak pernah bercerita berbeda tentang uang yang sama.
+class RingkasanMutasiVoucher {
+  const RingkasanMutasiVoucher({
+    required this.totalMasuk,
+    required this.totalKeluar,
+    required this.saldoAwal,
+    required this.saldoAkhir,
+  });
+
+  final double totalMasuk;
+  final double totalKeluar;
+  final double saldoAwal;
+  final double saldoAkhir;
+}
+
+/// [baris] = mutasi (masuk/keluar), [rekap] = rekap per anggota
+/// (saldoAwal/saldoAkhir) -- rumus persis kartu di layar.
+RingkasanMutasiVoucher ringkasMutasiVoucher(
+    List<Map<String, dynamic>> baris, List<Map<String, dynamic>> rekap) {
+  double jumlah(List<Map<String, dynamic>> xs, String kunci) => xs.fold<double>(
+      0, (s, r) => s + ((r[kunci] as num?)?.toDouble() ?? 0));
+  return RingkasanMutasiVoucher(
+    totalMasuk: jumlah(baris, 'masuk'),
+    totalKeluar: jumlah(baris, 'keluar'),
+    saldoAwal: jumlah(rekap, 'saldoAwal'),
+    saldoAkhir: jumlah(rekap, 'saldoAkhir'),
+  );
+}
+
+String _escHtmlMutasi(Object? nilai) => '${nilai ?? ''}'
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+
+String _rpAtauStrip(Object? nilai) {
+  final n = (nilai as num?)?.toDouble() ?? 0;
+  return n == 0 ? '-' : _formatRpMutasiTabungan.format(n);
+}
+
+/// Dokumen Word Mutasi Voucher, dirakit sebagai HTML (dibuka Word apa adanya,
+/// tabelnya tetap dapat disunting). Permintaan An Nahl 17-09-2026: "download
+/// Word untuk rincian mutasi & sisa saldonya". Isinya: ringkasan (dari
+/// [ringkasMutasiVoucher], sama dengan kartu di layar), rekap per anggota, lalu
+/// rincian mutasi dengan sisa saldo per baris.
+///
+/// Fungsi murni: tanpa BuildContext dan tanpa I/O, supaya perilakunya diuji.
+/// Semua teks dari data di-escape -- keterangan dan nama berasal dari input
+/// pengguna.
+String dokumenWordMutasiVoucher({
+  required List<Map<String, dynamic>> baris,
+  required List<Map<String, dynamic>> rekap,
+  required DateTime dari,
+  required DateTime sampai,
+  String? namaAnggota,
+}) {
+  final rp = _formatRpMutasiTabungan;
+  final ringkas = ringkasMutasiVoucher(baris, rekap);
+  final tgl = DateFormat('dd/MM/yyyy');
+  final b = StringBuffer()
+    ..write('<html><head><meta charset="utf-8"><title>Mutasi Voucher</title>')
+    ..write('<style>body{font-family:Arial,sans-serif;font-size:10pt;}'
+        'table{border-collapse:collapse;width:100%;margin-bottom:12pt;}'
+        'th,td{border:1px solid #999;padding:3pt 5pt;}'
+        'th{background:#eeeeee;text-align:left;}'
+        'td.angka{text-align:right;}</style></head><body>')
+    ..write('<h2>Mutasi Voucher (Buku Besar)</h2>')
+    ..write('<p>Periode ${tgl.format(dari)} s/d ${tgl.format(sampai)}')
+    ..write(namaAnggota == null ? '' : ' &middot; ${_escHtmlMutasi(namaAnggota)}')
+    ..write('</p>')
+    ..write('<table><tr><th>Total Masuk</th><th>Total Keluar</th>'
+        '<th>Saldo Awal</th><th>Sisa Saldo</th></tr><tr>')
+    ..write('<td class="angka">${rp.format(ringkas.totalMasuk)}</td>')
+    ..write('<td class="angka">${rp.format(ringkas.totalKeluar)}</td>')
+    ..write('<td class="angka">${rp.format(ringkas.saldoAwal)}</td>')
+    ..write('<td class="angka"><b>${rp.format(ringkas.saldoAkhir)}</b></td>')
+    ..write('</tr></table>')
+    ..write('<h3>Rekap per Anggota</h3>')
+    ..write('<table><tr><th>Anggota</th><th>Saldo Awal</th><th>Masuk</th>'
+        '<th>Keluar</th><th>Sisa Saldo</th></tr>');
+  for (final r in rekap) {
+    b
+      ..write('<tr><td>${_escHtmlMutasi(r['namaAnggota'])}</td>')
+      ..write('<td class="angka">${rp.format(r['saldoAwal'] ?? 0)}</td>')
+      ..write('<td class="angka">${rp.format(r['masuk'] ?? 0)}</td>')
+      ..write('<td class="angka">${rp.format(r['keluar'] ?? 0)}</td>')
+      ..write('<td class="angka">${rp.format(r['saldoAkhir'] ?? 0)}</td></tr>');
+  }
+  b
+    ..write('</table>')
+    ..write('<h3>Rincian Mutasi &amp; Sisa Saldo</h3>')
+    ..write('<table><tr><th>Nama</th><th>Tanggal</th><th>Jenis</th>'
+        '<th>Keterangan</th><th>Masuk</th><th>Keluar</th><th>Sisa Saldo</th></tr>');
+  for (final r in baris) {
+    final waktu = DateTime.tryParse('${r['waktu']}');
+    b
+      ..write('<tr><td>${_escHtmlMutasi(r['namaAnggota'])}</td>')
+      ..write('<td>${waktu == null ? _escHtmlMutasi(r['waktu']) : _formatTglMutasiTabungan.format(waktu)}</td>')
+      ..write('<td>${_escHtmlMutasi(r['jenisMutasi'])}</td>')
+      ..write('<td>${_escHtmlMutasi(r['keterangan'])}</td>')
+      ..write('<td class="angka">${_rpAtauStrip(r['masuk'])}</td>')
+      ..write('<td class="angka">${_rpAtauStrip(r['keluar'])}</td>')
+      ..write('<td class="angka">${rp.format(r['saldoPerPenabung'] ?? 0)}</td></tr>');
+  }
+  b.write('</table></body></html>');
+  return b.toString();
+}
 
 /// Tab "Mutasi Voucher" (padanan `_mutasi_tabungan.jsp`) -- buku besar
 /// UNION topup+belanja+cashback dgn saldo berjalan, dihitung server (aksi
@@ -215,6 +326,37 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan> wit
     if (path != null) await File(path).writeAsBytes(bytes);
   }
 
+  /// Unduh Word -- lihat [dokumenWordMutasiVoucher]. Jalur simpannya sama
+  /// dengan Download Excel (FilePicker.saveFile), yang sudah berjalan di Desktop
+  /// dan Android. BOM UTF-8 di depan supaya Word tidak salah menebak encoding
+  /// nama berhuruf non-ASCII.
+  Future<void> _unduhWord() async {
+    if (_data.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Tidak ada data untuk diunduh.')));
+      return;
+    }
+    final html = dokumenWordMutasiVoucher(
+      baris: _data,
+      rekap: _rekapPerAnggota,
+      dari: _dari,
+      sampai: _sampai,
+      namaAnggota: _namaAnggotaFilter,
+    );
+    final bytes =
+        Uint8List.fromList(<int>[0xEF, 0xBB, 0xBF, ...utf8.encode(html)]);
+    final nama =
+        'Mutasi_Voucher_${DateFormat('yyyyMMdd').format(_dari)}_${DateFormat('yyyyMMdd').format(_sampai)}.doc';
+    final path = await FilePicker.platform.saveFile(
+      dialogTitle: 'Simpan Mutasi Voucher (Word)',
+      fileName: nama,
+      bytes: bytes,
+      type: FileType.custom,
+      allowedExtensions: const ['doc'],
+    );
+    if (path != null) await File(path).writeAsBytes(bytes);
+  }
+
   Future<void> _cetakPdf() async {
     if (_data.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -351,14 +493,12 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan> wit
         ),
       );
     }
-    final totalMasuk = _data.fold<double>(
-        0, (s, r) => s + ((r['masuk'] as num?)?.toDouble() ?? 0));
-    final totalKeluar = _data.fold<double>(
-        0, (s, r) => s + ((r['keluar'] as num?)?.toDouble() ?? 0));
-    final totalSaldoAwal = _rekapPerAnggota.fold<double>(
-        0, (s, r) => s + ((r['saldoAwal'] as num?)?.toDouble() ?? 0));
-    final totalSaldoAkhir = _rekapPerAnggota.fold<double>(
-        0, (s, r) => s + ((r['saldoAkhir'] as num?)?.toDouble() ?? 0));
+    // Satu sumber angka dengan berkas Word -- lihat ringkasMutasiVoucher.
+    final ringkas = ringkasMutasiVoucher(_data, _rekapPerAnggota);
+    final totalMasuk = ringkas.totalMasuk;
+    final totalKeluar = ringkas.totalKeluar;
+    final totalSaldoAwal = ringkas.saldoAwal;
+    final totalSaldoAkhir = ringkas.saldoAkhir;
 
     return RefreshIndicator(
       onRefresh: _muat,
@@ -391,6 +531,14 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan> wit
                 label: const Text('Download Excel'),
                 style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.success,
+                    foregroundColor: Colors.white),
+              ),
+              ElevatedButton.icon(
+                onPressed: _unduhWord,
+                icon: const Icon(Icons.description_outlined, size: 18),
+                label: const Text('Word'),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white),
               ),
               if (Sesi.instance.bolehEntryTopup)
