@@ -1185,6 +1185,7 @@ class _FormTopupOnlineState extends State<_FormTopupOnline> {
         'id_member': _idMember,
         'cara_pembayaran_id': _caraDipilih!['id'],
         'channel': '${_caraDipilih!['channel'] ?? ''}',
+        'gateway': '${_caraDipilih!['gateway'] ?? 'smartlink'}',
         'nominal': _nominalInput(),
       });
       if (mounted) {

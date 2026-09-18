@@ -162,6 +162,7 @@ class _TopupScreenState extends State<TopupScreen> {
       final hasil = await ApiClient.instance.aksi('kantin_topup_buat', {
         'cara_pembayaran_id': _saluranDipilih!['id'],
         'channel': '${_saluranDipilih!['channel'] ?? ''}',
+        'gateway': '${_saluranDipilih!['gateway'] ?? 'smartlink'}',
         'nominal': _nominalInput(),
       });
       _hasilTopup = Map<String, dynamic>.from(hasil);
