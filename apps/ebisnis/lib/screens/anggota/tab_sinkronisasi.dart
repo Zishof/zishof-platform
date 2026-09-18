@@ -98,6 +98,10 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
           'description': '${hasil['description'] ?? ''}'.trim(),
           'dilewatiDosenGuru': hasil['dilewatiDosenGuru'] ?? 0,
           'dilewatiTidakAktif': hasil['dilewatiTidakAktif'] ?? 0,
+          // Id pegawai yang gagal (server membatasi 5). Log galat server
+          // dikunci `idPegawai=<id>`, jadi daftar inilah yang membuat perintah
+          // "buka Log Error untuk baris yang gagal" bisa dijalankan.
+          'contohGagal': hasil['contohGagal'] ?? const [],
         });
       } catch (e) {
         hasilPerSumber.add({
@@ -415,6 +419,12 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
                       (r['dilewatiDosenGuru'] as num?)?.toInt() ?? 0;
                   final dilewatiTidakAktif =
                       (r['dilewatiTidakAktif'] as num?)?.toInt() ?? 0;
+                  final jumlahGagal = (r['gagal'] as num?)?.toInt() ?? 0;
+                  final idGagal = ((r['contohGagal'] as List?) ?? const [])
+                      .map((e) => e is Map ? e['pegawaiId'] : null)
+                      .where((id) => id != null)
+                      .map((id) => '$id')
+                      .toList();
                   return Container(
                     margin: const EdgeInsets.only(bottom: 6),
                     padding: const EdgeInsets.symmetric(
@@ -474,6 +484,16 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
                             '$dilewatiTidakAktif berstatus nonaktif.',
                             style: const TextStyle(
                                 fontSize: 11, color: AppColors.textSecondary),
+                          ),
+                        ],
+                        if (error == null && idGagal.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          SelectableText(
+                            'Id pegawai yang gagal: ${idGagal.join(', ')}'
+                            '${jumlahGagal > idGagal.length ? ' (${idGagal.length} pertama dari $jumlahGagal)' : ''}'
+                            ' -- cocokkan dengan idPegawai di Log Error.',
+                            style: const TextStyle(
+                                fontSize: 11, color: AppColors.danger),
                           ),
                         ],
                       ],
