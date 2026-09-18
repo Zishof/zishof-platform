@@ -1,4 +1,4 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:ebisnis/models.dart';
 
 void main() {
@@ -60,14 +60,84 @@ void main() {
       jenisItem: 'BAHAN',
     );
 
-    test('UAT-01: Validasi Komponen Paket Hanya Menerima Produk Status JUAL', () {
-      final kandidatProduk = [beras, minyak, gula, bahanNonJual];
-      // Aturan: Hanya produk dengan status jenisItem == 'JUAL' yang dapat dijadikan paket
-      final bolehJadiPaket = kandidatProduk.where((p) => p.jenisItem == 'JUAL').toList();
+    test('UAT-01: Validasi Komponen Paket Menerima Semua Produk Aktif (JUAL, BAHAN, EKSTRA)', () {
+      final produkNonAktif = Produk(
+        id: 301,
+        kode: 'NA-01',
+        barcode: '8993001',
+        nama: 'Produk Nonaktif',
+        hargaBeli: 5000,
+        hargaJual: 7000,
+        stok: 10,
+        kategoriId: 1,
+        kategoriNama: 'Umum',
+        gambarUrl: null,
+        aktif: false,
+      );
+
+      final kandidatProduk = [beras, minyak, gula, bahanNonJual, produkNonAktif];
+      // Aturan Baru: Semua produk asalkan aktif (p.aktif == true && p.jenisItem != 'PAKET')
+      final bolehJadiPaket = kandidatProduk.where((p) => p.aktif && p.jenisItem != 'PAKET').toList();
       
-      expect(bolehJadiPaket.length, 3);
-      expect(bolehJadiPaket.map((p) => p.kode), containsAll(['BRS-01', 'MYK-01', 'GLA-01']));
-      expect(bolehJadiPaket.any((p) => p.jenisItem == 'BAHAN'), isFalse);
+      expect(bolehJadiPaket.length, 4);
+      expect(bolehJadiPaket.map((p) => p.kode), containsAll(['BRS-01', 'MYK-01', 'GLA-01', 'BHN-01']));
+      expect(bolehJadiPaket.any((p) => !p.aktif), isFalse);
+    });
+
+    test('UAT-WA: Simulasi Grand Opening Paket Sembako 75.000 & Penyesuaian Harga Otomatis', () {
+      final beras2_5 = Produk(
+        id: 110,
+        kode: 'BRS-2.5',
+        barcode: '8991101',
+        nama: 'Beras 2,5kg',
+        hargaBeli: 34000,
+        hargaJual: 38000,
+        stok: 30,
+        kategoriId: 1,
+        kategoriNama: 'Sembako',
+        gambarUrl: null,
+        aktif: true,
+      );
+      final minyak1L = Produk(
+        id: 111,
+        kode: 'MYK-1L',
+        barcode: '8991102',
+        nama: 'Minyak 1ltr',
+        hargaBeli: 19000,
+        hargaJual: 22000,
+        stok: 40,
+        kategoriId: 1,
+        kategoriNama: 'Sembako',
+        gambarUrl: null,
+        aktif: true,
+      );
+      final gula1kg = Produk(
+        id: 112,
+        kode: 'GLA-1KG',
+        barcode: '8991103',
+        nama: 'Gula kg',
+        hargaBeli: 15000,
+        hargaJual: 18000,
+        stok: 50,
+        kategoriId: 1,
+        kategoriNama: 'Sembako',
+        gambarUrl: null,
+        aktif: true,
+      );
+
+      final komponen = [beras2_5, minyak1L, gula1kg];
+      // Penyesuaian otomatis ke total harga eceran jika harga belum diset
+      final totalEceran = komponen.fold<double>(0, (sum, p) => sum + p.hargaJual);
+      expect(totalEceran, 78000); // 38.000 + 22.000 + 18.000 = 78.000
+
+      final totalHpp = komponen.fold<double>(0, (sum, p) => sum + p.hargaBeli);
+      expect(totalHpp, 68000); // 34.000 + 19.000 + 15.000 = 68.000
+
+      // Penyesuaian ke harga promo grand opening: 75.000
+      const hargaPromoGrandOpening = 75000.0;
+      final hematPromo = totalEceran - hargaPromoGrandOpening;
+      expect(hematPromo, 3000); // Hemat Rp 3.000 dibanding eceran
+      expect(hargaPromoGrandOpening, greaterThan(totalHpp)); // Margin toko tetap aman (+ Rp 7.000)
     });
 
     test('UAT-02: Pembuatan Paket 1 (Paket Sembako Barokah) & Hitung HPP Otomatis', () {

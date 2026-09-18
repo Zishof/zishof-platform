@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -23,10 +23,10 @@ void main() {
       );
     });
 
-    test('Dialog pemilih komponen _tambahKomponenPaket memfilter status JUAL', () {
+    test('Dialog pemilih komponen _tambahKomponenPaket mengizinkan semua produk aktif', () {
       expect(produkScreenCode, contains('_tambahKomponenPaket'));
-      expect(produkScreenCode, contains("p.jenisItem == 'JUAL' || p.jenisItem.isEmpty"));
-      expect(produkScreenCode, contains('Pilih Komponen Paket (Produk Dijual)'));
+      expect(produkScreenCode, contains('p.aktif'));
+      expect(produkScreenCode, contains('Pilih Komponen Paket'));
     });
 
     test('Badge visual [PAKET] terpasang di baris tabel dan kartu produk', () {

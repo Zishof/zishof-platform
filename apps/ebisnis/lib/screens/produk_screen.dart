@@ -2551,11 +2551,13 @@ class _BahanBakuBaris {
   String nama;
   final TextEditingController qty;
   final TextEditingController harga;
+  double hargaJual;
   _BahanBakuBaris(
       {this.produkId,
       required this.nama,
       String qtyAwal = '1',
-      String hargaAwal = '0'})
+      String hargaAwal = '0',
+      this.hargaJual = 0})
       : qty = TextEditingController(text: qtyAwal),
         harga = TextEditingController(text: hargaAwal);
   void dispose() {
@@ -2714,11 +2716,22 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
     _hargaPack = TextEditingController(
         text: p?.hargaPack == null ? '' : '${p!.hargaPack}');
     for (final b in p?.bahanBaku ?? const <Map<String, dynamic>>[]) {
+      final pid = (b['produkId'] as num?)?.toInt();
+      double hj = (b['hargaJual'] as num?)?.toDouble() ?? 0;
+      if (hj == 0 && pid != null) {
+        for (final item in widget.semuaProduk) {
+          if (item.id == pid) {
+            hj = item.hargaJual;
+            break;
+          }
+        }
+      }
       _bahanBaku.add(_BahanBakuBaris(
-        produkId: (b['produkId'] as num?)?.toInt(),
+        produkId: pid,
         nama: (b['nama'] as String?) ?? '-',
         qtyAwal: '${b['qty'] ?? 1}',
         hargaAwal: '${b['harga'] ?? 0}',
+        hargaJual: hj,
       ));
     }
     _ekstraPilihan.addAll(p?.ekstraPilihan ?? const <int>[]);
@@ -2757,6 +2770,9 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
 
   double get _totalHpp => _bahanBaku.fold(
       0, (s, b) => s + _angka(b.qty.text) * _angka(b.harga.text));
+
+  double get _totalHargaJualEceranKomponen => _bahanBaku.fold(
+      0, (s, b) => s + _angka(b.qty.text) * b.hargaJual);
 
   String _namaUom(int? id) {
     if (id == null) return '';
@@ -2948,20 +2964,30 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
     final dipilih = await showDialog<Produk>(
       context: context,
       builder: (_) => _DialogPilihProduk(
-        title: 'Pilih Komponen Paket (Produk Dijual)',
+        title: 'Pilih Komponen Paket',
         tampilkanHargaJual: true,
         daftar: widget.semuaProduk
             .where((p) =>
                 p.id != widget.produk?.id &&
-                (p.jenisItem == 'JUAL' || p.jenisItem.isEmpty))
+                p.aktif &&
+                p.jenisItem != 'PAKET')
             .toList(),
       ),
     );
     if (dipilih == null) return;
-    setStateIfMounted(() => _bahanBaku.add(_BahanBakuBaris(
+    setStateIfMounted(() {
+      _bahanBaku.add(_BahanBakuBaris(
         produkId: dipilih.id,
         nama: dipilih.nama,
-        hargaAwal: dipilih.hargaBeli.toStringAsFixed(0))));
+        qtyAwal: '1',
+        hargaAwal: (dipilih.hargaBeli > 0 ? dipilih.hargaBeli : dipilih.hargaJual)
+            .toStringAsFixed(0),
+        hargaJual: dipilih.hargaJual,
+      ));
+      if (_angka(_hargaJual.text) == 0) {
+        _hargaJual.text = _totalHargaJualEceranKomponen.toStringAsFixed(0);
+      }
+    });
   }
 
   Future<void> _tambahBahanBaku() async {
@@ -3974,7 +4000,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                 child: _bahanBaku.isEmpty
                     ? Text(
                         _jenisItem == 'PAKET'
-                            ? 'Belum ada komponen -- Harga Beli diisi manual. Tambahkan produk dijual di sini sebagai komponen paket (HPP dihitung otomatis).'
+                            ? 'Belum ada komponen -- Harga Beli diisi manual. Tambahkan produk aktif di sini sebagai komponen paket (HPP dihitung otomatis).'
                             : 'Belum ada resep -- Harga Beli diisi manual. Tambahkan komponen di sini kalau produk ini dirakit dari bahan lain (HPP dihitung otomatis).',
                         style: TextStyle(
                             fontSize: 12,
@@ -3987,9 +4013,27 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                                   children: [
                                     Expanded(
                                         flex: 3,
-                                        child: Text(b.nama,
-                                            style:
-                                                const TextStyle(fontSize: 13))),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(b.nama,
+                                                style: const TextStyle(
+                                                    fontSize: 13,
+                                                    fontWeight:
+                                                        FontWeight.w500)),
+                                            if (_jenisItem == 'PAKET' &&
+                                                b.hargaJual > 0)
+                                              Text(
+                                                'Eceran: ${_formatRupiah.format(b.hargaJual)}',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: AppColors
+                                                      .textSecondaryOf(context),
+                                                ),
+                                              ),
+                                          ],
+                                        )),
                                     const SizedBox(width: 8),
                                     Expanded(
                                       flex: 2,
@@ -4015,7 +4059,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                                         decoration:
                                             AppFormStyle.fieldDecoration(
                                           context,
-                                          labelText: 'Harga Satuan',
+                                          labelText: 'HPP Satuan',
                                           isDense: true,
                                         ),
                                         onChanged: (_) =>
@@ -4032,7 +4076,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('Total HPP',
+                              const Text('Total HPP (Modal)',
                                   style:
                                       TextStyle(fontWeight: FontWeight.bold)),
                               Text(_formatRupiah.format(_totalHpp),
@@ -4041,6 +4085,65 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                                       color: AppColors.primary)),
                             ],
                           ),
+                          if (_jenisItem == 'PAKET' &&
+                              _totalHargaJualEceranKomponen > 0) ...[
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Total Nilai Eceran Komponen',
+                                    style: TextStyle(fontSize: 12)),
+                                Text(
+                                    _formatRupiah.format(
+                                        _totalHargaJualEceranKomponen),
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                            if (_angka(_hargaJual.text) > 0 &&
+                                _totalHargaJualEceranKomponen >
+                                    _angka(_hargaJual.text)) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Hemat Promo Bundling',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.green,
+                                          fontWeight: FontWeight.w600)),
+                                  Text(
+                                    _formatRupiah.format(
+                                        _totalHargaJualEceranKomponen -
+                                            _angka(_hargaJual.text)),
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.green,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ],
+                            const SizedBox(height: 4),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: () {
+                                  setStateIfMounted(() {
+                                    _hargaJual.text =
+                                        _totalHargaJualEceranKomponen
+                                            .toStringAsFixed(0);
+                                  });
+                                },
+                                icon: const Icon(Icons.auto_fix_high, size: 14),
+                                label: const Text(
+                                    'Samakan Harga Jual dgn Total Eceran',
+                                    style: TextStyle(fontSize: 11)),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
               ),
