@@ -28,6 +28,10 @@ $ErrorActionPreference = 'Stop'
 $appDir = Split-Path $PSScriptRoot -Parent
 Set-Location $appDir
 
+if (Test-Path 'C:\Program Files\Eclipse Adoptium\jdk-17.0.20.8-hotspot') {
+    $env:JAVA_HOME = 'C:\Program Files\Eclipse Adoptium\jdk-17.0.20.8-hotspot'
+}
+
 # Model ONNX tidak disimpan di Git. Unduh dan verifikasi hash sebelum build
 # varian mana pun agar APK/Windows tidak terbit tanpa fitur wajah.
 & (Join-Path $PSScriptRoot 'unduh_model_wajah.ps1')
