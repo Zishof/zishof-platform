@@ -148,6 +148,18 @@ class AppProductProfile {
           fiturGrup: const {FiturGrup.pos, FiturGrup.mitrainap},
         );
 
+  /// Varian "Frozen Food" (Sarimpi Jaya Frozen) -- POS frozen food untuk tenant
+  /// sarimpijaya. Server bawaan https://sarimpijaya.ebisnis.id/ebisnis.
+  const AppProductProfile.frozenFood()
+      : this._(
+          kode: 'frozenfood',
+          namaAplikasi: 'Sarimpi Jaya Frozen POS',
+          namaSidebar: 'Sarimpi Jaya Frozen',
+          updateAssetKeyword: 'frozenfood',
+          logoAsset: 'assets/images/frozenfood/icon.png',
+          fiturGrup: const {FiturGrup.pos},
+        );
+
   /// Profil yang cocok dgn `--dart-define=EBISNIS_VARIANT` build ini -- dipakai
   /// `main.dart` (entrypoint default melayani ebisnis & albahjah sekaligus).
   factory AppProductProfile.dariDartDefine() {
@@ -160,6 +172,7 @@ class AppProductProfile {
     if (AppVariant.isEmedik) return const AppProductProfile.emedik();
     if (AppVariant.isMitraInap) return const AppProductProfile.mitrainap();
     if (AppVariant.isPetra) return const AppProductProfile.petra();
+    if (AppVariant.isFrozenFood) return const AppProductProfile.frozenFood();
     return const AppProductProfile.ebisnis();
   }
 
@@ -175,6 +188,7 @@ class AppProductProfile {
   bool get isEmedik => fiturGrup.contains(FiturGrup.emedik);
 
   bool get isMitraInap => fiturGrup.contains(FiturGrup.mitrainap);
+  bool get isFrozenFood => kode == 'frozenfood';
 
   /// Prefix tag rilis GitHub utk update-checker VARIAN yg punya rilis bertag
   /// khusus. Al-Bahjah dan Nahl WAJIB berbeda kanal karena nama paket Nahl
@@ -190,6 +204,7 @@ class AppProductProfile {
     // updater tidak akan menarik rilis `v*` ebisnis ke instalasi MitraInap.
     if (kode == 'mitrainap') return 'mitrainap-';
     if (kode == 'petra') return 'petra-';
+    if (kode == 'frozenfood') return 'frozenfood-';
     if (kode == 'nahl') return 'nahl-';
     // eBisnis memakai kanal rilis utama `v*`. Prefix eksplisit diperlukan
     // supaya checker tidak membaca `releases/latest` yang dapat menunjuk rilis

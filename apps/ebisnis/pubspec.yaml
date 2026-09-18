@@ -135,6 +135,9 @@ flutter:
     - assets/images/emedik/login-background.png
     - assets/images/petra/icon.png
     - assets/images/petra/login-background.png
+    - assets/images/frozenfood/icon.png
+    - assets/images/frozenfood/login-background.png
+    - assets/images/frozenfood/produk/
     - assets/images/help/apotik-workflow.png
     - assets/images/help/emedik-workflow.png
     # Model wajah on-device (SFace+YuNet ONNX, diunduh

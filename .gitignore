@@ -54,3 +54,6 @@ Thumbs.db
 # Render QA dan bytecode lokal; artefak final PDF/PNG tetap dilacak.
 docs/pos/uat-offline-*/rendered/
 **/__pycache__/
+
+apps/ebisnis/ebisnis.db
+

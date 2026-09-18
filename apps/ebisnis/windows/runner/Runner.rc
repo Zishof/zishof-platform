@@ -64,6 +64,8 @@ IDI_APP_ICON            ICON                    "resources\\icon_apotik.ico"
 IDI_APP_ICON            ICON                    "resources\\icon_emedik.ico"
 #elif defined(EBISNIS_VARIANT_PETRA)
 IDI_APP_ICON            ICON                    "resources\\icon_petra.ico"
+#elif defined(EBISNIS_VARIANT_FROZENFOOD)
+IDI_APP_ICON            ICON                    "resources\\icon_frozenfood.ico"
 #else
 IDI_APP_ICON            ICON                    "resources\\app_icon.ico"
 #endif
@@ -141,6 +143,11 @@ BEGIN
             VALUE "InternalName", "ebisnis_mitrainap" "\0"
             VALUE "OriginalFilename", "ebisnis_mitrainap.exe" "\0"
             VALUE "ProductName", "MitraInap" "\0"
+#elif defined(EBISNIS_VARIANT_FROZENFOOD)
+            VALUE "FileDescription", "Sarimpi Jaya Frozen POS" "\0"
+            VALUE "InternalName", "ebisnis_frozenfood" "\0"
+            VALUE "OriginalFilename", "ebisnis_frozenfood.exe" "\0"
+            VALUE "ProductName", "Sarimpi Jaya Frozen POS" "\0"
 #else
             VALUE "FileDescription", "ebisnis" "\0"
             VALUE "InternalName", "ebisnis" "\0"

@@ -34,11 +34,15 @@ class LaporanDetailScreen extends StatefulWidget {
   /// Unit yang dipra-pilih (konfigurasi `satuan_kerja_kantin` di server).
   final int satuanKerjaDefault;
 
+  /// Hasil laporan awal untuk mode offline / mock / testing
+  final Map<String, dynamic>? hasilAwal;
+
   const LaporanDetailScreen({
     super.key,
     required this.item,
     this.satuanKerja = const [],
     this.satuanKerjaDefault = 0,
+    this.hasilAwal,
   });
 
   @override
@@ -85,6 +89,9 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
     final adaBawaan = widget.satuanKerja
         .any((e) => (e['id'] as num?)?.toInt() == widget.satuanKerjaDefault);
     _satkerId = adaBawaan ? widget.satuanKerjaDefault : 0;
+    if (widget.hasilAwal != null) {
+      _hasil = Map<String, dynamic>.from(widget.hasilAwal!);
+    }
   }
 
   @override
@@ -870,7 +877,12 @@ class _TabelLaporanState extends State<_TabelLaporan> {
 
   String _fmtSel(dynamic v, String tipe, String label) {
     if (v == null) return '';
-    if (tipe == 'num') return _fmtNum(v as num, _isHitungKolom(label));
+    if (tipe == 'num') {
+      if (v is num) return _fmtNum(v, _isHitungKolom(label));
+      final parsed = num.tryParse(v.toString());
+      if (parsed != null) return _fmtNum(parsed, _isHitungKolom(label));
+      return v.toString();
+    }
     return v.toString();
   }
 

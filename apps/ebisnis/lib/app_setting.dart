@@ -44,13 +44,18 @@ class AppSetting {
   /// "Ubah Alamat Server" pada layar Masuk.
   ///
   /// Al-Bahjah tetap memakai server khusus
-  /// https://ecampus.staialbahjah.ac.id/albahjah, dan eKantin Petra memakai
-  /// https://kantinpcu.ecampus.id/petra.
+  /// https://ecampus.staialbahjah.ac.id/albahjah, eKantin Petra memakai
+  /// https://kantinpcu.ecampus.id/petra, dan Sarimpi Jaya Frozen memakai
+  /// https://sarimpijaya.ebisnis.id/ebisnis.
   static const String baseUrlHost = AppVariant.isAlBahjah
       ? 'ecampus.staialbahjah.ac.id'
       : (AppVariant.isNahl
           ? 'an-nahl.santri.info'
-          : (AppVariant.isPetra ? 'kantinpcu.ecampus.id' : 'ebisnis.id'));
+          : (AppVariant.isPetra
+              ? 'kantinpcu.ecampus.id'
+              : (AppVariant.isFrozenFood
+                  ? 'sarimpijaya.ebisnis.id'
+                  : 'ebisnis.id')));
   static const String baseUrlContextPath = AppVariant.isAlBahjah
       ? 'albahjah'
       : (AppVariant.isNahl

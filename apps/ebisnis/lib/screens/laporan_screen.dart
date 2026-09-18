@@ -40,6 +40,7 @@ class LaporanScreen extends StatefulWidget {
   /// tiap menu mendarat di bagiannya tanpa menduplikasi panelnya jadi layar
   /// tersendiri. Id yang tidak ada pada katalog server diabaikan (tab katalog).
   final String? bukaPosting;
+  final List<Map<String, dynamic>>? kategoriAwal;
   const LaporanScreen({
     super.key,
     this.aksiKatalog = 'laporan_katalog',
@@ -47,6 +48,7 @@ class LaporanScreen extends StatefulWidget {
     this.judul = 'Laporan-Laporan',
     this.subjudul = 'Katalog laporan siap pakai',
     this.bukaPosting,
+    this.kategoriAwal,
   });
 
   @override
@@ -75,7 +77,12 @@ class _LaporanScreenState extends State<LaporanScreen> with JejakGalat {
   @override
   void initState() {
     super.initState();
-    _muat();
+    if (widget.kategoriAwal != null) {
+      _kategori = List<Map<String, dynamic>>.from(widget.kategoriAwal!);
+      _memuat = false;
+    } else {
+      _muat();
+    }
     // Submenu Akuntansi > Posting HPP / Posting Penjualan langsung mendarat di
     // tabnya (lihat _katalogBertab), tidak lagi membuka dialog melayang.
   }

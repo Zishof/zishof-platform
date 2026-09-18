@@ -46,6 +46,12 @@ class AppVariant {
   /// Build: `-t lib/main_petra.dart --dart-define=EBISNIS_VARIANT=petra`.
   static const isPetra = kode == 'petra';
 
+  /// Varian "Frozen Food" (Sarimpi Jaya Frozen). Server bawaan berada pada
+  /// https://sarimpijaya.ebisnis.id/ebisnis dan namespace lokalnya dipisahkan
+  /// agar transaksi, cache, serta outbox tidak bercampur.
+  /// Build: `-t lib/main_frozenfood.dart --dart-define=EBISNIS_VARIANT=frozenfood`.
+  static const isFrozenFood = kode == 'frozenfood';
+
   static const isEBisnis = kode == 'default' || kode == 'ebisnis';
 
   /// Namespace stabil untuk seluruh data lokal. Nilai ini tidak mengikuti
@@ -64,7 +70,9 @@ class AppVariant {
                       ? 'emedik'
                       : (isMitraInap
                           ? 'mitrainap'
-                          : (isPetra ? 'petra' : 'ebisnis'))))));
+                          : (isPetra
+                              ? 'petra'
+                              : (isFrozenFood ? 'frozenfood' : 'ebisnis')))))));
 
   static const namaAplikasi = isAlBahjah
       ? 'Al-Bahjah POS'
@@ -78,7 +86,11 @@ class AppVariant {
                       ? 'eBisnis POS eMedik'
                       : (isMitraInap
                           ? 'MitraInap'
-                          : (isPetra ? 'eKantin Petra' : 'eBisnis'))))));
+                          : (isPetra
+                              ? 'eKantin Petra'
+                              : (isFrozenFood
+                                  ? 'Sarimpi Jaya Frozen POS'
+                                  : 'eBisnis')))))));
   static const namaSidebar = isAlBahjah
       ? 'Al-Bahjah POS'
       : (isNahl
@@ -91,7 +103,11 @@ class AppVariant {
                       ? 'POS eMedik'
                       : (isMitraInap
                           ? 'MitraInap'
-                          : (isPetra ? 'eKantin Petra' : 'eBisnis POS'))))));
+                          : (isPetra
+                              ? 'eKantin Petra'
+                              : (isFrozenFood
+                                  ? 'Sarimpi Jaya Frozen'
+                                  : 'eBisnis POS')))))));
   static const updateAssetKeyword = isAlBahjah
       ? 'albahjah'
       : (isNahl
@@ -104,7 +120,9 @@ class AppVariant {
                       ? 'emedik'
                       : (isMitraInap
                           ? 'mitrainap'
-                          : (isPetra ? 'petra' : 'ebisnis'))))));
+                          : (isPetra
+                              ? 'petra'
+                              : (isFrozenFood ? 'frozenfood' : 'ebisnis')))))));
 
   /// Kanal rilis harus berbeda untuk Al-Bahjah dan Nahl. Nama installer Nahl
   /// mengandung teks "Al-Bahjah An-Nahl", sehingga memilih rilis global lalu
@@ -121,7 +139,9 @@ class AppVariant {
                       ? 'mitrainap-'
                       : (isPetra
                           ? 'petra-'
-                          : (isNahl ? 'nahl-' : (isEBisnis ? 'v' : null)))))));
+                          : (isFrozenFood
+                              ? 'frozenfood-'
+                              : (isNahl ? 'nahl-' : (isEBisnis ? 'v' : null))))))));
   static const labelPerangkat = isAlBahjah
       ? 'Al-Bahjah POS Flutter Pilot'
       : (isNahl
@@ -136,7 +156,9 @@ class AppVariant {
                           ? 'MitraInap Flutter'
                           : (isPetra
                               ? 'eKantin Petra Flutter'
-                              : 'eBisnis Flutter Pilot'))))));
+                              : (isFrozenFood
+                                  ? 'Sarimpi Jaya Frozen POS Flutter'
+                                  : 'eBisnis Flutter Pilot')))))));
   static const logoAsset = isAlBahjah
       ? 'assets/images/albahjah/icon.png'
       : (isNahl
@@ -149,7 +171,9 @@ class AppVariant {
                       ? 'assets/images/emedik/icon.png'
                       : (isPetra
                           ? 'assets/images/petra/icon.png'
-                          : 'assets/images/ebisnis/icon.png')))));
+                          : (isFrozenFood
+                              ? 'assets/images/frozenfood/icon.png'
+                              : 'assets/images/ebisnis/icon.png'))))));
 
   /// Latar layar masuk mengikuti unit usaha. Aset sengaja dipisah per varian
   /// agar identitas eBisnis umum, Inventory, Apotik, eMedik, dan Al-Bahjah
@@ -166,7 +190,9 @@ class AppVariant {
                       ? 'assets/images/emedik/login-background.png'
                       : (isPetra
                           ? 'assets/images/petra/login-background.png'
-                          : 'assets/images/ebisnis/login-background.png')))));
+                          : (isFrozenFood
+                              ? 'assets/images/frozenfood/login-background.png'
+                              : 'assets/images/ebisnis/login-background.png'))))));
 
   /// Judul kartu di layar Masuk -- BEDA dari [namaAplikasi] (yang tetap dipakai
   /// di window title/sidebar/label perangkat/update asset keyword). Al-Bahjah
@@ -176,7 +202,9 @@ class AppVariant {
       ? 'Unit Usaha Al Bahjah'
       : (isNahl
           ? 'TokoQu Al-Bahjah An Nahl'
-          : (isPetra ? 'Masuk eKantin' : namaAplikasi));
+          : (isPetra
+              ? 'Masuk eKantin'
+              : (isFrozenFood ? 'Sarimpi Jaya Frozen' : namaAplikasi)));
 
   /// Sub-judul (tagline) di bawah judul kartu Masuk. Al-Bahjah minta kalimat
   /// visi-misi pesantren menggantikan "Masuk sebagai Kasir" generik.
@@ -192,7 +220,9 @@ class AppVariant {
                       ? 'Masuk sesuai peran Anda di layanan eMedik'
                       : (isPetra
                           ? 'Selamat datang kembali, silakan masuk ke akun Anda.'
-                          : 'Masuk ke sistem operasional eBisnis')))));
+                          : (isFrozenFood
+                              ? 'Produk Frozen Food & Olahan Daging Berkualitas'
+                              : 'Masuk ke sistem operasional eBisnis'))))));
 
   /// ── Identitas panel kiri layar Masuk (khusus Petra) ────────────────────
   /// Versi web eKantin Petra memakai kartu dua kolom: panel biru berisi
