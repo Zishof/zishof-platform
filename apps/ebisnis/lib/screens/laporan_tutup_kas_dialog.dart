@@ -144,9 +144,10 @@ class LaporanTutupKasDialog extends StatelessWidget {
       await cetakLangsungKePrinterDefault(
           dokumen: dokumen, nama: 'Laporan Tutup Kas');
     } catch (e) {
-      if (context.mounted)
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Laporan belum dapat dicetak: $e')));
+      }
     }
   }
 
