@@ -6,6 +6,7 @@ berhubungan dengan POS harus dicatat di sini sebelum pekerjaan dinyatakan selesa
 
 Dokumen aktif:
 
+- [Standar Provisioning Tenant Baru eBisnis POS: Toko Default, Akun Kasir/Admin, dan Sinkronisasi Produk](2026-09-19-standar-provisioning-tenant-baru-toko-akun-produk.md)
 - [Baseline wajib user manual dan UAT bergambar](2026-09-04-standar-user-manual-bergambar.md)
 - [ATURAN WAJIB: Local-first untuk semua modul](ATURAN-WAJIB-LOCAL-FIRST.md)
 - [Publikasi eBisnis POS Desktop 1.34.16 — 1 September 2026](2026-09-01-publikasi-desktop-ebisnis-1.34.16.md)
