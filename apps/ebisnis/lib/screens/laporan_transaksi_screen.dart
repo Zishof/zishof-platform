@@ -15,6 +15,7 @@ import '../widgets/safe_state.dart';
 import 'inventory_sales/cetak_util.dart';
 import 'laporan_tutup_kas_dialog.dart';
 import 'struk_screen.dart';
+import '../sesi.dart';
 import '../widgets/jejak_galat.dart';
 
 final _formatRupiah =
