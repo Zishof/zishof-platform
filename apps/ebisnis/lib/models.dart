@@ -151,7 +151,13 @@ class Produk {
         satuanPackNama: (j['satuanPackNama'] ?? '') as String,
         hargaPack: (j['hargaPack'] as num?)?.toDouble(),
         faktorPackKeDasar: (j['faktorPackKeDasar'] as num?)?.toDouble(),
-        gambarUrl: j['gambarUrl'] as String?,
+        gambarUrl: (j['gambarUrl'] as String?)?.trim().isNotEmpty == true
+            ? (j['gambarUrl'] as String).trim()
+            : fallbackAssetProduk(
+                kode: (j['kode'] ?? '') as String,
+                nama: (j['nama'] ?? '') as String,
+                barcode: (j['barcode'] ?? '') as String,
+              ),
         hargaBeli: (j['hargaBeli'] as num?)?.toDouble() ?? 0,
         keterangan: (j['keterangan'] ?? '') as String,
         izinkanJualMinusStok: j['izinkanJualMinusStok'] == true,
@@ -176,7 +182,15 @@ class Produk {
   /// Baris utk `CoreDb.replaceProdukCache` -- dipakai bersama oleh KasirScreen
   /// dan ProdukScreen (keduanya menyegarkan cache lokal yg sama dari respons
   /// `katalog` yang identik) supaya pemetaan JSON->kolom SQLite tidak dobel.
-  static Map<String, Object?> baseKeCacheRow(Map<String, dynamic> j) => {
+  static Map<String, Object?> baseKeCacheRow(Map<String, dynamic> j) {
+    final gbr = (j['gambarUrl'] as String?)?.trim().isNotEmpty == true
+        ? (j['gambarUrl'] as String).trim()
+        : fallbackAssetProduk(
+            kode: (j['kode'] ?? '') as String,
+            nama: (j['nama'] ?? '') as String,
+            barcode: (j['barcode'] ?? '') as String,
+          );
+    return {
         'id': j['id'],
         'kode': j['kode'] ?? '',
         'barcode': j['barcode'] ?? '',
@@ -185,7 +199,7 @@ class Produk {
         'stok': j['stok'] ?? 0,
         'kategori_id': j['kategoriId'],
         'kategori_nama': j['kategoriNama'] ?? '',
-        'gambar_url': j['gambarUrl'],
+        'gambar_url': gbr,
         'aktif': j['aktif'] == false ? 0 : 1,
         'jenis_item': (j['jenisItem'] as String?)?.isNotEmpty == true
             ? j['jenisItem']
@@ -200,6 +214,7 @@ class Produk {
             ((j['fotoUrls'] as List?) ?? []).map((e) => e as String).toList()),
         'izinkan_jual_minus_stok': j['izinkanJualMinusStok'] == true ? 1 : 0,
       };
+  }
 
   /// Kebalikan [baseKeCacheRow] utk kolom dasarnya: baris cache lokal ->
   /// bentuk JSON `katalog`. Dipakai layar pencarian produk yang jatuh ke
@@ -256,6 +271,59 @@ class Produk {
     } catch (_) {
       return const [];
     }
+  }
+
+  /// Peta aset bawaan offline untuk varian produk khusus (mis. Sarimpi Jaya Frozen).
+  /// Menjamin kartu katalog tetap memiliki visual produk HD saat server belum
+  /// memiliki unggahan berkas foto di backend.
+  static String? fallbackAssetProduk({
+    required String kode,
+    required String nama,
+    required String barcode,
+  }) {
+    final k = kode.trim().toUpperCase();
+    final b = barcode.trim().toUpperCase();
+    final n = nama.trim().toLowerCase();
+
+    // Sarimpi Jaya Frozen
+    if (k == 'PKJ01' || b.contains('PKJ-01') || b.contains('KJ-KECIL') || (n.contains('pentol') && n.contains('50'))) {
+      return 'assets/images/frozenfood/produk/pentol_kj_kecil.png';
+    }
+    if (k == 'PKJ02' || b.contains('PKJ-02') || b.contains('KJ-BESAR') || (n.contains('pentol') && (n.contains('besar') || n.contains('10')))) {
+      return 'assets/images/frozenfood/produk/pentol_kj_besar.png';
+    }
+    if (k == 'BDK01' || k == 'BDH01' || b.contains('BDH-01') || b.contains('DG-KECIL') || (n.contains('halus') && n.contains('kecil'))) {
+      return 'assets/images/frozenfood/produk/bakso_daging_kecil.png';
+    }
+    if (k == 'BDB01' || k == 'BDH02' || b.contains('BDH-02') || b.contains('DG-BESAR') || (n.contains('halus') && n.contains('besar'))) {
+      return 'assets/images/frozenfood/produk/bakso_daging_besar.png';
+    }
+    if (k == 'BSD25' || k == 'BSK25' || b.contains('BSK-25') || b.contains('SD-KSR-25') || (n.contains('sedang') && (n.contains('kasar') || n.contains('halus')))) {
+      return 'assets/images/frozenfood/produk/bakso_sedang_25.png';
+    }
+    if (k == 'BBS10' || k == 'BBK10' || b.contains('BBK-10') || b.contains('URAT-BSR') || (n.contains('urat') && n.contains('besar')) || (n.contains('besar') && n.contains('kasar'))) {
+      return 'assets/images/frozenfood/produk/bakso_besar_10.png';
+    }
+    if (k == 'BJB06' || k == 'BJK06' || b.contains('BJK-06') || b.contains('BKS-JMB') || n.contains('tahu bakso') || n.contains('jumbo')) {
+      return 'assets/images/frozenfood/produk/bakso_jumbo_6.png';
+    }
+    if (k == 'BKL04' || b.contains('BKL-04') || b.contains('KLG-4') || n.contains('siomay') || n.contains('klenger')) {
+      return 'assets/images/frozenfood/produk/bakso_klenger_4.png';
+    }
+    if (k == 'ADNAYM' || b.contains('ADN-AYM') || b.contains('ADN-AYAM') || n.contains('adonan ayam') || n.contains('bumbu kuah')) {
+      return 'assets/images/frozenfood/produk/adonan_ayam.png';
+    }
+    if (k == 'ADNSPI' || b.contains('ADN-SPI') || b.contains('ADN-SAPI') || n.contains('adonan sapi') || n.contains('bawang goreng')) {
+      return 'assets/images/frozenfood/produk/adonan_sapi.png';
+    }
+    if (k == 'ADNSLH' || b.contains('ADN-SLH') || b.contains('SOLO-HLS') || n.contains('solo halus') || n.contains('sambal bakso')) {
+      return 'assets/images/frozenfood/produk/adonan_solo_halus.png';
+    }
+    if (k == 'ADNSLK' || b.contains('ADN-SLK') || b.contains('SOLO-KSR') || n.contains('solo kasar') || n.contains('paket bakso')) {
+      return 'assets/images/frozenfood/produk/adonan_solo_kasar.png';
+    }
+
+    return null;
   }
 }
 

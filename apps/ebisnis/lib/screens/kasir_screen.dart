@@ -326,7 +326,13 @@ class _KasirScreenState extends State<KasirScreen> {
         stok: (b['stok'] as num?)?.toInt() ?? 0,
         kategoriId: b['kategori_id'] as int?,
         kategoriNama: (b['kategori_nama'] ?? '') as String,
-        gambarUrl: b['gambar_url'] as String?,
+        gambarUrl: (b['gambar_url'] as String?)?.trim().isNotEmpty == true
+            ? (b['gambar_url'] as String).trim()
+            : Produk.fallbackAssetProduk(
+                kode: (b['kode'] ?? '') as String,
+                nama: (b['nama'] ?? '') as String,
+                barcode: (b['barcode'] ?? '') as String,
+              ),
         izinkanJualMinusStok:
             (b['izinkan_jual_minus_stok'] as num?)?.toInt() == 1,
         // Offline-first: gerbang "Pilih Ekstra" (_tambahKeKeranjang) harus
