@@ -1399,14 +1399,28 @@ class _KasirScreenState extends State<KasirScreen> {
   Future<void> _submitPencarian(String nilai) async {
     final v = nilai.trim();
     if (v.isEmpty) return;
-    var cocok =
-        _semuaProduk.where((p) => p.kode == v || p.barcode == v).toList();
+
+    // Kandidat pencocokan barcode: nilai asli, serta konversi UPC-A (12 digit) <-> EAN-13 (awalan '0')
+    final kandidat = <String>{v};
+    if (v.length == 12 && RegExp(r'^\d{12}$').hasMatch(v)) {
+      kandidat.add('0$v');
+    } else if (v.length == 13 && v.startsWith('0') && RegExp(r'^\d{13}$').hasMatch(v)) {
+      kandidat.add(v.substring(1));
+    }
+
+    bool cocokBarcode(String? barcode, String? kode) {
+      if (barcode != null && kandidat.contains(barcode.trim())) return true;
+      if (kode != null && kandidat.contains(kode.trim())) return true;
+      return false;
+    }
+
+    var cocok = _semuaProduk.where((p) => cocokBarcode(p.barcode, p.kode)).toList();
     Produk? produkKemasan;
     Map<String, dynamic>? kemasanCocok;
     if (cocok.isEmpty) {
       for (final p in _semuaProduk) {
         for (final k in p.kemasan) {
-          if (k['aktif'] != false && '${k['barcode'] ?? ''}' == v) {
+          if (k['aktif'] != false && cocokBarcode('${k['barcode'] ?? ''}', null)) {
             produkKemasan = p;
             kemasanCocok = k;
             break;
@@ -1419,7 +1433,7 @@ class _KasirScreenState extends State<KasirScreen> {
       final cache = await CoreDb.instance.produkCache(keyword: v, limit: 10);
       cocok = cache
           .map(_produkDariCache)
-          .where((p) => p.kode == v || p.barcode == v)
+          .where((p) => cocokBarcode(p.barcode, p.kode))
           .toList();
       if (cocok.isEmpty && produkKemasan == null) {
         final semuaCache =
@@ -1427,7 +1441,7 @@ class _KasirScreenState extends State<KasirScreen> {
         for (final row in semuaCache) {
           final p = _produkDariCache(row);
           for (final k in p.kemasan) {
-            if (k['aktif'] != false && '${k['barcode'] ?? ''}' == v) {
+            if (k['aktif'] != false && cocokBarcode('${k['barcode'] ?? ''}', null)) {
               produkKemasan = p;
               kemasanCocok = k;
               break;
@@ -2498,7 +2512,7 @@ class _KasirScreenState extends State<KasirScreen> {
       // kasir yg perlu ketik manual tanpa scanner masih bisa pakai keyboard
       // sentuh Windows lewat taskbar secara manual.
       keyboardType: defaultTargetPlatform == TargetPlatform.windows
-          ? TextInputType.none
+          ? TextInputType.text
           : null,
       decoration: InputDecoration(
         hintText: 'Cari / scan barcode produk...',

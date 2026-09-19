@@ -13,6 +13,7 @@ import '../widgets/kilau_perubahan.dart';
 import '../widgets/penanda_data_tersimpan.dart';
 import '../widgets/safe_state.dart';
 import 'inventory_sales/cetak_util.dart';
+import 'laporan_tutup_kas_dialog.dart';
 import 'struk_screen.dart';
 import '../widgets/jejak_galat.dart';
 
@@ -147,6 +148,7 @@ Future<void> _tampilkanRincianAngka(
   required String nilai,
   String? keterangan,
   Map<String, String> rincian = const {},
+  Widget? aksiTambahan,
 }) async {
   await showDialog<void>(
     context: context,
@@ -198,6 +200,7 @@ Future<void> _tampilkanRincianAngka(
         ),
       ),
       actions: [
+        if (aksiTambahan != null) aksiTambahan,
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(),
           child: const Text('Tutup'),
@@ -217,6 +220,7 @@ Widget _angkaLaporan(
   TextAlign textAlign = TextAlign.left,
   int maxLines = 1,
   VoidCallback? onTap,
+  Widget? aksiTambahan,
 }) {
   return Tooltip(
     message: 'Klik untuk melihat rincian',
@@ -231,6 +235,7 @@ Widget _angkaLaporan(
                   nilai: nilai,
                   keterangan: keterangan,
                   rincian: rincian,
+                  aksiTambahan: aksiTambahan,
                 ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
@@ -1627,9 +1632,64 @@ class _TabSesiState extends State<_TabSesi> with JejakGalat {
     );
   }
 
+  void _cetakLaporanTutupKas(Map<String, dynamic> row) {
+    final Map<String, dynamic> laporan;
+    if (row['laporanTutupKas'] is Map) {
+      laporan = Map<String, dynamic>.from(row['laporanTutupKas'] as Map);
+    } else {
+      laporan = <String, dynamic>{
+        'namaToko': Sesi.instance.tokoNama.isNotEmpty
+            ? Sesi.instance.tokoNama
+            : 'Toko Al-Bahjah',
+        'namaKasir': row['kasir'] ?? row['kasirNama'] ?? '-',
+        'waktuBuka': _formatWaktu(row['waktuBuka']),
+        'waktuTutup': _formatWaktu(row['waktuTutup']),
+        'modalAwal': row['modalAwal'] ?? 0,
+        'penjualanTunai': row['totalTunai'] ?? 0,
+        'kasSeharusnya':
+            ((row['modalAwal'] as num?) ?? 0) + ((row['totalTunai'] as num?) ?? 0),
+        'jumlahKasTunai': row['saldoAkhir'] ?? 0,
+        'selisih': row['selisih'] ?? 0,
+        'returPenjualan': row['returPenjualan'] ?? 0,
+        'biaya': row['biaya'] ?? 0,
+        'jumlahBiaya': row['jumlahBiaya'] ?? 0,
+        'piutang': row['piutang'] ?? 0,
+        'jumlahTransaksiPiutang': row['jumlahTransaksiPiutang'] ?? 0,
+        'jumlahTransaksi': row['jumlahTransaksi'] ?? 0,
+        'totalTransaksi': row['totalTransaksi'] ??
+            (((row['totalTunai'] as num?) ?? 0) +
+                ((row['totalNonTunai'] as num?) ?? 0)),
+        'metodePembayaran': row['metodePembayaran'] ??
+            (row['metode'] is List
+                ? row['metode']
+                : [
+                    if (((row['totalTunai'] as num?) ?? 0) > 0)
+                      {
+                        'nama': 'Tunai',
+                        'penerimaan': row['totalTunai'],
+                        'retur': 0,
+                        'total': row['totalTunai'],
+                      },
+                    if (((row['totalNonTunai'] as num?) ?? 0) > 0)
+                      {
+                        'nama': 'Non Tunai',
+                        'penerimaan': row['totalNonTunai'],
+                        'retur': 0,
+                        'total': row['totalNonTunai'],
+                      },
+                  ]),
+      };
+    }
+
+    showDialog(
+      context: context,
+      builder: (_) => LaporanTutupKasDialog(laporan: laporan),
+    );
+  }
+
   Widget _tabelSesi() {
     return AppDataTable(
-      minWidth: 920,
+      minWidth: 980,
       emptyText: 'Belum ada sesi pada rentang ini.',
       columns: const [
         AppTableColumn('Kode Sesi', flex: 3),
@@ -1638,6 +1698,7 @@ class _TabSesiState extends State<_TabSesi> with JejakGalat {
         AppTableColumn('Waktu Tutup', flex: 2),
         AppTableColumn('Status', flex: 2),
         AppTableColumn('Saldo Akhir', flex: 2, align: TextAlign.right),
+        AppTableColumn('Aksi', flex: 1, align: TextAlign.center),
       ],
       rows: _data.map((row) {
         final tutup = row['status']?.toString().toUpperCase() == 'TUTUP';
@@ -1667,21 +1728,44 @@ class _TabSesiState extends State<_TabSesi> with JejakGalat {
             AppTableCell(
               flex: 2,
               align: TextAlign.right,
-              child: _angkaLaporan(context,
-                  label: 'Saldo akhir sesi ${row['sesiKode'] ?? '-'}',
-                  nilai: _formatRupiah.format(row['saldoAkhir'] ?? 0),
-                  keterangan: proyeksi
-                      ? 'Nilai masih berupa proyeksi karena sesi belum dikonfirmasi tutup.'
-                      : 'Nilai penutupan sesi yang sudah dikonfirmasi.',
-                  rincian: {
-                    'Kasir': '${row['kasir'] ?? '-'}',
-                    'Status': labelStatus,
-                    'Waktu buka': _formatWaktu(row['waktuBuka']),
-                    'Waktu tutup': _formatWaktu(row['waktuTutup']),
-                  },
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                      fontSize: 12.5, fontWeight: FontWeight.w800)),
+              child: _angkaLaporan(
+                context,
+                label: 'Saldo akhir sesi ${row['sesiKode'] ?? '-'}',
+                nilai: _formatRupiah.format(row['saldoAkhir'] ?? 0),
+                keterangan: proyeksi
+                    ? 'Nilai masih berupa proyeksi karena sesi belum dikonfirmasi tutup.'
+                    : 'Nilai penutupan sesi yang sudah dikonfirmasi.',
+                rincian: {
+                  'Kasir': '${row['kasir'] ?? '-'}',
+                  'Status': labelStatus,
+                  'Waktu buka': _formatWaktu(row['waktuBuka']),
+                  'Waktu tutup': _formatWaktu(row['waktuTutup']),
+                },
+                aksiTambahan: tutup
+                    ? OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _cetakLaporanTutupKas(row);
+                        },
+                        icon: const Icon(Icons.print, size: 16),
+                        label: const Text('Cetak Laporan Tutup Kas'),
+                      )
+                    : null,
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                    fontSize: 12.5, fontWeight: FontWeight.w800),
+              ),
+            ),
+            AppTableCell(
+              flex: 1,
+              align: TextAlign.center,
+              child: tutup
+                  ? IconButton(
+                      tooltip: 'Cetak Laporan Tutup Kas',
+                      icon: const Icon(Icons.print, size: 18),
+                      onPressed: () => _cetakLaporanTutupKas(row),
+                    )
+                  : const SizedBox(),
             ),
           ],
         );
