@@ -1022,7 +1022,8 @@ class _KasirScreenState extends State<KasirScreen> {
     if (_sinkronBerjalan) return;
     setStateIfMounted(() => _sinkronBerjalan = true);
     try {
-      final hasil = await TransaksiOutboxService.instance.sinkronkan();
+      final hasil = await TransaksiOutboxService.instance
+          .sinkronkan(sertakanGagal: true);
       await _perbaruiJumlahPending();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

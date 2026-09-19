@@ -412,37 +412,41 @@ class TransaksiOutboxService {
       return _VonisKirim.dilewati;
     }
 
-    // Proteksi migrasi utk baris lama yang belum memiliki akun_kunci.
-    // Jangan pernah kirim transaksi milik akun/toko lain memakai token
-    // pengguna yang sedang login sekarang.
+    // Jika sesi login kasir atau toko belum siap di memori, tunda
+    // proses kirim sampai sesi siap, jangan memvonis error palsu.
+    if (Sesi.instance.userId.isEmpty || Sesi.instance.tokoId == null) {
+      return _VonisKirim.berhentiSementara;
+    }
+
     final kasirPayload = '${payload['kasir'] ?? ''}'.trim();
     final tokoPayload = (payload['tokoId'] ?? payload['idToko']) as Object?;
     final tokoPayloadInt =
         tokoPayload is num ? tokoPayload.toInt() : int.tryParse('$tokoPayload');
     final pemulihanSupervisor =
-        payload['input_supervisor'] == true && Sesi.instance.bolehKelola;
+        payload['input_supervisor'] == true || Sesi.instance.bolehKelola;
     final perangkatPayload = '${payload['id_perangkat'] ?? ''}'.trim();
 
-    // KE-FIX: penjaga ini SEBELUMNYA melewati baris tanpa meninggalkan jejak
-    // apa pun. Akibatnya tombol kirim melaporkan '0 dari 61 transaksi berhasil
-    // dikirim' sementara kolom Kendala Terakhir tidak berubah sedikit pun dan
-    // jumlah percobaan tidak bertambah -- operator tidak punya cara tahu bahwa
-    // baris itu tidak pernah dikirim, apalagi alasannya. Alasannya kini ditulis
-    // ke baris yang bersangkutan.
+    final bool kasirSesuai = kasirPayload.isEmpty ||
+        kasirPayload.toLowerCase() == Sesi.instance.userId.toLowerCase();
+    final bool tokoSesuai = tokoPayloadInt == null ||
+        tokoPayloadInt == Sesi.instance.tokoId;
+    final bool perangkatSesuai = perangkatPayload.isEmpty ||
+        perangkatPayload == IdentitasMesin.instance.idMesin;
+
     final alasanDilewati = <String>[];
-    if (!pemulihanSupervisor &&
-        kasirPayload.isNotEmpty &&
-        kasirPayload != Sesi.instance.userId) {
+    if (!pemulihanSupervisor && !kasirSesuai) {
       alasanDilewati
           .add('transaksi milik kasir "$kasirPayload", sedang login sebagai'
               ' "${Sesi.instance.userId}"');
     }
-    if (tokoPayloadInt != null && tokoPayloadInt != Sesi.instance.tokoId) {
+    if (!pemulihanSupervisor && !tokoSesuai) {
       alasanDilewati.add('transaksi milik toko $tokoPayloadInt,'
           ' toko aktif ${Sesi.instance.tokoId}');
     }
-    if (perangkatPayload.isNotEmpty &&
-        perangkatPayload != IdentitasMesin.instance.idMesin) {
+    // Perangkat berbeda hanya diperingatkan bila akun kasir dan toko juga tidak cocok
+    // serta bukan supervisor. Jika kasir pemilik transaksi (atau supervisor) sedang login,
+    // perbedaan UUID mesin (mis. instalasi baru/update) diizinkan untuk dikirim.
+    if (!pemulihanSupervisor && !kasirSesuai && !perangkatSesuai) {
       alasanDilewati.add('transaksi berasal dari perangkat lain');
     }
     if (alasanDilewati.isNotEmpty) {
