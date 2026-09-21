@@ -225,6 +225,12 @@ class StrukScreen extends StatelessWidget {
     return null;
   }
 
+  /// Saldo nol sah; respons lama tanpa saldo tidak boleh diubah menjadi nol.
+  static double? saldoDariSumber(Map<String, dynamic> sumber) {
+    final nilai = _angkaDariKeys(sumber, const ['saldo', 'sisaSaldo']);
+    return nilai != null && nilai.isFinite ? nilai : null;
+  }
+
   static String labelPembayaran(
     Map<String, dynamic> detail, [
     Map<String, dynamic>? row,
@@ -650,7 +656,7 @@ class StrukScreen extends StatelessWidget {
     if (_totalCashbackItem > 0) {
       pair('Cashback', '+${_formatUang(_totalCashbackItem)}');
     }
-    if (uangDiterima != null) pair('Tunai', _formatUang(uangDiterima!));
+    if (uangDiterima != null) pair('Dibayar', _formatUang(uangDiterima!));
     if (kembalian != null) pair('Kembali', _formatUang(kembalian!));
     final payments = _pembayaranEfektif;
     if (payments.isEmpty) {
@@ -913,7 +919,7 @@ class StrukScreen extends StatelessWidget {
         if (_totalCashbackItem > 0)
           _totalPdf('Cashback', '+${_formatUang(_totalCashbackItem)}'),
         if (uangDiterima != null)
-          _totalPdf('Tunai', _formatUang(uangDiterima!)),
+          _totalPdf('Dibayar', _formatUang(uangDiterima!)),
         if (kembalian != null) _totalPdf('Kembali', _formatUang(kembalian!)),
         ..._pembayaranPdf(),
         if (saldo != null) _totalPdf('Saldo', _formatUang(saldo!)),
@@ -1109,6 +1115,7 @@ class StrukScreen extends StatelessWidget {
   StrukScreen salin({
     double? total,
     double? totalDiskonOverride,
+    double? saldo,
     String? catatanKoreksi,
     bool? koreksiSudahDiterapkan,
     bool? menungguAngkaServer,
@@ -1129,7 +1136,7 @@ class StrukScreen extends StatelessWidget {
       pelanggan: pelanggan,
       uangDiterima: uangDiterima,
       kembalian: kembalian,
-      saldo: saldo,
+      saldo: saldo ?? this.saldo,
       modeCetakUlang: modeCetakUlang,
       jenisDokumen: jenisDokumen,
       totalDiskonOverride: totalDiskonOverride ?? this.totalDiskonOverride,
@@ -1291,6 +1298,7 @@ class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
   DateTime? _mulai;
   double? _totalServer;
   double? _totalDiskonServer;
+  double? _saldoServer;
 
   @override
   void initState() {
@@ -1332,6 +1340,7 @@ class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
             setState(() {
               _totalServer = t;
               _totalDiskonServer = d;
+              _saldoServer = StrukScreen.saldoDariSumber(Map<String, dynamic>.from(peta));
               _selesai = true;
             });
             if (catatan.isNotEmpty) {
@@ -1381,6 +1390,7 @@ class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
       return asli.salin(
         koreksiSudahDiterapkan: true,
         menungguAngkaServer: !_selesai,
+        saldo: _saldoServer,
       );
     }
     // Pembanding 1 rupiah: beda di bawah itu hanya pembulatan, bukan selisih
@@ -1395,6 +1405,7 @@ class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
       tersinkron: true,
       total: totalServer,
       totalDiskonOverride: _totalDiskonServer,
+      saldo: _saldoServer,
       catatanKoreksi: berbeda
           ? 'Total disesuaikan server dari ${_rupiah(asli.total)} menjadi'
               ' ${_rupiah(totalServer)}'
@@ -1731,7 +1742,7 @@ class _StrukPreview extends StatelessWidget {
                 _TotalStruk(
                     label: 'Cashback', value: '+${formatUang(totalCashback)}'),
               if (uangDiterima != null)
-                _TotalStruk(label: 'Tunai', value: formatUang(uangDiterima!)),
+                _TotalStruk(label: 'Dibayar', value: formatUang(uangDiterima!)),
               if (kembalian != null)
                 _TotalStruk(label: 'Kembali', value: formatUang(kembalian!)),
               ..._pembayaranPreview(),

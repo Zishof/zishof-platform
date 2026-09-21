@@ -556,11 +556,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   double? _saldoDepositSetelahBayar(Map<String, dynamic>? hasilBayar) {
     final saldoResponse = _saldoDepositDariResponse(hasilBayar);
     if (saldoResponse != null) return saldoResponse;
-    final nominalDeposit = _nominalDepositTerpakai();
-    final saldoAwal = _saldoMember;
-    if (nominalDeposit <= 0 || saldoAwal == null) return null;
-    final saldoAkhir = saldoAwal - nominalDeposit;
-    return saldoAkhir < 0 ? 0 : saldoAkhir;
+    // Tanpa angka server, jangan menampilkan perkiraan sebagai saldo final.
+    return null;
   }
 
   /// Memeriksa saldo OTORITATIF sebelum membuat transaksi atau outbox.
@@ -1962,7 +1959,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       final double? uangDiterimaStruk = _splitAktif ? null : _uangDiterima;
       final double? kembalianStruk =
           _splitAktif ? null : (_kembalian < 0 ? 0.0 : _kembalian);
-      final saldoStruk = _saldoDepositSetelahBayar(null);
+      final saldoStruk = _saldoDepositSetelahBayar(hasilServer);
       _kodePengajuanLimitTertunda = null;
       widget.keranjang.clear();
       // Broadcast "sukses" (bukan sekadar keranjang-kosong biasa) --

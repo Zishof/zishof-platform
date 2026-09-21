@@ -473,6 +473,8 @@ class TransaksiOutboxService {
         await CoreDb.instance.simpanHasilServerTransaksi(kodeUnik, {
           'total': hasilBayar['total'],
           'totalDiskon': hasilBayar['totalDiskon'],
+          'saldo': hasilBayar['saldo'],
+          'sisaSaldo': hasilBayar['sisaSaldo'],
           'diskonFaktur': hasilBayar['diskonFaktur'],
           'totalKlien': payload['total'],
           'data': hasilBayar['data'],
