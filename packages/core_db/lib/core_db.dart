@@ -119,7 +119,7 @@ class CoreDb {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 19,
+        version: 20,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -300,6 +300,9 @@ class CoreDb {
   /// sebelumnya, kolom sudah terlanjur ada) -- padanan cara migrasi
   /// `local-db.js` versi Electron.
   Future<void> _upgradeSkema(Database db, int versiLama, int versiBaru) async {
+    if (versiLama < 20) {
+      await db.execute('ALTER TABLE produk_cache ADD COLUMN detail_json TEXT');
+    }
     if (versiLama < 2) {
       try {
         await db.execute('ALTER TABLE produk_cache ADD COLUMN jenis_item TEXT');
@@ -583,6 +586,7 @@ class CoreDb {
         kode TEXT,
         barcode TEXT,
         nama TEXT,
+        detail_json TEXT,
         harga_jual REAL,
         stok INTEGER,
         kategori_id INTEGER,
@@ -1195,6 +1199,23 @@ class CoreDb {
             }
           }
 
+          final detail = <String, dynamic>{};
+          final mentah = lokal['detail_json'];
+          if (mentah is String && mentah.isNotEmpty) {
+            detail.addAll(Map<String, dynamic>.from(jsonDecode(mentah) as Map));
+          }
+          const pemetaan = {
+            'harga_beli': 'hargaBeli', 'keterangan': 'keterangan',
+            'satuan_id': 'satuanId', 'satuan_pembelian_id': 'satuanPembelianId',
+            'bahan_baku': 'bahanBaku', 'harga_beli_manual': 'hargaBeliManual',
+            'rute': 'rute', 'perlu_qc': 'perluQc',
+            'pack_aktif': 'packAktif', 'satuan_pack_id': 'satuanPackId',
+            'harga_pack': 'hargaPack', 'kebijakan_retur_id': 'kebijakanReturId',
+          };
+          for (final e in pemetaan.entries) {
+            if (payload.containsKey(e.key)) detail[e.value] = payload[e.key];
+          }
+          lokal['detail_json'] = jsonEncode(detail);
           salin('kode', 'kode');
           salin('barcode', 'barcode');
           salin('nama', 'nama');

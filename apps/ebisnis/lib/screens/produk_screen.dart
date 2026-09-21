@@ -3362,6 +3362,13 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   }
 
   Future<void> _simpan() async {
+    if (widget.produk != null && !widget.produk!.detailTersedia) {
+      setStateIfMounted(() => _pesanError =
+          'Detail produk pada salinan lama belum lengkap. Hubungkan perangkat, '
+          'muat ulang daftar Produk, lalu buka kembali form agar harga beli '
+          'dan resep yang tersimpan tidak tertimpa nilai kosong.');
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
     setStateIfMounted(() {
       _menyimpan = true;
@@ -3381,7 +3388,8 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'harga_beli':
               _bahanBaku.isNotEmpty ? _totalHpp : _angka(_hargaBeli.text),
           'harga_jual': _angka(_hargaJual.text),
-          'stok': _angka(_stok.text),
+          if (!ubah || _angka(_stok.text) != widget.produk!.stok)
+            'stok': _angka(_stok.text),
           'keterangan': _keterangan.text.trim(),
           'pemasok_nama': _pemasok.text.trim(),
           'satuan_id': _satuanId,
@@ -3476,6 +3484,29 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'kode': _kode.text.trim(),
           'barcode': _barcode.text.trim(),
           'nama': _nama.text.trim(),
+          'pemasokNama': _pemasok.text.trim(),
+          'hargaBeli': _bahanBaku.isNotEmpty ? _totalHpp : _angka(_hargaBeli.text),
+          'keterangan': _keterangan.text.trim(),
+          'satuanId': _satuanId,
+          'satuanNama': _namaUom(_satuanId),
+          'satuanPembelianId': _satuanPembelianId,
+          'satuanPembelianNama': _namaUom(_satuanPembelianId),
+          'kebijakanReturId': _kebijakanReturId,
+          'rute': _rute,
+          'perluQc': _perluQc,
+          'hargaBeliManual': _hargaBeliManual,
+          'packAktif': _packAktif,
+          'satuanPackId': _satuanPackId,
+          'satuanPackNama': _namaUom(_satuanPackId),
+          'hargaPack': _packAktif ? _angka(_hargaPack.text) : null,
+          'bahanBaku': _bahanBaku
+              .map((b) => {
+                    'produk_id': b.produkId,
+                    'nama': b.nama,
+                    'qty': _angka(b.qty.text),
+                    'harga': _angka(b.harga.text)
+                  })
+              .toList(),
           'hargaJual': _angka(_hargaJual.text),
           'stok': _angka(_stok.text),
           'kategoriId': _kategoriId,

@@ -49,6 +49,7 @@ class Produk {
 
   final String? gambarUrl;
   final double hargaBeli;
+  final bool detailTersedia;
   final String keterangan;
   final bool izinkanJualMinusStok;
   final bool aktif;
@@ -116,6 +117,7 @@ class Produk {
     this.faktorPackKeDasar,
     required this.gambarUrl,
     this.hargaBeli = 0,
+    this.detailTersedia = true,
     this.keterangan = '',
     this.izinkanJualMinusStok = false,
     this.aktif = true,
@@ -159,6 +161,7 @@ class Produk {
                 barcode: (j['barcode'] ?? '') as String,
               ),
         hargaBeli: (j['hargaBeli'] as num?)?.toDouble() ?? 0,
+        detailTersedia: j.containsKey('hargaBeli'),
         keterangan: (j['keterangan'] ?? '') as String,
         izinkanJualMinusStok: j['izinkanJualMinusStok'] == true,
         // katalog tidak mengirim "aktif" eksplisit (hanya baris aktif yg dikembalikan kecuali admin
@@ -167,8 +170,10 @@ class Produk {
         jenisItem: (j['jenisItem'] as String?)?.isNotEmpty == true
             ? j['jenisItem'] as String
             : 'JUAL',
-        bahanBaku:
-            ((j['bahanBaku'] as List?) ?? []).cast<Map<String, dynamic>>(),
+        bahanBaku: ((j['bahanBaku'] as List?) ?? []).map((raw) {
+          final baris = Map<String, dynamic>.from(raw as Map);
+          return {...baris, 'produkId': baris['produkId'] ?? baris['produk_id']};
+        }).toList(),
         ekstraPilihan: ((j['ekstraPilihan'] as List?) ?? [])
             .map((e) => (e as num).toInt())
             .toList(),
@@ -195,6 +200,7 @@ class Produk {
         'kode': j['kode'] ?? '',
         'barcode': j['barcode'] ?? '',
         'nama': j['nama'] ?? '',
+        'detail_json': jsonEncode(j),
         'harga_jual': j['hargaJual'] ?? 0,
         'stok': j['stok'] ?? 0,
         'kategori_id': j['kategoriId'],
@@ -221,6 +227,7 @@ class Produk {
   /// cache saat offline (koreksi transaksi, dialog cari produk Sales) supaya
   /// pemetaan kolom SQLite->JSON tidak digandakan di tiap layar.
   static Map<String, dynamic> cacheRowKeJson(Map<String, Object?> b) => {
+        ..._detailCache(b['detail_json']),
         'id': b['id'],
         'kode': b['kode'] ?? '',
         'barcode': b['barcode'] ?? '',
@@ -238,6 +245,15 @@ class Produk {
         'fotoUrls': _bacaDaftarTeks(b['foto_urls']),
         'izinkanJualMinusStok': b['izinkan_jual_minus_stok'] == 1,
       };
+
+  static Map<String, dynamic> _detailCache(Object? mentah) {
+    try {
+      final decoded = jsonDecode('$mentah');
+      return decoded is Map ? Map<String, dynamic>.from(decoded) : {};
+    } catch (_) {
+      return {};
+    }
+  }
 
   static List<int> _bacaDaftarAngka(Object? mentah) {
     try {
