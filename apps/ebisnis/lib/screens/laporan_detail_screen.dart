@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import '../api_client.dart';
+import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/penanda_data_tersimpan.dart';
@@ -59,6 +60,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
   bool _perToko = false;
   int? _satkerId;
 
+  int _versiPermintaan = 0;
   bool _memuat = false;
   bool _memprosesPdf = false;
   String? _pesanError;
@@ -82,6 +84,8 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
   @override
   void initState() {
     super.initState();
+    _controllerProduk.addListener(_filterBerubah);
+    _controllerPelanggan.addListener(_filterBerubah);
     final sekarang = DateTime.now();
     _tglMulai = DateTime(sekarang.year, sekarang.month, 1);
     _tglSampai = sekarang;
@@ -120,16 +124,31 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
   /// periode, cari produk/pelanggan, per toko) -- salah kunci berarti hasil
   /// periode A menimpa periode B.
   String _kunciCache(Map<String, dynamic> payload) =>
-      'laporan:jalankan:${payload['r']}'
-      ':${payload['tglMulai'] ?? '-'}_${payload['tglSampai'] ?? '-'}'
-      ':${payload['qProduk'] ?? '-'}:${payload['qPelanggan'] ?? '-'}'
-      ':${payload['perToko'] ?? '-'}:${payload['satkerId'] ?? '-'}';
+      'laporan:jalankan:v2:${jsonEncode([
+            ApiClient.baseUrl,
+            Sesi.instance.tenantId,
+            Sesi.instance.userId,
+            Sesi.instance.tokoId,
+            payload
+          ])}';
+
+  void _hapusHasil() {
+    _versiPermintaan++;
+    _hasil = null;
+    _dariCache = false;
+    _cacheDisimpanPada = null;
+    _pesanError = null;
+    _memuat = false;
+  }
+
+  void _filterBerubah() => setStateIfMounted(_hapusHasil);
 
   Future<void> _tampilkan() async {
     setStateIfMounted(() {
+      _hapusHasil();
       _memuat = true;
-      _pesanError = null;
     });
+    final versi = _versiPermintaan;
     final payload = _buatPayload();
     final kunci = _kunciCache(payload);
     // BACA LOKAL DULU (pola MasterOffline.daftarCacheDulu, dihitung MANUAL di
@@ -142,7 +161,13 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
     // berupa LIST posisional (bukan map ber-id), jadi tidak ada identitas baris
     // yang stabil untuk dianimasikan -- cukup cache-nya saja.
     var adaCacheLokal = false;
-    final tersimpan = await CoreDb.instance.ambilCacheReferensi(kunci);
+    String? tersimpan;
+    try {
+      tersimpan = await CoreDb.instance.ambilCacheReferensi(kunci);
+    } catch (_) {
+      // Cache tidak tersedia: tetap coba membaca laporan server.
+    }
+    if (!mounted || versi != _versiPermintaan) return;
     if (tersimpan != null) {
       try {
         final hasilLokal = jsonDecode(tersimpan) as Map<String, dynamic>;
@@ -160,6 +185,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
     }
     try {
       final hasil = await ApiClient.instance.aksi('laporan_jalankan', payload);
+      if (!mounted || versi != _versiPermintaan) return;
       setStateIfMounted(() {
         _hasil = hasil;
         // Angka server sudah terpasang -> penanda salinan tersimpan padam.
@@ -176,6 +202,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
             '_disimpanPada': DateTime.now().toIso8601String(),
           }));
     } on ApiException catch (e) {
+      if (!mounted || versi != _versiPermintaan) return;
       // Offline dgn snapshot sudah tampil -> cukup diam (indikator offline
       // global sudah menceritakan kondisinya).
       if (!e.offline || !adaCacheLokal) {
@@ -193,9 +220,13 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
         });
       }
     } catch (e) {
-      setStateIfMounted(() => _pesanError = terapkanGalat(e));
+      if (mounted && versi == _versiPermintaan) {
+        setStateIfMounted(() => _pesanError = terapkanGalat(e));
+      }
     } finally {
-      if (mounted) setStateIfMounted(() => _memuat = false);
+      if (mounted && versi == _versiPermintaan) {
+        setStateIfMounted(() => _memuat = false);
+      }
     }
   }
 
@@ -300,6 +331,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
         lastDate: DateTime(2100));
     if (dipilih != null) {
       setStateIfMounted(() {
+        _hapusHasil();
         if (mulai) {
           _tglMulai = dipilih;
         } else {
@@ -379,14 +411,19 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
                                 ),
                               ))
                           .toList(),
-                      onChanged: (v) => setStateIfMounted(() => _satkerId = v),
+                      onChanged: (v) => setStateIfMounted(() {
+                        _hapusHasil();
+                        _satkerId = v;
+                      }),
                     ),
                   ],
                   if (_adaFilterPerToko)
                     CheckboxListTile(
                         value: _perToko,
-                        onChanged: (v) =>
-                            setStateIfMounted(() => _perToko = v ?? false),
+                        onChanged: (v) => setStateIfMounted(() {
+                              _hapusHasil();
+                              _perToko = v ?? false;
+                            }),
                         title: const Text('Tampilkan per Toko'),
                         contentPadding: EdgeInsets.zero,
                         dense: true),
