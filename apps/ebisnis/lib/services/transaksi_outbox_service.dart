@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:core_db/core_db.dart';
+import 'package:flutter/foundation.dart';
 import 'package:core_device/core_device.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -68,7 +69,17 @@ import 'peringatan_transaksi.dart';
 ///    bila datanya terlanjur terhapus di server). Jangan menambah penjagaan
 ///    "anti kirim ganda" di klien yang justru memblokir pemulihan itu.
 class TransaksiOutboxService {
-  TransaksiOutboxService._();
+  TransaksiOutboxService._() : _jalankanUji = null;
+
+  /// Menjalankan pengujian antrean tanpa jaringan atau data kasir sungguhan.
+  @visibleForTesting
+  TransaksiOutboxService.untukUji(this._jalankanUji);
+
+  final Future<HasilSinkronisasiTransaksi> Function({
+    required bool sertakanGagal,
+    required Duration jedaRetry,
+  })? _jalankanUji;
+  Future<HasilSinkronisasiTransaksi>? _manualMenunggu;
 
   static final TransaksiOutboxService instance = TransaksiOutboxService._();
 
@@ -308,10 +319,28 @@ class TransaksiOutboxService {
   /// berulang tanpa sepengetahuan pengguna.
   Future<HasilSinkronisasiTransaksi> sinkronkan({bool sertakanGagal = false}) {
     final aktif = _prosesAktif;
-    if (aktif != null) return aktif;
-    final proses = _sinkronkanInternal(sertakanGagal: sertakanGagal);
-    _prosesAktif = proses;
-    return proses.whenComplete(() => _prosesAktif = null);
+    if (aktif != null) {
+      if (!sertakanGagal) return aktif;
+      // Klik manual tidak boleh hilang di balik sapuan otomatis. Gabungkan
+      // klik bersamaan menjadi satu sapuan tambahan, setelah mutex dilepas.
+      return _manualMenunggu ??= aktif
+          .then(
+            (_) => sinkronkan(sertakanGagal: true),
+            onError: (Object _, StackTrace __) =>
+                sinkronkan(sertakanGagal: true),
+          )
+          .whenComplete(() => _manualMenunggu = null);
+    }
+    final jalankan = _jalankanUji ?? _sinkronkanInternal;
+    final proses = jalankan(
+      sertakanGagal: sertakanGagal,
+      jedaRetry: sertakanGagal
+          ? Duration.zero
+          : Duration(minutes: _intervalRetryMenit),
+    );
+    final terjaga = proses.whenComplete(() => _prosesAktif = null);
+    _prosesAktif = terjaga;
+    return terjaga;
   }
 
   /// Jumlah transaksi yang masih tertahan di perangkat ini: PENDING (menunggu
@@ -343,7 +372,7 @@ class TransaksiOutboxService {
   }
 
   Future<HasilSinkronisasiTransaksi> _sinkronkanInternal(
-      {bool sertakanGagal = false}) async {
+      {required bool sertakanGagal, required Duration jedaRetry}) async {
     if (!ApiClient.instance.sudahLogin) {
       return const HasilSinkronisasiTransaksi(total: 0, berhasil: 0);
     }
@@ -363,6 +392,7 @@ class TransaksiOutboxService {
       akunKunci: Sesi.instance.userId,
       tokoId: Sesi.instance.tokoId,
       idPerangkat: IdentitasMesin.instance.idMesin,
+      jedaRetry: jedaRetry,
     );
     var berhasil = 0;
     for (final row in pending) {
@@ -428,8 +458,8 @@ class TransaksiOutboxService {
 
     final bool kasirSesuai = kasirPayload.isEmpty ||
         kasirPayload.toLowerCase() == Sesi.instance.userId.toLowerCase();
-    final bool tokoSesuai = tokoPayloadInt == null ||
-        tokoPayloadInt == Sesi.instance.tokoId;
+    final bool tokoSesuai =
+        tokoPayloadInt == null || tokoPayloadInt == Sesi.instance.tokoId;
     final bool perangkatSesuai = perangkatPayload.isEmpty ||
         perangkatPayload == IdentitasMesin.instance.idMesin;
 

@@ -1881,7 +1881,7 @@ class CoreDb {
     final database = await db;
     final hasil = await database.rawQuery(
       "SELECT COUNT(*) AS n FROM transaksi_pending "
-      "WHERE status = 'PENDING' "
+      "WHERE status IN ('PENDING', 'GAGAL') "
       'AND (akun_kunci = ? OR akun_kunci IS NULL) '
       'AND (toko_id = ? OR toko_id IS NULL) '
       'AND (id_perangkat = ? OR id_perangkat IS NULL)',

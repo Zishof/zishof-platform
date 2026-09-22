@@ -563,46 +563,6 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
               icon: const Icon(Icons.cloud_upload_outlined, size: 16),
               label: const Text('Coba Kirim Sekarang'),
             ),
-            OutlinedButton.icon(
-              onPressed: () async {
-                final kode = '${row['kode_unik'] ?? ''}';
-                final yakin = await showDialog<bool>(
-                  context: context,
-                  builder: (c) => AlertDialog(
-                    title: const Text('Selesaikan antrean transaksi?'),
-                    content: Text(
-                      'Transaksi $kode akan ditandai sebagai Sukses di perangkat ini '
-                      'agar antrean kasir bersih dan sesi kas dapat ditutup.\n\n'
-                      'Gunakan opsi ini jika transaksi telah tercatat di server atau '
-                      'telah diselesaikan manual oleh supervisor/admin.',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(c, false),
-                        child: const Text('Batal'),
-                      ),
-                      FilledButton(
-                        onPressed: () => Navigator.pop(c, true),
-                        child: const Text('Tandai Selesai'),
-                      ),
-                    ],
-                  ),
-                );
-                if (yakin == true && context.mounted) {
-                  await CoreDb.instance.tandaiTransaksiSinkron(kode);
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    await _muatTransaksiPending(aturLoading: false);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                          content: Text('Transaksi $kode ditandai selesai.')),
-                    );
-                  }
-                }
-              },
-              icon: const Icon(Icons.check_circle_outline, size: 16),
-              label: const Text('Tandai Selesai (Buka Kunci)'),
-            ),
           ],
           if (dapatDikoreksi)
             OutlinedButton.icon(

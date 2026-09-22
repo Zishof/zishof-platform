@@ -35,7 +35,26 @@ final _formatTanggalServer = DateFormat('yyyy-MM-dd');
 /// ADA di core_db, bukan tabel baru: snapshot terakhir tampil seketika, hasil
 /// server menyusul dgn kilau baris + banner perubahan (termasuk transaksi
 /// baru dari kasir lain), bukan pengganti data real-time.
-const _kunciCacheRiwayat = 'riwayat:penjualan';
+@visibleForTesting
+String kunciCacheRiwayatPenjualan(
+    String akun, int? toko, Map<String, dynamic> filter) {
+  final keys = filter.keys.toList()..sort();
+  return 'riwayat:penjualan:v2:${jsonEncode([
+        akun,
+        toko,
+        {for (final k in keys) k: filter[k]}
+      ])}';
+}
+
+/// Status lokal lama dapat berasal dari penandaan manual, bukan ACK server.
+@visibleForTesting
+String labelStatusArsipTransaksi(Map<String, dynamic> row) {
+  if (row['idTransaksi'] != null) return 'Tercatat pada data server';
+  if (row['statusSinkronLokal'] == 'SYNCED') {
+    return 'Selesai di perangkat · belum dicocokkan server';
+  }
+  return 'Cadangan lokal · menunggu sinkron';
+}
 
 /// Kunci diff satu baris transaksi utk kilau/banner -- id header nota bila
 /// ada (server), fallback nomor nota (arsip lokal/server lama).
@@ -1303,6 +1322,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
   bool _menyinkronkanDuaArah = false;
   bool _membandingkanDuaArah = false;
   String? _error;
+  String? _peringatanServer;
   List<Map<String, dynamic>> _data = [];
   int _halaman = 1;
   int _total = 0;
@@ -1383,18 +1403,6 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
         _qtyMinimalFilter,
         _qtyMaksimalFilter,
       ].any((c) => c.text.trim().isNotEmpty);
-
-  bool get _defaultTanpaFilter {
-    final hariIni = _formatTanggalServer.format(DateTime.now());
-    return _mulai != null &&
-        _sampai != null &&
-        _formatTanggalServer.format(_mulai!) == hariIni &&
-        _formatTanggalServer.format(_sampai!) == hariIni &&
-        _cariPembeli.isEmpty &&
-        !_adaFilterLanjutan &&
-        !_hanyaTransaksiTidakValid &&
-        _halaman == 1;
-  }
 
   DateTime? _waktuPayloadLokal(dynamic raw) {
     final teks = '${raw ?? ''}'.trim();
@@ -1525,27 +1533,70 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
     setStateIfMounted(() {
       _memuat = true;
       _error = null;
+      _peringatanServer = null;
+      _data = [];
+      _total = 0;
+      _omzetTotal = 0;
     });
+    final payload = {
+      if (_mulai != null) 'tglMulai': _formatTanggalServer.format(_mulai!),
+      if (_sampai != null) 'tglSampai': _formatTanggalServer.format(_sampai!),
+      if (_cariPembeli.isNotEmpty) 'keyword': _cariPembeli,
+      if (_kasirFilter.text.trim().isNotEmpty)
+        'kasir': _kasirFilter.text.trim(),
+      if (_mesinFilter.text.trim().isNotEmpty)
+        'mesin': _mesinFilter.text.trim(),
+      if (_produkFilter.text.trim().isNotEmpty)
+        'produk': _produkFilter.text.trim(),
+      if (_pelangganFilter.text.trim().isNotEmpty)
+        'cariPembeli': _pelangganFilter.text.trim(),
+      if (_notaFilter.text.trim().isNotEmpty)
+        'nomorNota': _notaFilter.text.trim(),
+      if (_metodeFilter.text.trim().isNotEmpty)
+        'metodeExact': _metodeFilter.text.trim(),
+      if (_waktuMulaiFilter.text.trim().isNotEmpty)
+        'waktuMulai': _waktuMulaiFilter.text.trim(),
+      if (_waktuSampaiFilter.text.trim().isNotEmpty)
+        'waktuSampai': _waktuSampaiFilter.text.trim(),
+      if ((_angkaFilter(_totalMinimalFilter)) > 0)
+        'totalMinimal': _angkaFilter(_totalMinimalFilter),
+      if ((_angkaFilter(_totalMaksimalFilter)) > 0)
+        'totalMaksimal': _angkaFilter(_totalMaksimalFilter),
+      if ((_angkaFilter(_qtyMinimalFilter)) > 0)
+        'qtyMinimal': _angkaFilter(_qtyMinimalFilter),
+      if ((_angkaFilter(_qtyMaksimalFilter)) > 0)
+        'qtyMaksimal': _angkaFilter(_qtyMaksimalFilter),
+      'includePembayaran': true,
+      'includeSplitPembayaran': true,
+      'sertakanPembayaran': true,
+      'withPayments': true,
+      'transaksiTidakValid': _hanyaTransaksiTidakValid,
+      'page': _halaman,
+      'pageSize': _pageSize,
+    };
+    final kunciCache = kunciCacheRiwayatPenjualan(
+        Sesi.instance.userId, Sesi.instance.tokoId, payload);
     final lokal = saringArsipLokalUntukFilterIntegritas(
       await _arsipLokalSesuaiFilter(),
       hanyaTransaksiTidakValid: _hanyaTransaksiTidakValid,
     );
     // BACA LOKAL-DULU (pola daftarCacheDulu, dihitung manual krn jalur baca
     // layar ini kompleks: gabungan arsip lokal + bentuk respons bervariasi +
-    // fallback keyword): utk tampilan DEFAULT, snapshot terakhir langsung
+    // fallback keyword): snapshot sesuai filter terakhir langsung
     // tampil tanpa menunggu jaringan; hasil server menyusul dan diff-nya
     // menggerakkan kilau baris + banner (transaksi baru dari kasir lain).
-    // Tampilan berfilter/halaman >1 tetap online-first spt semula.
+    // Kunci mencakup akun, toko, seluruh filter dan halaman agar snapshot
+    // tanggal/toko lain tidak digunakan saat jaringan gagal.
     List<Map<String, dynamic>>? dataCache;
-    if (_defaultTanpaFilter) {
+    {
       try {
-        final tersimpan =
-            await CoreDb.instance.ambilCacheReferensi(_kunciCacheRiwayat);
+        final tersimpan = await CoreDb.instance.ambilCacheReferensi(kunciCache);
         if (tersimpan != null) {
           final hasilCache = jsonDecode(tersimpan) as Map<String, dynamic>;
           final data = _normalisasiDaftarTransaksi(hasilCache);
           dataCache = data;
-          final gabungan = _gabungkanDenganArsipLokal(data, lokal);
+          final gabungan =
+              _halaman == 1 ? _gabungkanDenganArsipLokal(data, lokal) : data;
           setStateIfMounted(() {
             _data = gabungan;
             _total = _normalisasiTotalTransaksi(hasilCache, data.length);
@@ -1563,42 +1614,6 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
       }
     }
     try {
-      final payload = {
-        if (_mulai != null) 'tglMulai': _formatTanggalServer.format(_mulai!),
-        if (_sampai != null) 'tglSampai': _formatTanggalServer.format(_sampai!),
-        if (_cariPembeli.isNotEmpty) 'keyword': _cariPembeli,
-        if (_kasirFilter.text.trim().isNotEmpty)
-          'kasir': _kasirFilter.text.trim(),
-        if (_mesinFilter.text.trim().isNotEmpty)
-          'mesin': _mesinFilter.text.trim(),
-        if (_produkFilter.text.trim().isNotEmpty)
-          'produk': _produkFilter.text.trim(),
-        if (_pelangganFilter.text.trim().isNotEmpty)
-          'cariPembeli': _pelangganFilter.text.trim(),
-        if (_notaFilter.text.trim().isNotEmpty)
-          'nomorNota': _notaFilter.text.trim(),
-        if (_metodeFilter.text.trim().isNotEmpty)
-          'metodeExact': _metodeFilter.text.trim(),
-        if (_waktuMulaiFilter.text.trim().isNotEmpty)
-          'waktuMulai': _waktuMulaiFilter.text.trim(),
-        if (_waktuSampaiFilter.text.trim().isNotEmpty)
-          'waktuSampai': _waktuSampaiFilter.text.trim(),
-        if ((_angkaFilter(_totalMinimalFilter)) > 0)
-          'totalMinimal': _angkaFilter(_totalMinimalFilter),
-        if ((_angkaFilter(_totalMaksimalFilter)) > 0)
-          'totalMaksimal': _angkaFilter(_totalMaksimalFilter),
-        if ((_angkaFilter(_qtyMinimalFilter)) > 0)
-          'qtyMinimal': _angkaFilter(_qtyMinimalFilter),
-        if ((_angkaFilter(_qtyMaksimalFilter)) > 0)
-          'qtyMaksimal': _angkaFilter(_qtyMaksimalFilter),
-        'includePembayaran': true,
-        'includeSplitPembayaran': true,
-        'sertakanPembayaran': true,
-        'withPayments': true,
-        'transaksiTidakValid': _hanyaTransaksiTidakValid,
-        'page': _halaman,
-        'pageSize': _pageSize,
-      };
       var hasil = await ApiClient.instance.aksi('laporan_order_list', payload);
       var data = _normalisasiDaftarTransaksi(hasil);
       if (data.isEmpty && _cariPembeli.isNotEmpty) {
@@ -1662,15 +1677,15 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
           _versiPerubahan++;
         }
       });
-      if (_defaultTanpaFilter) {
-        unawaited(CoreDb.instance
-            .simpanCacheReferensi(_kunciCacheRiwayat, jsonEncode(hasil)));
-      }
+      unawaited(
+          CoreDb.instance.simpanCacheReferensi(kunciCache, jsonEncode(hasil)));
     } catch (e) {
-      // Snapshot cache sudah tampil (baca lokal-dulu) -- saat OFFLINE cukup
-      // diam (indikator offline global sudah menceritakan kondisinya);
-      // penolakan bisnis server tetap diperlihatkan lewat jalur di bawah.
-      if (dataCache != null && e is ApiException && e.offline) return;
+      // Cache tetap dapat dibaca, tetapi gangguan jaringan maupun sesi
+      // kedaluwarsa harus terlihat dan tidak boleh menyerupai data server baru.
+      setStateIfMounted(() => _peringatanServer =
+          'Data server belum dapat diperbarui. Tampilan memakai data tersimpan; '
+              'belum membuktikan seluruh transaksi diterima server. ${terapkanGalat(e)}');
+      if (dataCache != null) return;
       if (lokal.isNotEmpty) {
         setStateIfMounted(() {
           _data = lokal;
@@ -1680,26 +1695,6 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
           _error = null;
         });
         return;
-      }
-      // Offline & sedang melihat tampilan default (bukan hasil filter) --
-      // pakai snapshot terakhir yg tersimpan drpd layar kosong tak berguna.
-      if (_defaultTanpaFilter) {
-        final tersimpan =
-            await CoreDb.instance.ambilCacheReferensi(_kunciCacheRiwayat);
-        if (tersimpan != null) {
-          final hasil = jsonDecode(tersimpan) as Map<String, dynamic>;
-          final data = _normalisasiDaftarTransaksi(hasil);
-          setStateIfMounted(() {
-            _data = data;
-            _total = _normalisasiTotalTransaksi(hasil, data.length);
-            _omzetTotal = (hasil['totalNilai'] as num?)?.toDouble() ??
-                data.fold<double>(0,
-                    (a, r) => a + ((r['totalBiaya'] as num?)?.toDouble() ?? 0));
-            _error = null;
-          });
-          if (mounted) setStateIfMounted(() => _memuat = false);
-          return;
-        }
       }
       setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
@@ -1857,10 +1852,8 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                     if (row['statusSinkronLokal'] != null)
                       _chipRingkasan(
                           'Sinkron',
-                          row['statusSinkronLokal'] == 'SYNCED'
-                              ? 'Tersinkron'
-                              : 'Menunggu',
-                          row['statusSinkronLokal'] == 'SYNCED'
+                          labelStatusArsipTransaksi(row),
+                          row['idTransaksi'] != null
                               ? AppColors.success
                               : AppColors.warning),
                     _chipRingkasan('Diskon', _formatRupiah.format(diskonHeader),
@@ -2454,7 +2447,8 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
         pembayaran: StrukScreen.pembayaranDariSumber(detail, row),
         pajak: (row['pajak'] as num?)?.toDouble() ?? 0,
         pelanggan: '${detail['pembeli'] ?? row['pembeli'] ?? ''}',
-        saldo: StrukScreen.saldoDariSumber(detail) ?? StrukScreen.saldoDariSumber(row),
+        saldo: StrukScreen.saldoDariSumber(detail) ??
+            StrukScreen.saldoDariSumber(row),
         modeCetakUlang: true,
       ),
     ));
@@ -2804,6 +2798,11 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
               berubah: _idBerubah.length,
               dihapus: _jumlahHapus,
             ),
+            if (_peringatanServer != null && _error == null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(_peringatanServer!),
+              ),
             if (_memuat)
               const Padding(
                   padding: EdgeInsets.symmetric(vertical: 60),
@@ -2864,13 +2863,11 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                             if (row['statusSinkronLokal'] != null) ...[
                               const SizedBox(height: 3),
                               Text(
-                                row['statusSinkronLokal'] == 'SYNCED'
-                                    ? 'Cadangan lokal · tersinkron'
-                                    : 'Cadangan lokal · menunggu sinkron',
+                                labelStatusArsipTransaksi(row),
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600,
-                                  color: row['statusSinkronLokal'] == 'SYNCED'
+                                  color: row['idTransaksi'] != null
                                       ? AppColors.success
                                       : AppColors.warning,
                                 ),
