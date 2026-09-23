@@ -2559,6 +2559,9 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
         saldo: StrukScreen.saldoDariSumber(detail) ??
             StrukScreen.saldoDariSumber(row),
         modeCetakUlang: true,
+        nomorAntrian: '${detail['nomorAntrian'] ?? ''}',
+        catatanPesanan: '${detail['keterangan'] ?? ''}',
+        jenisKonsumsi: '${detail['jenisKonsumsi'] ?? 'NORMAL'}',
       ),
     ));
   }

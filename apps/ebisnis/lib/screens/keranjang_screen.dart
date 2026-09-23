@@ -16,6 +16,7 @@ import '../services/kebijakan_offline_pembayaran.dart';
 import '../services/layar_pelanggan_broadcaster.dart';
 import '../services/master_offline.dart';
 import '../services/pengaturan_nomor_struk.dart';
+import '../services/pengaturan_nomor_antrian.dart';
 import '../services/pengaturan_pembayaran.dart';
 import '../services/transaksi_outbox_service.dart';
 import '../services/uom_konversi.dart';
@@ -183,8 +184,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   final Map<int, Map<String, dynamic>> _metadataPromoManual = {};
   Timer? _debounceDiskon;
   final _uangDiterimaController = TextEditingController(text: '0');
+  final _catatanPesananController = TextEditingController();
   String _tipeDiskonFaktur = 'NOMINAL';
   double _nilaiDiskonFaktur = 0;
+  String _jenisKonsumsi = 'NORMAL';
+  String? _nomorAntrianPercobaan;
   bool _uangDiterimaManual = false;
   int _halamanKeranjang = 1;
   ItemKeranjang? _itemTeratasTerakhir;
@@ -224,6 +228,23 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           PengaturanPembayaran.instance.pilihDefault(_caraBayarTersedia);
     }
     _muatPreferensiDanCaraBayar();
+    _sinkronkanUangDiterima();
+  }
+
+  void _pilihJenisKonsumsi(String nilai) {
+    setStateIfMounted(() {
+      _jenisKonsumsi = nilai;
+      if (nilai == 'MANAGER_MEAL') {
+        _tipeDiskonFaktur = 'PERSEN';
+        _nilaiDiskonFaktur = 100;
+      } else if (nilai == 'CREW_MEAL') {
+        _tipeDiskonFaktur = 'PERSEN';
+        _nilaiDiskonFaktur = 10;
+      } else if (_nilaiDiskonFaktur == 100 || _nilaiDiskonFaktur == 10) {
+        _tipeDiskonFaktur = 'NOMINAL';
+        _nilaiDiskonFaktur = 0;
+      }
+    });
     _sinkronkanUangDiterima();
   }
 
@@ -387,6 +408,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   @override
   void dispose() {
     _debounceDiskon?.cancel();
+    _catatanPesananController.dispose();
     _uangDiterimaController.dispose();
     LayarPelangganBroadcaster.instance.berhenti();
     super.dispose();
@@ -1545,6 +1567,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       'nama_member': _memberTerpilih?.nama,
       'nama_mesin': IdentitasMesin.instance.namaMesin,
       'id_perangkat': IdentitasMesin.instance.idMesin,
+      'nomor_antrian': _nomorAntrianPercobaan,
+      'keterangan': _catatanPesananController.text.trim(),
+      'jenis_konsumsi': _jenisKonsumsi,
       if (_roomChargeStay != null) ...{
         'hotel_menginap_id': _roomChargeStay!['id'],
         'hotel_properti_id': _roomChargeStay!['properti_id'],
@@ -1854,6 +1879,19 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       // metode umum yang dipilih sebelum member tersedia.
       if (!_bisaBayar) return;
     }
+    if (_jenisKonsumsi != 'NORMAL' && _memberTerpilih == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Manager Meal dan Crew Meal wajib memilih member/PIC karyawan.')));
+      await _pilihMember();
+      if (!mounted || _memberTerpilih == null) return;
+    }
+    if (_jenisKonsumsi == 'MANAGER_MEAL' && _dasarDiskonFaktur > 20000.5) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Manager Meal maksimal Rp20.000. Kurangi item atau gunakan Penjualan Normal.')));
+      return;
+    }
 
     String? kodePercobaan;
     setStateIfMounted(() => _memproses = true);
@@ -1865,6 +1903,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       if (!await _validasiSaldoPusatSebelumBayar()) return;
       kodePercobaan = _kodePengajuanLimitTertunda ?? await _buatKodeUnik();
       final kodeUnik = kodePercobaan;
+      _nomorAntrianPercobaan ??= await PengaturanNomorAntrian.instance
+          .buat(tokoId: Sesi.instance.tokoId!);
       final buktiBiometrik = await _verifikasiMemberJikaPerlu(kodeUnik);
       if (buktiBiometrik == null) return;
       final waktu =
@@ -1954,7 +1994,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       final double? kembalianStruk =
           _splitAktif ? null : (_kembalian < 0 ? 0.0 : _kembalian);
       final saldoStruk = _saldoDepositSetelahBayar(hasilServer);
+      final nomorAntrianStruk = _nomorAntrianPercobaan;
+      final catatanPesananStruk = _catatanPesananController.text.trim();
+      final jenisKonsumsiStruk = _jenisKonsumsi;
       _kodePengajuanLimitTertunda = null;
+      _nomorAntrianPercobaan = null;
       widget.keranjang.clear();
       // Broadcast "sukses" (bukan sekadar keranjang-kosong biasa) --
       // mengosongkan tampilan keranjang di Layar Pelanggan SEKALIGUS memberi
@@ -1967,6 +2011,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         _nilaiDiskonFaktur = 0;
         _tipeDiskonFaktur = 'NOMINAL';
         _roomChargeStay = null;
+        _catatanPesananController.clear();
+        _jenisKonsumsi = 'NORMAL';
       });
       widget.onSelesai?.call();
       if (!mounted) return;
@@ -1985,6 +2031,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           uangDiterima: uangDiterimaStruk,
           kembalian: kembalianStruk,
           saldo: saldoStruk,
+          nomorAntrian: nomorAntrianStruk,
+          catatanPesanan: catatanPesananStruk,
+          jenisKonsumsi: jenisKonsumsiStruk,
         ),
       ));
     } catch (e, stackTrace) {
@@ -2780,6 +2829,50 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
             _pemilihWaktuTransaksiTertahan(),
             _pemilihMember(),
             _promoManualPicker(),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: _jenisKonsumsi,
+              decoration: const InputDecoration(
+                labelText: 'Jenis Transaksi',
+                border: _radiusInput,
+                isDense: true,
+              ),
+              items: const [
+                DropdownMenuItem(
+                    value: 'NORMAL', child: Text('Penjualan Normal')),
+                DropdownMenuItem(
+                    value: 'MANAGER_MEAL',
+                    child: Text('Manager Meal (maks. Rp20.000)')),
+                DropdownMenuItem(
+                    value: 'CREW_MEAL', child: Text('Crew Meal (diskon 10%)')),
+              ],
+              onChanged: _memproses
+                  ? null
+                  : (nilai) => _pilihJenisKonsumsi(nilai ?? 'NORMAL'),
+            ),
+            if (_jenisKonsumsi != 'NORMAL')
+              const Padding(
+                padding: EdgeInsets.only(top: 6),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                      'Pilih member/PIC karyawan. Server akan memeriksa batas dan potongan kembali.',
+                      style: TextStyle(fontSize: 11, color: Colors.orange)),
+                ),
+              ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _catatanPesananController,
+              enabled: !_memproses,
+              maxLength: 300,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Catatan Pesanan',
+                hintText: 'Contoh: tanpa sambal, paha, dibungkus terpisah',
+                border: _radiusInput,
+                isDense: true,
+              ),
+            ),
             Divider(height: 1, color: AppColors.borderOf(context)),
             const SizedBox(height: 12),
             _labelBagian('Pilih metode pembayaran'),

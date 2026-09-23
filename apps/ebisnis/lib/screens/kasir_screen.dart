@@ -20,6 +20,7 @@ import '../sesi.dart';
 import '../services/layar_pelanggan_broadcaster.dart';
 import '../services/layar_pelanggan_launcher.dart';
 import '../services/pengaturan_laci.dart';
+import '../services/pengaturan_shift_otomatis.dart';
 import '../services/pesanan_poller.dart';
 import '../services/simpan_gambar_local_first.dart';
 import '../services/sinkron_stok_opname.dart';
@@ -156,6 +157,8 @@ class _KasirScreenState extends State<KasirScreen> {
   /// walau topbar sudah "Kas Terbuka". Timer ini jalan independen dari
   /// transaksi/navigasi, persis spt versi Electron.
   Timer? _timerSinkronSesiKas;
+  Timer? _timerShiftOtomatis;
+  String? _tanggalDialogTutupOtomatis;
 
   /// Kas Sekarang -- pil saldo kas berjalan di toolbar (padanan indikator
   /// "Rp 1.900.000" pada referensi Electron). `null` = belum diketahui/tak
@@ -206,6 +209,8 @@ class _KasirScreenState extends State<KasirScreen> {
     _jadwalkanFokusCariItem();
     _timerSinkronSesiKas = Timer.periodic(
         const Duration(seconds: 30), (_) => _cobaSinkronBukaKasPending());
+    _timerShiftOtomatis = Timer.periodic(
+        const Duration(minutes: 1), (_) => _periksaJadwalTutupOtomatis());
     TransaksiOutboxService.instance.mulai();
     MasterOffline.revisiBaris.addListener(_saatStokLokalBerubah);
     SinkronStokOpname.mulai();
@@ -232,6 +237,7 @@ class _KasirScreenState extends State<KasirScreen> {
     _debounceHargaCoret?.cancel();
     _debounceCariProduk?.cancel();
     _timerSinkronSesiKas?.cancel();
+    _timerShiftOtomatis?.cancel();
     _kataKunciController.dispose();
     _fokusKataKunci.dispose();
     super.dispose();
@@ -292,12 +298,43 @@ class _KasirScreenState extends State<KasirScreen> {
       await _sinkronKatalogDanKonfigurasi(
           tampilkanErrorJikaKosong: _semuaProduk.isEmpty);
       await _periksaSesiKas();
+      await _terapkanBukaShiftOtomatis();
+      await _periksaJadwalTutupOtomatis();
       PesananPoller.instance.mulai();
     } catch (e) {
       if (_semuaProduk.isEmpty && mounted) {
         setStateIfMounted(() => _pesanError = 'Gagal memuat data POS: $e');
       }
     }
+  }
+
+  Future<void> _terapkanBukaShiftOtomatis() async {
+    await PengaturanShiftOtomatis.instance.muat();
+    final p = PengaturanShiftOtomatis.instance;
+    if (!mounted ||
+        !Sesi.instance.wajibSesiKas ||
+        _kasTerbuka == true ||
+        _sesiKasDiPerangkatLain ||
+        !p.bukaOtomatis) {
+      return;
+    }
+    await _bukaKas(p.modalAwal, 'Shift dibuka otomatis oleh POS Desktop.');
+  }
+
+  Future<void> _periksaJadwalTutupOtomatis() async {
+    if (!mounted || _kasTerbuka != true) return;
+    await PengaturanShiftOtomatis.instance.muat();
+    final p = PengaturanShiftOtomatis.instance;
+    if (!p.ingatkanTutupOtomatis) return;
+    final sekarang = DateTime.now();
+    final bagian = p.jamTutup.split(':');
+    final menitTarget = (int.tryParse(bagian.first) ?? 22) * 60 +
+        (bagian.length > 1 ? int.tryParse(bagian[1]) ?? 0 : 0);
+    if (sekarang.hour * 60 + sekarang.minute < menitTarget) return;
+    final tanggal = '${sekarang.year}-${sekarang.month}-${sekarang.day}';
+    if (_tanggalDialogTutupOtomatis == tanggal) return;
+    _tanggalDialogTutupOtomatis = tanggal;
+    await _bukaDialogTutupKas();
   }
 
   void _jadwalkanFokusCariItem() {
@@ -1201,7 +1238,8 @@ class _KasirScreenState extends State<KasirScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.inventory_2_outlined),
-            title: Text('${p.satuanPackNama} — ${_formatRupiah.format(p.hargaPack!)}'),
+            title: Text(
+                '${p.satuanPackNama} — ${_formatRupiah.format(p.hargaPack!)}'),
             subtitle: Text('isi $faktor '
                 '${p.satuanNama.isEmpty ? 'unit' : p.satuanNama} (harga pack tetap)'),
             onTap: () {

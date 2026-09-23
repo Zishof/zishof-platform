@@ -50,6 +50,8 @@ import '../screens/log_error_screen.dart';
 import '../screens/konfigurasi_screen.dart';
 import '../screens/layar_pelanggan_screen.dart';
 import '../screens/laporan_screen.dart';
+import '../screens/self_order_screen.dart';
+import '../screens/shift_otomatis_screen.dart';
 import '../screens/draft_jurnal_screen.dart';
 import '../screens/jurnal_umum_screen.dart';
 import '../screens/kode_akun_screen.dart';
@@ -214,6 +216,8 @@ enum MenuEBisnis {
   riwayatAudit,
   konfigurasi,
   layarPelanggan,
+  selfOrder,
+  shiftOtomatis,
   hakAkses,
   tokoKelola,
   berandaInventorySales,
@@ -813,6 +817,12 @@ const _daftarMenu = <_ItemMenuShell>[
       'Layar Pelanggan',
       builder: _bangunLayarPelanggan),
   _ItemMenuShell(
+      MenuEBisnis.selfOrder, Icons.qr_code_2_outlined, 'Self Order / QR Menu',
+      builder: _bangunSelfOrder),
+  _ItemMenuShell(
+      MenuEBisnis.shiftOtomatis, Icons.schedule_outlined, 'Otomasi Shift Kasir',
+      builder: _bangunShiftOtomatis),
+  _ItemMenuShell(
       MenuEBisnis.hakAkses, Icons.admin_panel_settings_outlined, 'Hak Akses',
       builder: _bangunHakAkses),
   _ItemMenuShell(
@@ -871,6 +881,8 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.kasir,
     MenuEBisnis.pesanan,
     MenuEBisnis.layarPelanggan,
+    MenuEBisnis.selfOrder,
+    MenuEBisnis.shiftOtomatis,
   ]),
   _GrupMenuShell('Dashboard', [
     MenuEBisnis.ringkasan,
@@ -1193,6 +1205,8 @@ Widget _bangunRiwayatAudit(BuildContext c) => const RiwayatAuditScreen(
     );
 Widget _bangunKonfigurasi(BuildContext c) => const KonfigurasiScreen();
 Widget _bangunLayarPelanggan(BuildContext c) => const LayarPelangganScreen();
+Widget _bangunSelfOrder(BuildContext c) => const SelfOrderScreen();
+Widget _bangunShiftOtomatis(BuildContext c) => const ShiftOtomatisScreen();
 Widget _bangunHakAkses(BuildContext c) => const HakAksesScreen();
 Widget _bangunTokoKelola(BuildContext c) => const TokoKelolaScreen();
 Widget _bangunBerandaIS(BuildContext c) => const BerandaInventorySalesScreen();
@@ -1651,6 +1665,10 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Konfigurasi';
     case MenuEBisnis.layarPelanggan:
       return 'Layar Pelanggan';
+    case MenuEBisnis.selfOrder:
+      return 'Self Order / QR Menu';
+    case MenuEBisnis.shiftOtomatis:
+      return 'Otomasi Shift Kasir';
     case MenuEBisnis.hakAkses:
       return 'Hak Akses';
     case MenuEBisnis.tokoKelola:
@@ -1851,6 +1869,10 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.konfigurasi;
     case 'Layar Pelanggan':
       return MenuEBisnis.layarPelanggan;
+    case 'Self Order / QR Menu':
+      return MenuEBisnis.selfOrder;
+    case 'Otomasi Shift Kasir':
+      return MenuEBisnis.shiftOtomatis;
     case 'Hak Akses':
       return MenuEBisnis.hakAkses;
     case 'Kelola Toko':

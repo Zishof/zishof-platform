@@ -44,6 +44,9 @@ class StrukScreen extends StatelessWidget {
   final double? kembalian;
   final double? saldo;
   final bool modeCetakUlang;
+  final String? nomorAntrian;
+  final String? catatanPesanan;
+  final String? jenisKonsumsi;
 
   /// Total diskon OTORITATIF dari server, bila sudah diterima.
   ///
@@ -87,6 +90,9 @@ class StrukScreen extends StatelessWidget {
     this.kembalian,
     this.saldo,
     this.modeCetakUlang = false,
+    this.nomorAntrian,
+    this.catatanPesanan,
+    this.jenisKonsumsi,
     this.totalDiskonOverride,
     this.catatanKoreksi,
     this.koreksiSudahDiterapkan = false,
@@ -619,11 +625,21 @@ class StrukScreen extends StatelessWidget {
     }
     text('-' * columns);
     info('No', kode);
+    if (nomorAntrian != null && nomorAntrian!.trim().isNotEmpty) {
+      centered('ANTRIAN ${nomorAntrian!.trim()}', bold: true);
+    }
     info('Tanggal', waktu);
     info('Kasir', _labelKasir());
     info('Pelanggan', _labelPelanggan());
     if (statusLabel != null && statusLabel!.trim().isNotEmpty) {
       info('Status', statusLabel!);
+    }
+    if (jenisKonsumsi != null && jenisKonsumsi != 'NORMAL') {
+      info('Program',
+          jenisKonsumsi == 'MANAGER_MEAL' ? 'Manager Meal' : 'Crew Meal');
+    }
+    if (catatanPesanan != null && catatanPesanan!.trim().isNotEmpty) {
+      info('Catatan', catatanPesanan!.trim());
     }
     text('-' * columns);
 
@@ -856,6 +872,27 @@ class StrukScreen extends StatelessWidget {
   /// layout yang sama persis seperti tombol Cetak Struk di layar ini.
   Future<void> cetakLangsung() => _cetakStruk();
 
+  /// Mencetak salinan operasional untuk dapur pada printer struk yang sama.
+  /// Mode cetak ulang mencegah laci kas terbuka untuk dokumen dapur.
+  Future<void> _cetakTiketDapur(BuildContext context) => StrukScreen(
+        kode: kode,
+        waktu: waktu,
+        item: item,
+        total: total,
+        metode: metode,
+        pembayaran: pembayaran,
+        pajak: pajak,
+        diskonFaktur: diskonFaktur,
+        tersinkron: tersinkron,
+        statusLabel: statusLabel,
+        pelanggan: pelanggan,
+        nomorAntrian: nomorAntrian,
+        catatanPesanan: catatanPesanan,
+        jenisKonsumsi: jenisKonsumsi,
+        modeCetakUlang: true,
+        jenisDokumen: 'TIKET DAPUR',
+      )._cetakStruk(context);
+
   pw.Widget _strukPdf(pw.ImageProvider? logo) {
     // Column harus menjadi widget langsung milik MultiPage agar dapat dipecah
     // antarhalaman. Default style dipasang pada Document di _cetakStruk;
@@ -895,11 +932,21 @@ class StrukScreen extends StatelessWidget {
         ],
         _garisPdf(),
         _infoPdf('No', kode),
+        if (nomorAntrian != null && nomorAntrian!.trim().isNotEmpty)
+          pw.Text('ANTRIAN ${nomorAntrian!.trim()}',
+              textAlign: pw.TextAlign.center,
+              style:
+                  pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
         _infoPdf('Tanggal', waktu),
         _infoPdf('Kasir', _labelKasir()),
         _infoPdf('Pelanggan', _labelPelanggan()),
         if (statusLabel != null && statusLabel!.trim().isNotEmpty)
           _infoPdf('Status', statusLabel!.trim()),
+        if (jenisKonsumsi != null && jenisKonsumsi != 'NORMAL')
+          _infoPdf('Program',
+              jenisKonsumsi == 'MANAGER_MEAL' ? 'Manager Meal' : 'Crew Meal'),
+        if (catatanPesanan != null && catatanPesanan!.trim().isNotEmpty)
+          _infoPdf('Catatan', catatanPesanan!.trim()),
         _garisPdf(),
         ...item.map(_itemPdf),
         _garisPdf(),
@@ -1139,6 +1186,9 @@ class StrukScreen extends StatelessWidget {
       saldo: saldo ?? this.saldo,
       modeCetakUlang: modeCetakUlang,
       jenisDokumen: jenisDokumen,
+      nomorAntrian: nomorAntrian,
+      catatanPesanan: catatanPesanan,
+      jenisKonsumsi: jenisKonsumsi,
       totalDiskonOverride: totalDiskonOverride ?? this.totalDiskonOverride,
       catatanKoreksi: catatanKoreksi ?? this.catatanKoreksi,
       koreksiSudahDiterapkan:
@@ -1186,6 +1236,7 @@ class StrukScreen extends StatelessWidget {
                       const SizedBox(height: 14),
                       _TombolStruk(
                         onCetak: () => _cetakStruk(context),
+                        onCetakDapur: () => _cetakTiketDapur(context),
                         menungguAngkaServer: menungguAngkaServer,
                         tampilkanTransaksiBaru: !modeCetakUlang,
                         tampilkanBukaLaci: !modeCetakUlang,
@@ -1311,14 +1362,16 @@ class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
     }
     _mulai = DateTime.now();
     _periksa();
-    _timer = Timer.periodic(const Duration(milliseconds: 500), (_) => _periksa());
+    _timer =
+        Timer.periodic(const Duration(milliseconds: 500), (_) => _periksa());
   }
 
   Future<void> _periksa() async {
     if (_memeriksa || !mounted || _selesai) return;
     _memeriksa = true;
     try {
-      final row = await CoreDb.instance.transaksiLokalDenganKode(widget.asli.kode);
+      final row =
+          await CoreDb.instance.transaksiLokalDenganKode(widget.asli.kode);
       final mentah = '${row?['hasil_server_json'] ?? ''}'.trim();
       if (mentah.isNotEmpty) {
         final peta = jsonDecode(mentah);
@@ -1334,7 +1387,10 @@ class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
           // yang tersimpan sebelum pembaruan ini.
           final peringatan = peta['peringatanTransaksi'];
           final catatan = peringatan is List
-              ? peringatan.map((e) => '$e'.trim()).where((e) => e.isNotEmpty).join(' ')
+              ? peringatan
+                  .map((e) => '$e'.trim())
+                  .where((e) => e.isNotEmpty)
+                  .join(' ')
               : '${peta['peringatanStok'] ?? ''}'.trim();
           if (mounted) {
             setState(() {
@@ -2064,6 +2120,7 @@ void _kembaliDariStruk(BuildContext context) {
 
 class _TombolStruk extends StatelessWidget {
   final VoidCallback onCetak;
+  final VoidCallback onCetakDapur;
   final VoidCallback onTransaksiBaru;
   final VoidCallback? onKembali;
   final bool tampilkanTransaksiBaru;
@@ -2076,6 +2133,7 @@ class _TombolStruk extends StatelessWidget {
 
   const _TombolStruk({
     required this.onCetak,
+    required this.onCetakDapur,
     this.menungguAngkaServer = false,
     required this.onTransaksiBaru,
     this.onKembali,
@@ -2136,6 +2194,15 @@ class _TombolStruk extends StatelessWidget {
               ),
             ],
           ],
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed: menungguAngkaServer ? null : onCetakDapur,
+          icon: const Icon(Icons.restaurant_outlined, size: 18),
+          label: const Text('Cetak Tiket Dapur'),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
         ),
         const SizedBox(height: 10),
         if (tampilkanTransaksiBaru) ...[
