@@ -2454,6 +2454,9 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
         pembayaran: StrukScreen.pembayaranDariSumber(detail, row),
         pajak: (row['pajak'] as num?)?.toDouble() ?? 0,
         pelanggan: '${detail['pembeli'] ?? row['pembeli'] ?? ''}',
+        nomorAntrian: '${detail['nomorAntrian'] ?? ''}',
+        catatanPesanan: '${detail['keterangan'] ?? ''}',
+        jenisKonsumsi: '${detail['jenisKonsumsi'] ?? 'NORMAL'}',
       ),
     ));
   }
