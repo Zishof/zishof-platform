@@ -1341,6 +1341,11 @@ class AppDataTable extends StatefulWidget {
   final String emptyText;
   final double minWidth;
 
+  /// Pertahankan lebar minimum dan sediakan gulir horizontal pada desktop.
+  /// Dipakai tabel dengan banyak kolom yang tidak mungkin tetap terbaca bila
+  /// seluruh kolom dipaksa masuk ke lebar viewport.
+  final bool horizontalScroll;
+
   /// Setel false untuk tabel yang memang harus tampil utuh sekaligus, mis.
   /// ringkasan tiga baris di dalam dialog, di mana bilah halaman justru
   /// mengganggu. Tabel panjang tidak boleh memakai ini.
@@ -1356,6 +1361,7 @@ class AppDataTable extends StatefulWidget {
     this.pagination,
     this.emptyText = 'Tidak ada data.',
     this.minWidth = 760,
+    this.horizontalScroll = false,
     this.pagingOtomatis = true,
     this.labelData = 'data',
   });
@@ -1367,6 +1373,7 @@ class AppDataTable extends StatefulWidget {
 class _AppDataTableState extends State<AppDataTable> {
   int _halaman = 1;
   final ScrollController _verticalController = ScrollController();
+  final ScrollController _horizontalController = ScrollController();
 
   bool get _pagingSendiri =>
       widget.pagination == null &&
@@ -1412,6 +1419,7 @@ class _AppDataTableState extends State<AppDataTable> {
   @override
   void dispose() {
     _verticalController.dispose();
+    _horizontalController.dispose();
     super.dispose();
   }
 
@@ -1452,11 +1460,15 @@ class _AppDataTableState extends State<AppDataTable> {
                     emptyText: widget.emptyText,
                   );
                 }
-                // Pada desktop/tablet semua kolom mengikuti lebar konten.
-                // Jangan memaksa minWidth dan horizontal-scroll: pola lama
-                // membuat kolom paling kanan tampak terpotong oleh viewport.
-                return SizedBox(
-                  width: lebarTabel,
+                // Tabel biasa tetap mengisi lebar konten. Tabel yang secara
+                // eksplisit mempunyai banyak kolom mempertahankan minWidth dan
+                // dapat digulir, sehingga judul serta angka tidak dipadatkan.
+                final lebarIsi =
+                    widget.horizontalScroll && widget.minWidth > lebarTabel
+                        ? widget.minWidth
+                        : lebarTabel;
+                final isiTabel = SizedBox(
+                  width: lebarIsi,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -1477,6 +1489,21 @@ class _AppDataTableState extends State<AppDataTable> {
                       else
                         ...baris.map((row) => _AppTableRow(row: row)),
                     ],
+                  ),
+                );
+                if (!widget.horizontalScroll || lebarIsi <= lebarTabel) {
+                  return isiTabel;
+                }
+                return Scrollbar(
+                  controller: _horizontalController,
+                  thumbVisibility: true,
+                  trackVisibility: true,
+                  interactive: true,
+                  scrollbarOrientation: ScrollbarOrientation.bottom,
+                  child: SingleChildScrollView(
+                    controller: _horizontalController,
+                    scrollDirection: Axis.horizontal,
+                    child: isiTabel,
                   ),
                 );
               },
