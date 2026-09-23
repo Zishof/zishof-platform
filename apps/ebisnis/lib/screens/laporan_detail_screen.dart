@@ -852,13 +852,13 @@ class _TabelLaporanState extends State<_TabelLaporan> {
       final tipe = '${kolom[i]['t'] ?? 'text'}';
       final label = '${kolom[i]['l'] ?? ''}'.toLowerCase();
       if (tipe == 'num') {
-        hasil += 132;
+        hasil += 160;
       } else if (tipe == 'tgl' || label.contains('tanggal')) {
-        hasil += 140;
+        hasil += 180;
       } else if (i == 0 || label.contains('toko') || label.contains('nama')) {
-        hasil += 170;
+        hasil += 190;
       } else {
-        hasil += 150;
+        hasil += 170;
       }
     }
     return hasil;
