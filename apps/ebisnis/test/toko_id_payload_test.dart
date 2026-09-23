@@ -29,6 +29,20 @@ void main() {
   });
 
   group('aksi yang butuh toko_id', () {
+    test(
+        'pengadaan mengirim toko terpilih dan mempertahankan pilihan eksplisit',
+        () {
+      Sesi.instance.tokoId = 6;
+      for (final action in [
+        'pengadaan_dasbor',
+        'pengadaan_pr_daftar',
+        'pengadaan_pr_simpan'
+      ]) {
+        expect(ApiClient.susunPayload(action, {})['toko_id'], 6);
+        expect(ApiClient.susunPayload(action, {'toko_id': 7})['toko_id'], 7);
+        expect(ApiClient.aksiMemakaiTokoId(action), isTrue);
+      }
+    });
     test('toko terpilih ikut terkirim', () {
       Sesi.instance
         ..bolehSemuaToko = true

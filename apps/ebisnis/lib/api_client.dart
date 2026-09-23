@@ -250,7 +250,7 @@ class ApiClient {
     // Kalau belum ada toko terpilih, kunci ini tidak dikirim dan server tetap
     // menolak dengan pesannya sendiri -- lebih baik ditolak daripada menebak
     // toko lalu menulis ke tempat yang salah.
-    if (_aksiBerTokoId.contains(namaAksi) && !sudahAdaToko) {
+    if (aksiMemakaiTokoId(namaAksi) && !sudahAdaToko) {
       final idToko = Sesi.instance.idTokoTerpilih;
       if (idToko != null) {
         payload['toko_id'] = idToko;
@@ -274,7 +274,7 @@ class ApiClient {
 
   /// Apakah [namaAksi] menerima `toko_id` dari sesi (lihat [_aksiBerTokoId]).
   static bool aksiMemakaiTokoId(String namaAksi) =>
-      _aksiBerTokoId.contains(namaAksi);
+      _aksiBerTokoId.contains(namaAksi) || namaAksi.startsWith('pengadaan_');
 
   /// Nama field yang isinya TIDAK BOLEH ikut tercatat di log teknis.
   ///
