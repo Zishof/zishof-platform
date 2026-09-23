@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api_client.dart';
+import '../services/produksi_status.dart';
 import '../widgets/app_error_info.dart';
 import '../services/master_offline.dart';
 import '../widgets/app_shell.dart';
@@ -142,15 +143,13 @@ class _ProduksiScreenState extends State<ProduksiScreen> {
 
   Future<void> _status(Map<String, dynamic> d, String status) async {
     try {
-      await ApiClient.instance.aksi('produksi_status', <String, dynamic>{
-        'jenis': cfg.kode,
-        'id': d['id'],
-        'status': status,
-        'catatan': 'Perubahan status dari aplikasi eBisnis',
-      });
+      // Online-only: approval/posting harus dikonfirmasi server agar stok
+      // dan reservasi tidak dinyatakan berhasil saat perangkat offline.
+      await ApiClient.instance.aksi('produksi_status',
+          payloadStatusProduksi(cfg.kode, d['id'], status));
       _muat();
     } catch (e) {
-      if (mounted) _pesan('Gagal mengubah status: $e');
+      if (mounted) _pesan('Status belum berubah. Pastikan koneksi aktif dan periksa pesan server: $e');
     }
   }
 
@@ -649,23 +648,13 @@ class _Detail extends StatelessWidget {
                                 onPressed: () =>
                                     Navigator.pop(context, 'disposisi:$dsp'),
                                 child: Text(dsp))),
-                          if (cfg.kode != 'quality_alert' &&
-                              hak['setujui'] == true &&
-                              status == 'DRAFT')
-                            FilledButton(
-                                onPressed: () =>
-                                    Navigator.pop(context, 'status:APPROVED'),
-                                child: const Text('Setujui')),
-                          if (hak['setujui'] == true && status == 'APPROVED')
-                            FilledButton(
-                                onPressed: () =>
-                                    Navigator.pop(context, 'status:POSTED'),
-                                child: const Text('Posting')),
-                          if (hak['batalkan'] == true && status != 'CANCELLED')
-                            TextButton(
-                                onPressed: () =>
-                                    Navigator.pop(context, 'status:CANCELLED'),
-                                child: const Text('Batalkan'))
+                          ...aksiStatusProduksi(cfg.kode, status, hak).map(
+                            (aksi) => FilledButton(
+                              onPressed: () => Navigator.pop(
+                                  context, 'status:${aksi.status}'),
+                              child: Text(aksi.label),
+                            ),
+                          ),
                         ])))));
   }
 }
