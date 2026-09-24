@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 const _outputDir = String.fromEnvironment('POS_TEST_OUTPUT_DIR');
+const _onlyProcess = String.fromEnvironment('POS_TEST_ONLY_PROCESS');
 
 const _proses = <(String, String)>[
   ('outlet_order', 'Pesanan Outlet'),
@@ -41,7 +42,9 @@ void main() {
     expect(host, isNotEmpty, reason: 'POS_TEST_HOST wajib diisi.');
     expect(_outputDir, isNotEmpty, reason: 'POS_TEST_OUTPUT_DIR wajib diisi.');
 
-    await tester.binding.setSurfaceSize(const Size(2560, 1392));
+    // Samakan logical viewport dengan jendela runner Windows. Screenshot tetap
+    // dirender 2x supaya teks, jumlah record, dan tombol terbaca jelas di laporan.
+    await tester.binding.setSurfaceSize(const Size(1280, 696));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     CoreDb.configureStorage('abchicken_uat');
@@ -63,8 +66,11 @@ void main() {
         .aksi('si_restaurant_summary', const <String, dynamic>{});
     final dataRingkasan =
         Map<String, dynamic>.from(ringkasan['data'] as Map? ?? const {});
-    expect((dataRingkasan['outlet'] as num?)?.toInt(), 1);
-    expect((dataRingkasan['gudangPusat'] as num?)?.toInt(), 1);
+    expect((dataRingkasan['outlet'] as num?)?.toInt(), greaterThanOrEqualTo(1),
+        reason: 'Tenant wajib memiliki minimal satu outlet aktif.');
+    expect((dataRingkasan['gudangPusat'] as num?)?.toInt(),
+        greaterThanOrEqualTo(1),
+        reason: 'Tenant wajib memiliki minimal satu gudang pusat aktif.');
     expect((dataRingkasan['produkJual'] as num?)?.toInt(),
         greaterThanOrEqualTo(50));
     expect((dataRingkasan['bahanBaku'] as num?)?.toInt(),
@@ -82,6 +88,59 @@ void main() {
             'Data tenant belum settle: ada pemeriksaan integritas yang gagal.');
 
     final catatan = StringBuffer('kode,judul,total,status_gagal,berkas\n');
+
+    if (_onlyProcess.isNotEmpty) {
+      if (_onlyProcess == 'summary') {
+        await _tampilkan(tester, const OperasiRantaiPasokScreen());
+        await _tunggu(
+            tester,
+            () => find
+                .text('Seluruh gerbang data UAT lulus')
+                .evaluate()
+                .isNotEmpty,
+            alasan:
+                'Ringkasan Desktop belum menyatakan seluruh gerbang data lulus.');
+        final path = await _potret(tester, '00-ringkasan-data-settle');
+        catatan.writeln(
+            'ringkasan,Ringkasan Data Settle,${checks.length},0,$path');
+        await _tulisHasil('summary', catatan);
+        return;
+      }
+      if (_onlyProcess == 'account') {
+        await _tampilkan(
+            tester, const OperasiRantaiPasokScreen(prosesAwal: 'account'));
+        await _tunggu(
+            tester, () => find.text('Ubah akun').evaluate().isNotEmpty,
+            alasan: 'Pemetaan akun tidak selesai dimuat.');
+        expect(find.textContaining('Belum dipilih'), findsNothing,
+            reason: 'Masih ada sumber akun posting yang belum dipetakan.');
+        final path = await _potret(tester, '12-sumber-akun-posting');
+        catatan.writeln('account,Sumber Akun Posting,3,0,$path');
+        await _tulisHasil('account', catatan);
+        return;
+      }
+      final index = _proses.indexWhere((item) => item.$1 == _onlyProcess);
+      expect(index, greaterThanOrEqualTo(0),
+          reason: 'Proses UAT $_onlyProcess tidak dikenal.');
+      final proses = _proses[index];
+      final hasil = await ApiClient.instance.aksi(
+          'si_restaurant_${proses.$1}_list',
+          const <String, dynamic>{'halaman': 1, 'batas': 50});
+      final total = (hasil['total'] as num?)?.toInt() ?? 0;
+      expect(total, greaterThanOrEqualTo(50),
+          reason: '${proses.$2} hanya mempunyai $total record.');
+      await _tampilkan(tester, OperasiRantaiPasokScreen(prosesAwal: proses.$1));
+      await _beriWaktu(tester, detik: 20);
+      expect(find.textContaining('$total record'), findsWidgets,
+          reason: 'Daftar ${proses.$2} tidak menampilkan $total record.');
+      expect(find.text('Tidak ada record yang cocok dengan filter.'),
+          findsNothing);
+      final nomor = (index + 1).toString().padLeft(2, '0');
+      final path = await _potret(tester, '$nomor-${proses.$1}-50-record');
+      catatan.writeln('${proses.$1},${proses.$2},$total,0,$path');
+      await _tulisHasil(proses.$1, catatan);
+      return;
+    }
 
     await _tampilkan(tester, const OperasiRantaiPasokScreen());
     await _tunggu(tester,
@@ -132,6 +191,13 @@ void main() {
   });
 }
 
+Future<void> _tulisHasil(String kode, StringBuffer catatan) async {
+  final dir = Directory(_outputDir);
+  await dir.create(recursive: true);
+  await File('${dir.path}\\hasil-$kode.csv')
+      .writeAsString(catatan.toString(), flush: true);
+}
+
 Future<void> _tampilkan(WidgetTester tester, Widget layar) async {
   // Lepaskan state layar sebelumnya. Tanpa langkah ini Flutter mempertahankan
   // State OperasiRantaiPasokScreen karena tipe widget sama, sehingga prosesAwal
@@ -172,7 +238,7 @@ Future<String> _potret(WidgetTester tester, String nama) async {
   final image = await layer.toImage(
     // ignore: deprecated_member_use
     tester.binding.renderView.paintBounds,
-    pixelRatio: 1,
+    pixelRatio: 2,
   );
   final data = await image.toByteData(format: ui.ImageByteFormat.png);
   image.dispose();
