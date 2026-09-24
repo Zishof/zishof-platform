@@ -55,6 +55,10 @@ class _HrdDasarScreenState extends State<HrdDasarScreen> {
                       value: 5,
                       icon: Icon(Icons.trending_up_outlined),
                       label: Text('Karier & Gaji')),
+                  ButtonSegment(
+                      value: 6,
+                      icon: Icon(Icons.task_alt_outlined),
+                      label: Text('Kinerja')),
                 ],
                 selected: {_tab},
                 onSelectionChanged: (v) => setState(() => _tab = v.first),
@@ -68,6 +72,7 @@ class _HrdDasarScreenState extends State<HrdDasarScreen> {
           _KedisiplinanTab(),
           _PayrollTab(),
           _KarierGajiTab(),
+          _KinerjaPegawaiTab(),
         ])),
       ]),
     );
@@ -1365,6 +1370,325 @@ class _FormKenaikanGajiState extends State<_FormKenaikanGaji> {
           FilledButton(
               onPressed: _simpan || _memuat ? null : _kirim,
               child: Text(_simpan ? 'Menyimpan…' : 'Kirim')),
+        ],
+      );
+}
+
+class _KinerjaPegawaiTab extends StatefulWidget {
+  const _KinerjaPegawaiTab();
+  @override
+  State<_KinerjaPegawaiTab> createState() => _KinerjaPegawaiTabState();
+}
+
+class _KinerjaPegawaiTabState extends State<_KinerjaPegawaiTab> {
+  bool _memuat = true, _bolehKelola = false;
+  String? _error;
+  List<Map<String, dynamic>> _data = [];
+  DateTime _periode = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  Future<void> _muat() async {
+    setStateIfMounted(() {
+      _memuat = true;
+      _error = null;
+    });
+    try {
+      final r = await ApiClient.instance.aksi('hrd_kinerja_daftar', {
+        'tahun': _periode.year,
+        'bulan': _periode.month,
+        'page_size': 500,
+      });
+      setStateIfMounted(() {
+        _data = ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+        _bolehKelola = r['bolehKelola'] == true;
+      });
+    } catch (e) {
+      setStateIfMounted(() => _error = '$e');
+    } finally {
+      setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  Future<void> _gantiBulan(int delta) async {
+    setState(() => _periode = DateTime(_periode.year, _periode.month + delta));
+    await _muat();
+  }
+
+  Future<void> _tambah() async {
+    final ok = await showDialog<bool>(
+        context: context,
+        builder: (_) => _FormRealisasiKinerja(periode: _periode));
+    if (ok == true) await _muat();
+  }
+
+  Future<void> _verifikasi(Map<String, dynamic> row) async {
+    final catatan = TextEditingController();
+    final lanjut = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+              title: const Text('Verifikasi Kinerja'),
+              content: TextField(
+                  controller: catatan,
+                  maxLines: 3,
+                  decoration:
+                      const InputDecoration(labelText: 'Catatan verifikator')),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Batal')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Verifikasi')),
+              ],
+            ));
+    if (lanjut != true) {
+      catatan.dispose();
+      return;
+    }
+    try {
+      await ApiClient.instance.aksi('hrd_kinerja_putusan', {
+        'id': row['id'],
+        'verifikasi': true,
+        'catatan': catatan.text.trim(),
+      });
+      await _muat();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      catatan.dispose();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => _PanelDaftar(
+        header: Row(children: [
+          IconButton(
+              onPressed: () => _gantiBulan(-1),
+              icon: const Icon(Icons.chevron_left)),
+          Text(DateFormat('MMMM yyyy', 'id_ID').format(_periode),
+              style: Theme.of(context).textTheme.titleMedium),
+          IconButton(
+              onPressed: () => _gantiBulan(1),
+              icon: const Icon(Icons.chevron_right)),
+          const Spacer(),
+          IconButton(onPressed: _muat, icon: const Icon(Icons.refresh)),
+          FilledButton.icon(
+              onPressed: _tambah,
+              icon: const Icon(Icons.add_task),
+              label: const Text('Catat Realisasi')),
+        ]),
+        memuat: _memuat,
+        error: _error,
+        kosong: 'Belum ada realisasi kinerja pada periode ini.',
+        children: _data
+            .map((r) => Card(
+                    child: ListTile(
+                  leading: Icon(
+                      r['terverifikasi'] == true
+                          ? Icons.verified
+                          : Icons.pending_actions,
+                      color: r['terverifikasi'] == true
+                          ? Colors.green
+                          : Colors.orange),
+                  title: Text('${r['tugas'] ?? '-'} · ${r['pegawai'] ?? '-'}'),
+                  subtitle: Text(
+                      '${r['tanggal'] ?? '-'} · Kuantitas ${r['kuantitas'] ?? 0} · Waktu ${r['waktu'] ?? 0}\n'
+                      '${r['keterangan'] ?? ''}${('${r['catatan'] ?? ''}').isEmpty ? '' : '\nCatatan: ${r['catatan']}'}'),
+                  isThreeLine: true,
+                  trailing: r['terverifikasi'] == true
+                      ? const Chip(label: Text('TERVERIFIKASI'))
+                      : _bolehKelola
+                          ? IconButton(
+                              onPressed: () => _verifikasi(r),
+                              tooltip: 'Verifikasi kinerja',
+                              icon: const Icon(Icons.approval_outlined))
+                          : const Chip(label: Text('MENUNGGU')),
+                )))
+            .toList(),
+      );
+}
+
+class _FormRealisasiKinerja extends StatefulWidget {
+  const _FormRealisasiKinerja({required this.periode});
+  final DateTime periode;
+  @override
+  State<_FormRealisasiKinerja> createState() => _FormRealisasiKinerjaState();
+}
+
+class _FormRealisasiKinerjaState extends State<_FormRealisasiKinerja> {
+  List<Map<String, dynamic>> _tugas = [];
+  int? _tugasId;
+  DateTime _tanggal = DateTime.now();
+  final _kuantitas = TextEditingController(text: '1'),
+      _waktu = TextEditingController(text: '0'),
+      _biaya = TextEditingController(text: '0'),
+      _keterangan = TextEditingController();
+  bool _memuat = true, _simpan = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _muatTugas();
+  }
+
+  @override
+  void dispose() {
+    _kuantitas.dispose();
+    _waktu.dispose();
+    _biaya.dispose();
+    _keterangan.dispose();
+    super.dispose();
+  }
+
+  Future<void> _muatTugas() async {
+    try {
+      final r = await ApiClient.instance.aksi('hrd_tugas_kinerja_daftar', {});
+      setStateIfMounted(() {
+        _tugas =
+            ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+        if (_tugas.isNotEmpty) {
+          _tugasId = (_tugas.first['id'] as num).toInt();
+          _kuantitas.text = '${_tugas.first['kuantitasDefault'] ?? 1}';
+          _waktu.text = '${_tugas.first['waktuDefault'] ?? 0}';
+        }
+      });
+    } finally {
+      setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  void _pilihTugas(int? id) {
+    Map<String, dynamic>? tugas;
+    for (final kandidat in _tugas) {
+      if ((kandidat['id'] as num?)?.toInt() == id) {
+        tugas = kandidat;
+        break;
+      }
+    }
+    setState(() {
+      _tugasId = id;
+      if (tugas != null) {
+        _kuantitas.text = '${tugas['kuantitasDefault'] ?? 1}';
+        _waktu.text = '${tugas['waktuDefault'] ?? 0}';
+      }
+    });
+  }
+
+  Future<void> _kirim() async {
+    final kuantitas =
+        double.tryParse(_kuantitas.text.replaceAll(',', '.')) ?? -1;
+    final waktu = double.tryParse(_waktu.text.replaceAll(',', '.')) ?? -1;
+    final biaya =
+        double.tryParse(_biaya.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? -1;
+    if (_tugasId == null ||
+        kuantitas < 0 ||
+        waktu < 0 ||
+        biaya < 0 ||
+        _keterangan.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text('Tugas, nilai realisasi, dan keterangan wajib diisi.')));
+      return;
+    }
+    setState(() => _simpan = true);
+    try {
+      await ApiClient.instance.aksi('hrd_kinerja_simpan', {
+        'tugas_id': _tugasId,
+        'tanggal': DateFormat('yyyy-MM-dd').format(_tanggal),
+        'kuantitas': kuantitas,
+        'waktu': waktu,
+        'biaya': biaya,
+        'keterangan': _keterangan.text.trim(),
+      });
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      setStateIfMounted(() => _simpan = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Catat Realisasi Kinerja'),
+        content: SizedBox(
+            width: 560,
+            child: _memuat
+                ? const Center(child: CircularProgressIndicator())
+                : SingleChildScrollView(
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    DropdownButtonFormField<int>(
+                        value: _tugasId,
+                        isExpanded: true,
+                        decoration:
+                            const InputDecoration(labelText: 'Tugas jabatan *'),
+                        items: _tugas
+                            .map((t) => DropdownMenuItem(
+                                value: (t['id'] as num).toInt(),
+                                child: Text('${t['nama'] ?? '-'}')))
+                            .toList(),
+                        onChanged: _pilihTugas),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                        onPressed: () async {
+                          final d = await showDatePicker(
+                              context: context,
+                              initialDate: _tanggal,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2100));
+                          if (d != null) setStateIfMounted(() => _tanggal = d);
+                        },
+                        icon: const Icon(Icons.event),
+                        label: Text(
+                            'Tanggal ${DateFormat('dd-MM-yyyy').format(_tanggal)}')),
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      Expanded(
+                          child: TextField(
+                              controller: _kuantitas,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                  labelText: 'Kuantitas'))),
+                      const SizedBox(width: 8),
+                      Expanded(
+                          child: TextField(
+                              controller: _waktu,
+                              keyboardType: TextInputType.number,
+                              decoration:
+                                  const InputDecoration(labelText: 'Waktu'))),
+                      const SizedBox(width: 8),
+                      Expanded(
+                          child: TextField(
+                              controller: _biaya,
+                              keyboardType: TextInputType.number,
+                              decoration:
+                                  const InputDecoration(labelText: 'Biaya'))),
+                    ]),
+                    const SizedBox(height: 12),
+                    TextField(
+                        controller: _keterangan,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                            labelText: 'Keterangan realisasi *')),
+                  ]))),
+        actions: [
+          TextButton(
+              onPressed: _simpan ? null : () => Navigator.pop(context),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: _simpan || _memuat ? null : _kirim,
+              child: Text(_simpan ? 'Menyimpan…' : 'Simpan')),
         ],
       );
 }
