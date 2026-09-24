@@ -76,6 +76,7 @@ class KeranjangScreen extends StatelessWidget {
   final Anggota? memberAwal;
   final DateTime? waktuTransaksiAwal;
   final bool semuaCaraBayarUntukMemberAwal;
+  final String jenisPenjualan;
   const KeranjangScreen(
       {super.key,
       required this.keranjang,
@@ -83,7 +84,8 @@ class KeranjangScreen extends StatelessWidget {
       this.draftKodeSumber,
       this.memberAwal,
       this.waktuTransaksiAwal,
-      this.semuaCaraBayarUntukMemberAwal = false});
+      this.semuaCaraBayarUntukMemberAwal = false,
+      this.jenisPenjualan = 'TOKO'});
 
   @override
   Widget build(BuildContext context) {
@@ -95,7 +97,8 @@ class KeranjangScreen extends StatelessWidget {
           draftKodeSumber: draftKodeSumber,
           memberAwal: memberAwal,
           waktuTransaksiAwal: waktuTransaksiAwal,
-          semuaCaraBayarUntukMemberAwal: semuaCaraBayarUntukMemberAwal),
+          semuaCaraBayarUntukMemberAwal: semuaCaraBayarUntukMemberAwal,
+          jenisPenjualan: jenisPenjualan),
     );
   }
 }
@@ -128,6 +131,9 @@ class PanelKeranjang extends StatefulWidget {
   /// Desktop yg menanamkan panel ini langsung) utk menyegarkan status lain
   /// (mis. badge jumlah transaksi belum sinkron).
   final VoidCallback? onSelesai;
+
+  /// Kanal penjualan dipilih di layar kasir; ikut disimpan pada header transaksi.
+  final String jenisPenjualan;
   const PanelKeranjang({
     super.key,
     required this.keranjang,
@@ -140,6 +146,7 @@ class PanelKeranjang extends StatefulWidget {
     this.tampilkanJudul = false,
     this.aksiHeader,
     this.onSelesai,
+    this.jenisPenjualan = 'TOKO',
   });
 
   @override
@@ -1570,6 +1577,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       'nomor_antrian': _nomorAntrianPercobaan,
       'keterangan': _catatanPesananController.text.trim(),
       'jenis_konsumsi': _jenisKonsumsi,
+      'jenis_penjualan': widget.jenisPenjualan,
       if (_roomChargeStay != null) ...{
         'hotel_menginap_id': _roomChargeStay!['id'],
         'hotel_properti_id': _roomChargeStay!['properti_id'],

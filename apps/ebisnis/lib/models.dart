@@ -511,6 +511,9 @@ class ItemKeranjang {
   /// pendapat (Fase A dok. 48/49).
   double? hargaGrosir;
 
+  /// Harga khusus kanal penjualan (GoFood/GrabFood/dll.) dari server.
+  double? hargaKanal;
+
   /// Snapshot kemasan yang dipakai MENAMBAH baris ini (nama + isi per
   /// kemasan) -- arsip, bukan rujukan: preset kemasan yang diubah di master
   /// produk kemudian hari tidak boleh mengubah arti baris/struk lama.
@@ -565,7 +568,7 @@ class ItemKeranjang {
       hargaGrosir ??
       (satuanJualKonsisten && hargaPackPerDasar != null
           ? hargaPackPerDasar!
-          : produk.hargaJual);
+          : (hargaKanal ?? produk.hargaJual));
 
   /// Label kemasan untuk baris & struk: "2 x Karung 50kg" bila qty habis
   /// dibagi isi kemasan; bila kasir mengubah qty hingga tidak bulat lagi,
