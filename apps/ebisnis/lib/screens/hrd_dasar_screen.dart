@@ -1896,6 +1896,29 @@ class _RiwayatPegawaiTabState extends State<_RiwayatPegawaiTab> {
                             _rows('pekerjaan'), (r) {
                           return '${r['jabatan'] ?? '-'} · ${r['mulai'] ?? '-'}–${r['selesai'] ?? '-'} · Pimpinan ${r['pimpinan'] ?? '-'}';
                         }),
+                        _bagian(
+                            'Kenaikan Pangkat',
+                            Icons.military_tech_outlined,
+                            _rows('pangkat'), (r) {
+                          return 'TMT ${r['tmt'] ?? '-'} · SK ${r['nomor'] ?? '-'} tanggal ${r['tanggalSk'] ?? '-'}';
+                        }),
+                        _bagian('Mutasi', Icons.swap_horiz_outlined,
+                            _rows('mutasi'), (r) {
+                          return 'TMT ${r['tmt'] ?? '-'} · ${r['status'] ?? '-'} · Surat ${r['nomor'] ?? '-'}';
+                        }),
+                        _bagian(
+                            'Pensiun', Icons.elderly_outlined, _rows('pensiun'),
+                            (r) {
+                          return 'TMT ${r['tmt'] ?? '-'} · ${r['status'] ?? '-'} · Surat ${r['nomor'] ?? '-'}';
+                        }),
+                        _bagian('Pelanggaran & Hukuman', Icons.gavel_outlined,
+                            _rows('pelanggaran'), (r) {
+                          return '${r['tanggal'] ?? '-'} · ${r['aktif'] == true ? 'Aktif' : 'Selesai'} · ${r['keterangan'] ?? ''}';
+                        }),
+                        _bagian('Penilaian Pelaksanaan Pekerjaan',
+                            Icons.assessment_outlined, _rows('penilaian'), (r) {
+                          return 'Nilai ${r['nilai'] ?? '-'} · ${r['predikat'] ?? '-'} · Penilai ${r['penilai'] ?? '-'}';
+                        }),
                       ]))
       ]));
 }
