@@ -173,16 +173,32 @@ class _PegawaiTabState extends State<_PegawaiTab> {
     if (ok == true) await _muat();
   }
 
+  Future<void> _imporPegawai() async {
+    final berubah = await showDialog<bool>(
+        context: context, builder: (_) => const _DialogImporPegawaiZk());
+    if (berubah == true) await _muat();
+  }
+
   @override
   Widget build(BuildContext context) => _PanelDaftar(
-        header: TextField(
-            controller: _cari,
-            decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search),
-                hintText: 'Cari kode atau nama pegawai',
-                suffixIcon: IconButton(
-                    icon: const Icon(Icons.refresh), onPressed: _muat)),
-            onSubmitted: (_) => _muat()),
+        header: Row(children: [
+          Expanded(
+              child: TextField(
+                  controller: _cari,
+                  decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.search),
+                      hintText: 'Cari kode atau nama pegawai',
+                      suffixIcon: IconButton(
+                          icon: const Icon(Icons.refresh), onPressed: _muat)),
+                  onSubmitted: (_) => _muat())),
+          if (_bolehKelola) ...[
+            const SizedBox(width: 8),
+            FilledButton.icon(
+                onPressed: _imporPegawai,
+                icon: const Icon(Icons.person_add_alt_1_outlined),
+                label: const Text('Impor Pegawai ZK')),
+          ]
+        ]),
         memuat: _memuat,
         error: _error,
         kosong: 'Belum ada pegawai yang dapat diakses.',
@@ -230,6 +246,122 @@ class _PegawaiTabState extends State<_PegawaiTab> {
                 ))
             .toList(),
       );
+}
+
+class _DialogImporPegawaiZk extends StatefulWidget {
+  const _DialogImporPegawaiZk();
+  @override
+  State<_DialogImporPegawaiZk> createState() => _DialogImporPegawaiZkState();
+}
+
+class _DialogImporPegawaiZkState extends State<_DialogImporPegawaiZk> {
+  final _cari = TextEditingController();
+  List<Map<String, dynamic>> _data = [];
+  bool _memuat = true;
+  int? _sedangTautkan;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  @override
+  void dispose() {
+    _cari.dispose();
+    super.dispose();
+  }
+
+  Future<void> _muat() async {
+    setStateIfMounted(() {
+      _memuat = true;
+      _error = null;
+    });
+    try {
+      final r = await ApiClient.instance.aksi('hrd_pegawai_tenant_kandidat',
+          {'keyword': _cari.text.trim(), 'page_size': 200});
+      setStateIfMounted(() => _data =
+          ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>());
+    } catch (e) {
+      setStateIfMounted(() => _error = '$e');
+    } finally {
+      setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  Future<void> _tautkan(Map<String, dynamic> row) async {
+    final id = (row['id'] as num).toInt();
+    setState(() => _sedangTautkan = id);
+    try {
+      await ApiClient.instance
+          .aksi('hrd_pegawai_tenant_tautkan', {'pegawai_id': id});
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      setStateIfMounted(() => _sedangTautkan = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+          title: const Text('Impor Pegawai dari ZK'),
+          content: SizedBox(
+              width: 700,
+              height: 520,
+              child: Column(children: [
+                const Text(
+                    'Hanya pegawai aktif yang belum terikat pada tenant lain yang ditampilkan.'),
+                const SizedBox(height: 12),
+                TextField(
+                    controller: _cari,
+                    decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search),
+                        hintText: 'Cari kode atau nama pegawai lama',
+                        suffixIcon: IconButton(
+                            onPressed: _muat, icon: const Icon(Icons.refresh))),
+                    onSubmitted: (_) => _muat()),
+                const SizedBox(height: 12),
+                Expanded(
+                    child: _memuat
+                        ? const Center(child: CircularProgressIndicator())
+                        : _error != null
+                            ? Center(
+                                child: Text(_error!,
+                                    style: const TextStyle(color: Colors.red)))
+                            : _data.isEmpty
+                                ? const Center(
+                                    child: Text(
+                                        'Tidak ada pegawai ZK yang belum terikat.'))
+                                : ListView.builder(
+                                    itemCount: _data.length,
+                                    itemBuilder: (_, i) {
+                                      final row = _data[i];
+                                      final id = (row['id'] as num).toInt();
+                                      return ListTile(
+                                          leading:
+                                              const Icon(Icons.badge_outlined),
+                                          title: Text('${row['nama'] ?? '-'}'),
+                                          subtitle: Text(
+                                              '${row['kode'] ?? '-'} · ${row['jabatan'] ?? '-'} · ${row['satuanKerja'] ?? '-'}'),
+                                          trailing: FilledButton(
+                                              onPressed: _sedangTautkan == null
+                                                  ? () => _tautkan(row)
+                                                  : null,
+                                              child: Text(_sedangTautkan == id
+                                                  ? 'Mengimpor…'
+                                                  : 'Impor')));
+                                    }))
+              ])),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Tutup'))
+          ]);
 }
 
 class _FormProfilPegawai extends StatefulWidget {
