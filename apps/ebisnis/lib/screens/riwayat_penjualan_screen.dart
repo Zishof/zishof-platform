@@ -15,6 +15,9 @@ import '../widgets/app_shell.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/riwayat_data_dialog.dart';
 import 'struk_screen.dart';
+import 'keranjang_screen.dart' show pilihMemberPos;
+import '../services/master_offline.dart';
+import '../services/pemulihan_member.dart';
 import 'riwayat_penjualan_analisis_screen.dart';
 import 'riwayat_audit_screen.dart';
 import '../widgets/safe_state.dart';
@@ -222,6 +225,74 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
   int? _caraBayarId;
   bool _caraBayarDiubah = false;
   List<SlotBayar> _splitBayar = [];
+  Anggota? _memberPemulihan;
+  List<CaraBayar>? _metodeMember;
+  bool _memuatMember = false;
+  bool _metodeMemberTerkunci = false;
+  int _versiMember = 0;
+
+  List<CaraBayar> get _metodeTersedia =>
+      widget.modeBaru && _memberPemulihan != null
+          ? (_metodeMember ?? const <CaraBayar>[])
+          : Sesi.instance.caraBayar;
+
+  Future<void> _pilihMemberPemulihan() async {
+    final member = await pilihMemberPos(context);
+    if (member == null || !mounted) return;
+    final versi = ++_versiMember;
+    setState(() {
+      _memberPemulihan = member;
+      _metodeMember = [];
+      _caraBayarId = null;
+      _memuatMember = true;
+      _metodeMemberTerkunci = false;
+      _pesan = null;
+    });
+    final konteks = [
+      ApiClient.baseUrl,
+      Sesi.instance.tenantId,
+      Sesi.instance.userId,
+      Sesi.instance.idTokoTerpilih,
+      member.id
+    ];
+    try {
+      await MasterOffline.objekCacheDulu(
+          'cara_bayar_list',
+          {
+            'id_member': member.id,
+            'id_toko': Sesi.instance.idTokoTerpilih,
+          },
+          'pemulihan:metode:${jsonEncode(konteks)}', onData: (hasil) {
+        if (!mounted || versi != _versiMember) return;
+        final metode = metodePemulihanMember(hasil);
+        final lama = _caraBayarId;
+        setState(() {
+          _metodeMember = metode;
+          _metodeMemberTerkunci = hasil['caraBayarTerkunci'] == true;
+          // Pilihan kasir yang masih sah dipertahankan; jangan jatuh ke Tunai.
+          _caraBayarId = metode.any((m) => m.id == lama) ? lama : null;
+          if (_metodeMemberTerkunci) {
+            final id = (hasil['caraBayarDefaultId'] as num?)?.toInt();
+            _caraBayarId = metode.any((m) => m.id == id) ? id : null;
+          }
+          _pesan = metode.isEmpty
+              ? 'Tidak ada metode yang diizinkan untuk member ini.'
+              : (hasil['offline'] == true
+                  ? 'Izin dari salinan perangkat; saldo dan izin tetap diperiksa server.'
+                  : null);
+        });
+      });
+    } catch (_) {
+      if (mounted && versi == _versiMember) {
+        setState(() => _pesan =
+            'Izin pembayaran belum dapat diperbarui. Jangan mengganti member menjadi Umum.');
+      }
+    } finally {
+      if (mounted && versi == _versiMember) {
+        setState(() => _memuatMember = false);
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -493,6 +564,25 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
       setState(() => _pesan = 'Metode pembayaran wajib dipilih.');
       return;
     }
+    if (widget.modeBaru) {
+      final galat = validasiMemberPemulihan(
+          _metodeTersedia, _caraBayarId, _memberPemulihan?.id,
+          memuat: _memuatMember);
+      if (galat != null) {
+        setState(() => _pesan = galat);
+        return;
+      }
+      final cara = _metodeTersedia.firstWhere((m) => m.id == _caraBayarId);
+      final member = _memberPemulihan;
+      if (cara.wajibPin ||
+          member?.wajibPin == true ||
+          member?.wajibBiometricWajah == true ||
+          member?.wajibBiometricFingerprint == true) {
+        setState(() => _pesan =
+            'Member/metode ini memerlukan PIN atau biometrik. Form pemulihan belum mendukung verifikasi tersebut. Hubungi admin; jangan mengubah kebijakan keamanan.');
+        return;
+      }
+    }
     if (_caraBayarDiubah && _splitBayar.length >= 2) {
       final galat =
           validasiAlokasiPembayaran(_splitBayar, _totalSetelahKoreksi);
@@ -525,6 +615,10 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
     }
     Navigator.of(context).pop({
       'alasan': alasan,
+      if (widget.modeBaru) ...identitasMemberPemulihan(_memberPemulihan),
+      if (widget.modeBaru)
+        'cara_bayar_nama':
+            _metodeTersedia.firstWhere((m) => m.id == _caraBayarId).nama,
       'item': item,
       'waktu': _waktu.toIso8601String(),
       if (_caraBayarDiubah && _splitBayar.length >= 2)
@@ -589,7 +683,7 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
               ),
               child: Text(
                 widget.modeBaru
-                    ? 'Khusus Supervisor. Transaksi pemulihan tetap melalui validasi harga, stok, diskon, audit, dan idempotensi server.'
+                    ? 'Khusus Supervisor. Untuk transaksi yang benar-benar belum tercatat. Jangan gunakan untuk mengganti antrean lokal yang masih ada: dapat membuat transaksi dan pemotongan saldo ganda. Saldo dan izin diperiksa server.'
                     : 'Khusus Supervisor. Perubahan akan menghitung ulang total dan stok serta menyimpan riwayat audit sebelum/sesudah beserta alasan. Transaksi yang sudah diposting atau memiliki retur tidak dapat diedit.',
               ),
             ),
@@ -655,6 +749,17 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
                 ),
               ),
             const SizedBox(height: 8),
+            if (widget.modeBaru)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(_memberPemulihan?.nama ?? 'Pelanggan: Umum'),
+                subtitle:
+                    const Text('Pilih santri untuk pembayaran voucher/saldo.'),
+                trailing: OutlinedButton.icon(
+                    onPressed: _memuatMember ? null : _pilihMemberPemulihan,
+                    icon: const Icon(Icons.person_search),
+                    label: const Text('Pilih Member')),
+              ),
             if (widget.bolehSplitPembayaran)
               SizedBox(
                 width: double.infinity,
@@ -701,14 +806,17 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
                 decoration: const InputDecoration(
                     labelText: 'Metode pembayaran *',
                     prefixIcon: Icon(Icons.payments_outlined)),
-                items: Sesi.instance.caraBayar
+                items: _metodeTersedia
                     .map((cara) => DropdownMenuItem<int>(
                         value: cara.id, child: Text(cara.nama)))
                     .toList(),
-                onChanged: (value) => setState(() {
-                  _caraBayarId = value;
-                  _caraBayarDiubah = true;
-                }),
+                onChanged:
+                    _memuatMember || (widget.modeBaru && _metodeMemberTerkunci)
+                        ? null
+                        : (value) => setState(() {
+                              _caraBayarId = value;
+                              _caraBayarDiubah = true;
+                            }),
               ),
             const SizedBox(height: 8),
             Row(children: [
@@ -2175,8 +2283,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
     if (isian == null || !mounted) return;
     final waktu = DateTime.parse('${isian['waktu']}');
     final caraBayarId = isian['cara_bayar'] as int;
-    final caraBayar =
-        Sesi.instance.caraBayar.where((cara) => cara.id == caraBayarId).first;
+    final caraBayarNama = '${isian['cara_bayar_nama'] ?? ''}';
     final item = (isian['item'] as List).cast<Map<String, dynamic>>();
     final total = item.fold<double>(
         0,
@@ -2195,7 +2302,9 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
       'kasir_user_id': '${isian['kasir_user_id'] ?? Sesi.instance.userId}',
       'waktu': _formatWaktuBayar(waktu),
       'caraBayar': caraBayarId,
-      'caraBayarNama': caraBayar.nama,
+      'caraBayarNama': caraBayarNama,
+      if (isian['id_member'] != null) 'id_member': isian['id_member'],
+      if (isian['nama_member'] != null) 'nama_member': isian['nama_member'],
       'total': total,
       'pajak': 0,
       'nama_mesin': IdentitasMesin.instance.namaMesin,

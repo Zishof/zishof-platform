@@ -3605,6 +3605,10 @@ class _SheetPilihPromoManual extends StatelessWidget {
 
 /// Dialog cari+pilih member -- online (`cari_member`) dgn fallback offline
 /// ke cache lokal (CoreDb.cariAnggotaCache) bila server tak terjangkau.
+/// Pemilih member bersama untuk POS dan input transaksi supervisor.
+Future<Anggota?> pilihMemberPos(BuildContext context) => showDialog<Anggota>(
+    context: context, builder: (_) => const _DialogPilihMember());
+
 class _DialogPilihMember extends StatefulWidget {
   const _DialogPilihMember();
 
