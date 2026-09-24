@@ -41,6 +41,10 @@ class _HrdDasarScreenState extends State<HrdDasarScreen> {
                   value: 2,
                   icon: Icon(Icons.access_time_outlined),
                   label: Text('Kehadiran')),
+              ButtonSegment(
+                  value: 3,
+                  icon: Icon(Icons.payments_outlined),
+                  label: Text('Payroll')),
             ],
             selected: {_tab},
             onSelectionChanged: (v) => setState(() => _tab = v.first),
@@ -51,6 +55,7 @@ class _HrdDasarScreenState extends State<HrdDasarScreen> {
           _PegawaiTab(),
           _CutiTab(),
           _KehadiranTab(),
+          _PayrollTab(),
         ])),
       ]),
     );
@@ -407,6 +412,311 @@ class _KehadiranTabState extends State<_KehadiranTab> {
     if (s.isEmpty) return '-';
     return s.length >= 16 ? s.substring(11, 16) : s;
   }
+}
+
+class _PayrollTab extends StatefulWidget {
+  const _PayrollTab();
+  @override
+  State<_PayrollTab> createState() => _PayrollTabState();
+}
+
+class _PayrollTabState extends State<_PayrollTab> {
+  bool _memuat = true;
+  String? _error;
+  List<Map<String, dynamic>> _slip = [], _pengajuan = [];
+  final _rupiah =
+      NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  Future<void> _muat() async {
+    setStateIfMounted(() {
+      _memuat = true;
+      _error = null;
+    });
+    try {
+      final hasil = await Future.wait([
+        ApiClient.instance.aksi('hrd_payroll_daftar', {'page_size': 100}),
+        ApiClient.instance.aksi('hrd_pengajuan_daftar', {'page_size': 100}),
+      ]);
+      setStateIfMounted(() {
+        _slip = ((hasil[0]['data'] as List?) ?? const [])
+            .cast<Map<String, dynamic>>();
+        _pengajuan = ((hasil[1]['data'] as List?) ?? const [])
+            .cast<Map<String, dynamic>>();
+      });
+    } catch (e) {
+      setStateIfMounted(() => _error = '$e');
+    } finally {
+      setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  Future<void> _bukaSlip(Map<String, dynamic> slip) async {
+    final r =
+        await ApiClient.instance.aksi('hrd_slip_detail', {'id': slip['id']});
+    if (!mounted) return;
+    final item =
+        ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+    await showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+              title: Text('Slip Gaji · ${r['pegawai'] ?? '-'}'),
+              content: SizedBox(
+                  width: 560,
+                  height: 420,
+                  child: Column(children: [
+                    Expanded(
+                        child: ListView.separated(
+                            itemCount: item.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
+                            itemBuilder: (_, i) => ListTile(
+                                  title: Text('${item[i]['nama'] ?? '-'}'),
+                                  subtitle:
+                                      Text('${item[i]['keterangan'] ?? ''}'),
+                                  trailing: Text(_rupiah
+                                      .format((item[i]['nilai'] as num?) ?? 0)),
+                                ))),
+                    const Divider(),
+                    ListTile(
+                        title: const Text('Take Home Pay',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        trailing: Text(
+                            _rupiah.format((r['nilaiFinal'] as num?) ?? 0),
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold)))
+                  ])),
+              actions: [
+                FilledButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Tutup'))
+              ],
+            ));
+  }
+
+  Future<void> _ajukan() async {
+    final ok = await showDialog<bool>(
+        context: context, builder: (_) => const _FormPengajuanPayroll());
+    if (ok == true) await _muat();
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(children: [
+        Row(children: [
+          Expanded(
+              child: Text('Slip gaji dan pengajuan pegawai',
+                  style: Theme.of(context).textTheme.titleMedium)),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
+          const SizedBox(width: 8),
+          FilledButton.icon(
+              onPressed: _ajukan,
+              icon: const Icon(Icons.add),
+              label: const Text('Ajukan Lembur / Kasbon'))
+        ]),
+        const SizedBox(height: 12),
+        Expanded(
+            child: _memuat
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(
+                        child: Text(_error!,
+                            style: const TextStyle(color: Colors.red)))
+                    : Row(children: [
+                        Expanded(child: _daftarSlip(context)),
+                        const VerticalDivider(width: 24),
+                        Expanded(child: _daftarPengajuan(context)),
+                      ]))
+      ]));
+
+  Widget _daftarSlip(BuildContext context) => Column(children: [
+        Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Slip Gaji',
+                style: Theme.of(context).textTheme.titleSmall)),
+        const SizedBox(height: 8),
+        Expanded(
+            child: _slip.isEmpty
+                ? const Center(child: Text('Belum ada slip gaji.'))
+                : ListView.builder(
+                    itemCount: _slip.length,
+                    itemBuilder: (_, i) {
+                      final s = _slip[i];
+                      return Card(
+                          child: ListTile(
+                              onTap: () => _bukaSlip(s),
+                              leading: const Icon(Icons.receipt_long_outlined),
+                              title: Text(
+                                  '${s['pegawai'] ?? '-'} · ${s['bulan'] ?? '-'}/${s['tahun'] ?? '-'}'),
+                              subtitle: Text(s['dibayar'] == true
+                                  ? 'Sudah dibayar ${s['tanggalBayar'] ?? ''}'
+                                  : 'Belum dibayar'),
+                              trailing: Text(_rupiah
+                                  .format((s['nilaiFinal'] as num?) ?? 0))));
+                    }))
+      ]);
+
+  Widget _daftarPengajuan(BuildContext context) => Column(children: [
+        Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Pengajuan',
+                style: Theme.of(context).textTheme.titleSmall)),
+        const SizedBox(height: 8),
+        Expanded(
+            child: _pengajuan.isEmpty
+                ? const Center(child: Text('Belum ada pengajuan payroll.'))
+                : ListView.builder(
+                    itemCount: _pengajuan.length,
+                    itemBuilder: (_, i) {
+                      final p = _pengajuan[i];
+                      return Card(
+                          child: ListTile(
+                              leading: Icon(
+                                  p['status'] == 'DISETUJUI'
+                                      ? Icons.check_circle_outline
+                                      : Icons.hourglass_top,
+                                  color: p['status'] == 'DISETUJUI'
+                                      ? Colors.green
+                                      : Colors.orange),
+                              title: Text(
+                                  '${p['jenis'] ?? '-'} · ${p['pegawai'] ?? '-'}'),
+                              subtitle: Text(
+                                  '${p['tanggal'] ?? '-'} · ${p['status'] ?? 'MENUNGGU'}\n${p['keterangan'] ?? ''}'),
+                              isThreeLine: true,
+                              trailing: Text(
+                                  _rupiah.format((p['nilai'] as num?) ?? 0))));
+                    }))
+      ]);
+}
+
+class _FormPengajuanPayroll extends StatefulWidget {
+  const _FormPengajuanPayroll();
+  @override
+  State<_FormPengajuanPayroll> createState() => _FormPengajuanPayrollState();
+}
+
+class _FormPengajuanPayrollState extends State<_FormPengajuanPayroll> {
+  List<Map<String, dynamic>> _jenis = [];
+  int? _jenisId;
+  final _nilai = TextEditingController(),
+      _angsuran = TextEditingController(text: '1'),
+      _keterangan = TextEditingController();
+  DateTime _jatuhTempo = DateTime.now().add(const Duration(days: 30));
+  bool _simpan = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _muatJenis();
+  }
+
+  @override
+  void dispose() {
+    _nilai.dispose();
+    _angsuran.dispose();
+    _keterangan.dispose();
+    super.dispose();
+  }
+
+  Future<void> _muatJenis() async {
+    final r = await ApiClient.instance.aksi('hrd_pengajuan_jenis', {});
+    setStateIfMounted(() {
+      _jenis = ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+      if (_jenis.isNotEmpty) _jenisId = (_jenis.first['id'] as num).toInt();
+    });
+  }
+
+  Future<void> _kirim() async {
+    final nilai =
+        double.tryParse(_nilai.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+    final angsuran = int.tryParse(_angsuran.text) ?? 1;
+    if (_jenisId == null || nilai <= 0 || _keterangan.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Jenis, nilai, dan keterangan wajib diisi.')));
+      return;
+    }
+    setState(() => _simpan = true);
+    try {
+      await ApiClient.instance.aksi('hrd_pengajuan_simpan', {
+        'jenis_id': _jenisId,
+        'nilai': nilai,
+        'jumlah_angsur': angsuran,
+        'jatuh_tempo': DateFormat('yyyy-MM-dd').format(_jatuhTempo),
+        'keterangan': _keterangan.text.trim()
+      });
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      setStateIfMounted(() => _simpan = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Pengajuan Payroll'),
+        content: SizedBox(
+            width: 480,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              DropdownButtonFormField<int>(
+                  value: _jenisId,
+                  decoration:
+                      const InputDecoration(labelText: 'Jenis pengajuan'),
+                  items: _jenis
+                      .map((j) => DropdownMenuItem<int>(
+                          value: (j['id'] as num).toInt(),
+                          child: Text('${j['nama'] ?? '-'}')))
+                      .toList(),
+                  onChanged: (v) => setState(() => _jenisId = v)),
+              const SizedBox(height: 12),
+              TextField(
+                  controller: _nilai,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Nilai (Rp)')),
+              const SizedBox(height: 12),
+              TextField(
+                  controller: _angsuran,
+                  keyboardType: TextInputType.number,
+                  decoration:
+                      const InputDecoration(labelText: 'Jumlah angsuran')),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                  onPressed: () async {
+                    final d = await showDatePicker(
+                        context: context,
+                        initialDate: _jatuhTempo,
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime(2100));
+                    if (d != null) setStateIfMounted(() => _jatuhTempo = d);
+                  },
+                  icon: const Icon(Icons.event_outlined),
+                  label: Text(
+                      'Jatuh tempo ${DateFormat('dd-MM-yyyy').format(_jatuhTempo)}')),
+              const SizedBox(height: 12),
+              TextField(
+                  controller: _keterangan,
+                  maxLines: 3,
+                  decoration:
+                      const InputDecoration(labelText: 'Keterangan / alasan'))
+            ])),
+        actions: [
+          TextButton(
+              onPressed: _simpan ? null : () => Navigator.pop(context),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: _simpan ? null : _kirim,
+              child: Text(_simpan ? 'Menyimpan…' : 'Kirim Pengajuan'))
+        ],
+      );
 }
 
 class _PanelDaftar extends StatelessWidget {
