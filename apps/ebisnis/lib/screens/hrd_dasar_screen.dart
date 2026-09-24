@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../api_client.dart';
+import 'anggota/member_biometric_panel.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/safe_state.dart';
 
@@ -123,6 +124,41 @@ class _PegawaiTabState extends State<_PegawaiTab> {
     }
   }
 
+  Future<void> _biometrik(Map<String, dynamic> pegawai) async {
+    final userId = '${pegawai['akunUserId'] ?? ''}'.trim();
+    if (userId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Buat dan tautkan akun pegawai sebelum merekam biometrik.')));
+      return;
+    }
+    await showDialog<void>(
+        context: context,
+        builder: (ctx) => Dialog(
+              child: ConstrainedBox(
+                  constraints:
+                      const BoxConstraints(maxWidth: 920, maxHeight: 760),
+                  child: Column(children: [
+                    ListTile(
+                      leading: const Icon(Icons.fingerprint),
+                      title: Text('Biometrik ${pegawai['nama'] ?? '-'}'),
+                      subtitle: Text('Akun $userId'),
+                      trailing: IconButton(
+                          tooltip: 'Tutup',
+                          onPressed: () => Navigator.pop(ctx),
+                          icon: const Icon(Icons.close)),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                        child: SingleChildScrollView(
+                            padding: const EdgeInsets.all(16),
+                            child: MemberBiometricPanel(
+                                targetUserId: userId,
+                                memberName: '${pegawai['nama'] ?? '-'}'))),
+                  ])),
+            ));
+  }
+
   @override
   Widget build(BuildContext context) => _PanelDaftar(
         header: TextField(
@@ -153,6 +189,11 @@ class _PegawaiTabState extends State<_PegawaiTab> {
                         label: Text(p['aktif'] == true ? 'Aktif' : 'Nonaktif')),
                     if (_bolehKelola) ...[
                       const SizedBox(width: 6),
+                      if (('${p['akunUserId'] ?? ''}').isNotEmpty)
+                        IconButton(
+                            tooltip: 'Kelola sidik jari dan wajah',
+                            icon: const Icon(Icons.fingerprint),
+                            onPressed: () => _biometrik(p)),
                       IconButton(
                           tooltip: ('${p['akunUserId'] ?? ''}').isEmpty
                               ? 'Buat akun pegawai'
