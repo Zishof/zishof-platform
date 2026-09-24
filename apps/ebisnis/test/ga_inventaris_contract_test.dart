@@ -10,11 +10,17 @@ void main() {
       'ga_inventaris_daftar',
       'ga_inventaris_referensi',
       'ga_inventaris_simpan',
-      'ga_inventaris_ubah'
+      'ga_inventaris_ubah',
+      'ga_inventaris_pengajuan_daftar',
+      'ga_inventaris_pengajuan_simpan',
+      'ga_inventaris_pengajuan_putusan'
     ]) {
       expect(layar, contains("'$aksi'"));
     }
     expect(shell, contains("MenuEBisnis.gaInventaris: 'ga_inventaris'"));
     expect(shell, contains("_GrupMenuShell('General Affair'"));
+    expect(layar, contains('Setujui GA'));
+    expect(layar, contains('Setujui Keuangan'));
+    expect(layar, contains('Perpindahan inventaris'));
   });
 }
