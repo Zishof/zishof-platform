@@ -12,6 +12,8 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api_client.dart';
+import '../app_variant.dart';
+import '../services/hpp_opname.dart';
 import '../services/diff_daftar_lokal.dart';
 import '../services/master_offline.dart';
 import '../services/sinkron_stok_opname.dart';
@@ -1265,6 +1267,43 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
   List<Map<String, dynamic>> _riwayatHariIni = [];
   // Diff emisi baca lokal-dulu (daftarCacheDulu) -- menggerakkan kilau baris
   // + banner "pembaruan dari server" (opname yang dicatat petugas lain).
+  final Map<Object, double?> _hpp = {};
+  final Set<Object> _hppCache = {};
+  int _versiHpp = 0;
+  List<Object?> get _konteksHpp => [
+        ApiClient.baseUrl,
+        Sesi.instance.tenantId,
+        Sesi.instance.userId,
+        Sesi.instance.idTokoTerpilih
+      ];
+
+  Future<void> _muatHpp() async {
+    if (!AppVariant.isAlBahjah) return;
+    final versi = ++_versiHpp;
+    final konteks = _konteksHpp;
+    final tokoId = Sesi.instance.idTokoTerpilih;
+    await HppOpname.muat(
+      _riwayatHariIni,
+      aktif: () =>
+          mounted &&
+          versi == _versiHpp &&
+          jsonEncode(konteks) == jsonEncode(_konteksHpp),
+      baca: (row, onData) => MasterOffline.objekCacheDulu(
+          'so_produk_scan',
+          {'barcode': row['kode'], if (tokoId != null) 'toko_id': tokoId},
+          HppOpname.kunci(konteks, row),
+          onData: onData),
+      onData: (id, nilai, cache) => setStateIfMounted(() {
+        _hpp[id] = nilai;
+        if (cache) {
+          _hppCache.add(id);
+        } else {
+          _hppCache.remove(id);
+        }
+      }),
+    );
+  }
+
   final DiffDaftarLokal _diff = DiffDaftarLokal();
 
   @override
@@ -1282,6 +1321,9 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
   }
 
   Future<void> _muatRiwayat() async {
+    _versiHpp++;
+    _hpp.clear();
+    _hppCache.clear();
     try {
       // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
       // seketika, hasil server menyusul + diff utk kilau baris. Jalur SIMPAN
@@ -1290,6 +1332,7 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
           'so_riwayat', {'limit': 30}, 'master:so_riwayat', onData: (hasil) {
         if (!mounted) return;
         setStateIfMounted(() => _riwayatHariIni = _diff.terapkan(hasil));
+        unawaited(_muatHpp());
       });
     } catch (_) {
       // riwayat gagal dimuat bukan blocker utk input baru.
@@ -1401,6 +1444,14 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
           berubah: _diff.idBerubah.length,
           dihapus: _diff.jumlahHapus,
         ),
+        if (AppVariant.isAlBahjah)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Text(
+                'HPP/unit: harga beli master saat ini per satuan dasar, bukan harga historis saat opname. '
+                'Label "tersimpan" berarti memakai salinan perangkat.',
+                style: TextStyle(fontSize: 12)),
+          ),
         _riwayatTabelData(),
       ],
     );
@@ -1408,12 +1459,14 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
 
   Widget _riwayatTabelData() {
     return AppDataTable(
-      minWidth: 1040,
+      minWidth: AppVariant.isAlBahjah ? 1200 : 1040,
       emptyText: 'Belum ada catatan hari ini.',
       columns: const [
         AppTableColumn('Waktu', flex: 2),
         AppTableColumn('Kode', flex: 1),
         AppTableColumn('Produk', flex: 3),
+        if (AppVariant.isAlBahjah)
+          AppTableColumn('HPP/unit', flex: 2, align: TextAlign.right),
         AppTableColumn('Sistem', flex: 1, align: TextAlign.right),
         AppTableColumn('Fisik', flex: 1, align: TextAlign.right),
         AppTableColumn('Selisih', flex: 1, align: TextAlign.right),
@@ -1448,6 +1501,14 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
                     fontFamily: 'monospace',
                     fontSize: 12.5)),
             AppTableCell.text('${k['nama'] ?? ''}', flex: 3, maxLines: 2),
+            if (AppVariant.isAlBahjah)
+              AppTableCell.text(
+                  _hpp[k['produkId']] == null
+                      ? 'Belum tersedia'
+                      : '${_formatRupiah.format(_hpp[k['produkId']])}${_hppCache.contains(k['produkId']) ? '\n(tersimpan)' : ''}',
+                  flex: 2,
+                  align: TextAlign.right,
+                  maxLines: 2),
             AppTableCell.text(_formatAngka.format(k['stokSistem'] ?? 0),
                 flex: 1, align: TextAlign.right),
             AppTableCell.text(_formatAngka.format(k['stokFisik'] ?? 0),
