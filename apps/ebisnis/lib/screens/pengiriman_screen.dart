@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../api_client.dart';
 import '../services/master_offline.dart';
@@ -138,6 +139,65 @@ class _PengirimanScreenState extends State<PengirimanScreen> {
     if (berubah == true) await _muat();
   }
 
+  Future<void> _laporan() async {
+    final sekarang = DateTime.now();
+    final mulai = sekarang.subtract(const Duration(days: 30));
+    try {
+      final hasil = await ApiClient.instance.aksi('distribusi_laporan', {
+        'jenis': konfigurasi.kode,
+        'tanggalMulai': DateFormat('yyyy-MM-dd').format(mulai),
+        'tanggalSampai': DateFormat('yyyy-MM-dd').format(sekarang),
+      });
+      if (!mounted) return;
+      final data = ((hasil['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Laporan ${konfigurasi.judul} · 30 Hari'),
+          content: SizedBox(
+            width: 900,
+            height: 520,
+            child: data.isEmpty
+                ? const Center(child: Text('Belum ada pengiriman selesai.'))
+                : SingleChildScrollView(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        columns: const [
+                          DataColumn(label: Text('Tanggal')),
+                          DataColumn(label: Text('Outlet')),
+                          DataColumn(label: Text('Item')),
+                          DataColumn(label: Text('Dokumen'), numeric: true),
+                          DataColumn(label: Text('Qty'), numeric: true),
+                        ],
+                        rows: data
+                            .map((e) => DataRow(cells: [
+                                  DataCell(Text('${e['tanggal'] ?? '-'}')),
+                                  DataCell(Text('${e['outlet'] ?? '-'}')),
+                                  DataCell(Text('${e['item'] ?? '-'}')),
+                                  DataCell(Text('${e['jumlahDokumen'] ?? 0}')),
+                                  DataCell(Text('${e['qty'] ?? 0}')),
+                                ]))
+                            .toList(),
+                      ),
+                    ),
+                  ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Tutup')),
+          ],
+        ),
+      );
+    } catch (e) {
+      _info('Laporan belum dapat dimuat: $e');
+    }
+  }
+
   Future<void> _ubahStatus(Map<String, dynamic> data, String status) async {
     final catatan = TextEditingController();
     final lanjut = await showDialog<bool>(
@@ -201,6 +261,11 @@ class _PengirimanScreenState extends State<PengirimanScreen> {
             onPressed: _memuat ? null : _muat,
             tooltip: 'Muat ulang',
             icon: const Icon(Icons.refresh)),
+        OutlinedButton.icon(
+          onPressed: _laporan,
+          icon: const Icon(Icons.analytics_outlined),
+          label: const Text('Laporan 30 Hari'),
+        ),
         if (_hak['create'] == true)
           FilledButton.icon(
             onPressed: () => _form(),
@@ -328,6 +393,12 @@ class _DialogFormState extends State<_DialogForm> {
   late final TextEditingController nilaiTagihanAngkut;
   late final TextEditingController tanggalTagihanAngkut;
   late final TextEditingController catatan;
+  late final TextEditingController penandaGudang;
+  late final TextEditingController penandaChecker;
+  late final TextEditingController penandaOutlet;
+  late bool cekGudang;
+  late bool cekChecker;
+  late bool cekOutlet;
   final List<_BarisForm> baris = <_BarisForm>[];
   bool menyimpan = false;
 
@@ -352,6 +423,21 @@ class _DialogFormState extends State<_DialogForm> {
     tanggalTagihanAngkut =
         TextEditingController(text: '${a['tanggalTagihanAngkut'] ?? ''}');
     catatan = TextEditingController(text: '${a['catatan'] ?? ''}');
+    final checklist = a['checklist'] is Map
+        ? Map<String, dynamic>.from(a['checklist'] as Map)
+        : <String, dynamic>{};
+    final signatures = a['signatures'] is Map
+        ? Map<String, dynamic>.from(a['signatures'] as Map)
+        : <String, dynamic>{};
+    cekGudang = checklist['gudang'] == true;
+    cekChecker = checklist['checker'] == true;
+    cekOutlet = checklist['outlet'] == true;
+    penandaGudang =
+        TextEditingController(text: '${signatures['gudang'] ?? ''}');
+    penandaChecker =
+        TextEditingController(text: '${signatures['checker'] ?? ''}');
+    penandaOutlet =
+        TextEditingController(text: '${signatures['outlet'] ?? ''}');
     final daftar = a['baris'];
     if (daftar is List) {
       for (final nilai in daftar.whereType<Map>()) {
@@ -377,6 +463,9 @@ class _DialogFormState extends State<_DialogForm> {
     nilaiTagihanAngkut.dispose();
     tanggalTagihanAngkut.dispose();
     catatan.dispose();
+    penandaGudang.dispose();
+    penandaChecker.dispose();
+    penandaOutlet.dispose();
     for (final b in baris) {
       b.dispose();
     }
@@ -452,6 +541,18 @@ class _DialogFormState extends State<_DialogForm> {
           'nilaiTagihanAngkut': nilaiTagihanAngkut.text.trim(),
           'tanggalTagihanAngkut': tanggalTagihanAngkut.text.trim(),
           'catatan': catatan.text.trim(),
+          if (_butuhChecklist)
+            'checklist': {
+              'gudang': cekGudang,
+              'checker': cekChecker,
+              'outlet': cekOutlet,
+            },
+          if (_butuhChecklist)
+            'signatures': {
+              'gudang': penandaGudang.text.trim(),
+              'checker': penandaChecker.text.trim(),
+              'outlet': penandaOutlet.text.trim(),
+            },
           'clientMutationId': 'dist-${DateTime.now().microsecondsSinceEpoch}',
           'baris': barisValid.map((b) => b.json()).toList(),
         },
@@ -517,6 +618,17 @@ class _DialogFormState extends State<_DialogForm> {
                 maxLines: 3,
                 decoration: const InputDecoration(
                     labelText: 'Catatan', border: OutlineInputBorder())),
+            if (_butuhChecklist) ...[
+              const SizedBox(height: 16),
+              Text('Checklist Surat Jalan',
+                  style: Theme.of(context).textTheme.titleMedium),
+              _pemeriksaan('Gudang', cekGudang, penandaGudang,
+                  (v) => setState(() => cekGudang = v)),
+              _pemeriksaan('Checker', cekChecker, penandaChecker,
+                  (v) => setState(() => cekChecker = v)),
+              _pemeriksaan('Outlet/Tenant', cekOutlet, penandaOutlet,
+                  (v) => setState(() => cekOutlet = v)),
+            ],
             const SizedBox(height: 22),
             Row(children: <Widget>[
               Text('Rincian barang',
@@ -545,6 +657,28 @@ class _DialogFormState extends State<_DialogForm> {
       widget.konfigurasi.kode == 'proof_of_delivery';
 
   bool get _butuhTagihanAngkut => widget.konfigurasi.kode == 'freight_order';
+
+  bool get _butuhChecklist => widget.konfigurasi.kode == 'delivery_order';
+
+  Widget _pemeriksaan(String label, bool nilai, TextEditingController penanda,
+          ValueChanged<bool> onChanged) =>
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(children: [
+            Checkbox(value: nilai, onChanged: (v) => onChanged(v == true)),
+            SizedBox(width: 130, child: Text(label)),
+            Expanded(
+              child: TextField(
+                controller: penanda,
+                decoration: const InputDecoration(
+                  labelText: 'Nama/paraf penanggung jawab',
+                ),
+              ),
+            ),
+          ]),
+        ),
+      );
 
   Widget _input(TextEditingController controller, String label,
           {bool angka = false}) =>
@@ -765,6 +899,15 @@ class _DialogDetail extends StatelessWidget {
                 Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Text('${data['catatan']}')),
+              if (data['checklist'] is Map)
+                _detailBagian('Checklist Surat Jalan', [
+                  for (final bagian in const ['gudang', 'checker', 'outlet'])
+                    Text(
+                      '${bagian[0].toUpperCase()}${bagian.substring(1)}: '
+                      '${(data['checklist'] as Map)[bagian] == true ? 'Sudah diperiksa' : 'Belum diperiksa'}'
+                      '${data['signatures'] is Map && '${(data['signatures'] as Map)[bagian] ?? ''}'.isNotEmpty ? ' · ${(data['signatures'] as Map)[bagian]}' : ''}',
+                    ),
+                ]),
               const Divider(),
               Text('Rincian barang (${daftar.length})',
                   style: const TextStyle(fontWeight: FontWeight.w700)),

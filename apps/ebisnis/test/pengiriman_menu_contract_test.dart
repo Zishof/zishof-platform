@@ -53,6 +53,7 @@ void main() {
       'distribusi_detail',
       'distribusi_simpan',
       'distribusi_status',
+      'distribusi_laporan',
     ]) {
       expect(screen, contains("'$action'"), reason: 'aksi $action belum aktif');
     }
@@ -71,6 +72,10 @@ void main() {
     expect(screen, isNot(contains('Tidak ada data yang diubah')));
     expect(screen, contains('LayoutBuilder'));
     expect(screen, contains('Wrap('));
+    expect(screen, contains('Checklist Surat Jalan'));
+    expect(screen, contains("'checklist'"));
+    expect(screen, contains("'signatures'"));
+    expect(screen, contains('Laporan 30 Hari'));
   });
 
   test('seluruh halaman pengiriman mempertahankan shell dan sidebar utama', () {
