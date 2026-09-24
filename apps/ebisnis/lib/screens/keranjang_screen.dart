@@ -164,7 +164,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   bool _konteksCaraBayarSiap = false;
   int? _konteksCaraBayarMemberId;
   int _versiPermintaanCaraBayar = 0;
-  late bool _semuaCaraBayarUntukMemberAwal;
+  bool _pilihanCaraBayarPerluKonfirmasi = false;
   bool _memproses = false;
   Anggota? _memberTerpilih;
   double? _saldoMember;
@@ -209,10 +209,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     super.initState();
     _memberTerpilih = widget.memberAwal;
     _waktuTransaksi = widget.waktuTransaksiAwal ?? DateTime.now();
-    _semuaCaraBayarUntukMemberAwal =
-        widget.semuaCaraBayarUntukMemberAwal && widget.memberAwal != null;
-    final memberEfektif =
-        _semuaCaraBayarUntukMemberAwal ? null : _memberTerpilih?.id;
+    // Draft tetap tunduk pada izin member; flag lama bukan otorisasi bypass.
+    final memberEfektif = _memberTerpilih?.id;
     _konteksCaraBayarMemberId = memberEfektif;
     // Daftar dari konfigurasi login adalah daftar umum. Jangan pernah
     // menggunakannya untuk member tertentu sebelum izin member itu tersedia.
@@ -238,8 +236,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
             PengaturanPembayaran.instance.pilihDefault(_caraBayarTersedia);
       });
     }
-    await _muatCaraBayarUntukMember(
-        _semuaCaraBayarUntukMemberAwal ? null : _memberTerpilih?.id);
+    await _muatCaraBayarUntukMember(_memberTerpilih?.id);
   }
 
   /// Memuat ulang metode pembayaran setiap kali member berubah, sama seperti
@@ -262,6 +259,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         _memuatCaraBayar = true;
         _konteksCaraBayarMemberId = memberId;
         if (konteksBerubah) {
+          _pilihanCaraBayarPerluKonfirmasi = false;
           _caraBayarTersedia = memberId == null
               ? List<CaraBayar>.of(Sesi.instance.caraBayar)
               : <CaraBayar>[];
@@ -337,27 +335,21 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         .toList();
 
     final idTerpilih = _caraBayarTerpilih?.id;
-    CaraBayar? pilihan;
-    if (caraBayarDefaultId != null) {
-      for (final cara in daftar) {
-        if (cara.id == caraBayarDefaultId) {
-          pilihan = cara;
-          break;
-        }
-      }
+    final izin = daftar.map((cara) => cara.id).toSet();
+    if (!caraBayarTerkunci &&
+        ((idTerpilih != null && !izin.contains(idTerpilih)) ||
+            _splitBayar.any((slot) => !izin.contains(slot.caraBayar.id)))) {
+      // Tetap minta pilihan eksplisit meskipun cache lalu respons server
+      // diterapkan berurutan. Null akibat pencabutan izin bukan pilihan awal.
+      _pilihanCaraBayarPerluKonfirmasi = true;
     }
-    if (pilihan == null && idTerpilih != null) {
-      for (final cara in daftar) {
-        if (cara.id == idTerpilih) {
-          pilihan = cara;
-          break;
-        }
-      }
-    }
-    // _pos.jsp otomatis memilih bila hasil filter hanya satu. Untuk daftar
-    // lebih dari satu, pertahankan pilihan lama hanya jika masih diizinkan.
-    if (pilihan == null && daftar.length == 1) pilihan = daftar.first;
-    pilihan ??= PengaturanPembayaran.instance.pilihDefault(daftar);
+    final pilihan = PengaturanPembayaran.instance.pilihSaatPenyegaran(
+      daftar,
+      idTerpilih: _caraBayarTerpilih?.id,
+      idDefaultMember: caraBayarDefaultId,
+      terkunci: caraBayarTerkunci,
+      perluKonfirmasi: _pilihanCaraBayarPerluKonfirmasi,
+    );
 
     final metodeMenurutId = <int, CaraBayar>{
       for (final cara in daftar) cara.id: cara,
@@ -673,8 +665,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   // divalidasi seimbang dgn total di [PemilihMetodeSplit] sendiri.
   bool get _uangTunaiKurang =>
       !_splitAktif && _metodeTunai && _uangDiterima + 0.0001 < _total;
-  int? get _memberCaraBayarAktif =>
-      _semuaCaraBayarUntukMemberAwal ? null : _memberTerpilih?.id;
+  int? get _memberCaraBayarAktif => _memberTerpilih?.id;
   bool get _snapshotCaraBayarSesuai =>
       KebijakanOfflinePembayaran.snapshotSesuai(
         konteksSiap: _konteksCaraBayarSiap,
@@ -869,7 +860,6 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       setStateIfMounted(() {
         _memberTerpilih = terpilih;
         _saldoMember = null;
-        _semuaCaraBayarUntukMemberAwal = false;
       });
       unawaited(_muatCaraBayarUntukMember(terpilih.id));
       _siarkanKeranjang();
@@ -891,7 +881,6 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     setStateIfMounted(() {
       _memberTerpilih = null;
       _saldoMember = null;
-      _semuaCaraBayarUntukMemberAwal = false;
     });
     unawaited(_muatCaraBayarUntukMember(null));
     _siarkanKeranjang();
@@ -1162,7 +1151,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   bool get _verifikasiMemberWajibServer {
     final member = _memberTerpilih;
     return member != null &&
-        (_saldoAkanDipotong || _pinWajibUntukMetodeTerpilih || _hutangAkanDipakai);
+        (_saldoAkanDipotong ||
+            _pinWajibUntukMetodeTerpilih ||
+            _hutangAkanDipakai);
   }
 
   Future<int?> _verifikasiBiometrik(PosBiometricCaptureBridge bridge,
@@ -1859,6 +1850,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       if (lanjut == true) await _pilihMember();
       if (!mounted) return;
       if (_memberTerpilih == null) return; // tetap belum dipilih -> batalkan
+      // Pemilihan member memuat aturan secara asinkron. Jangan lanjut dengan
+      // metode umum yang dipilih sebelum member tersedia.
+      if (!_bisaBayar) return;
     }
 
     String? kodePercobaan;
@@ -2057,8 +2051,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         // lapangan): admin bisa mengubah izin metode member ketika sheet
         // sedang terbuka -- kasir tidak perlu menutup lalu membuka ulang.
         muatUlang: () async {
-          final berhasil = await _muatCaraBayarUntukMember(
-              _semuaCaraBayarUntukMemberAwal ? null : _memberTerpilih?.id);
+          final berhasil = await _muatCaraBayarUntukMember(_memberTerpilih?.id);
           return berhasil ? _caraBayarTersedia : null;
         },
       ),
@@ -2076,6 +2069,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       return;
     }
     setStateIfMounted(() {
+      _pilihanCaraBayarPerluKonfirmasi = false;
       _caraBayarTerpilih = hasil.first.caraBayar;
       _splitBayar = hasil.length >= 2 ? hasil : [];
     });

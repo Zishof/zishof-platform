@@ -10,13 +10,9 @@ import 'package:flutter_test/flutter_test.dart';
 /// metodenya masih diizinkan.
 void main() {
   late String source;
-  late String sourceKasir;
-  late String sourcePesanan;
 
   setUpAll(() {
     source = File('lib/screens/keranjang_screen.dart').readAsStringSync();
-    sourceKasir = File('lib/screens/kasir_screen.dart').readAsStringSync();
-    sourcePesanan = File('lib/screens/pesanan_screen.dart').readAsStringSync();
   });
 
   test('picker membuka snapshot aman sebelum menunggu refresh server', () {
@@ -29,10 +25,7 @@ void main() {
     expect(method, contains('if (_caraBayarTersedia.isEmpty ||'));
     expect(method, contains('await _muatCaraBayarUntukMember(memberId)'));
     expect(method, contains('unawaited(_muatCaraBayarUntukMember(memberId))'));
-    expect(
-        method,
-        contains(
-            '_semuaCaraBayarUntukMemberAwal ? null : _memberTerpilih?.id'));
+    expect(method, contains('_memberTerpilih?.id'));
     expect(method.indexOf('showModalBottomSheet'), greaterThanOrEqualTo(0));
   });
 
@@ -60,21 +53,17 @@ void main() {
     expect(source, contains('_splitBayar = splitTersegar'));
   });
 
-  test('member awal dari draft menawarkan semua metode aktif', () {
-    expect(sourcePesanan,
-        contains('semuaCaraBayarUntukMemberAwal: member != null'));
-    expect(
-        sourceKasir,
-        contains(
-            'semuaCaraBayarUntukMemberAwal: _semuaCaraBayarUntukMemberAwal'));
-    expect(source, contains('_semuaCaraBayarUntukMemberAwal ? null'));
+  test('member dari draft tidak boleh memakai snapshot umum', () {
+    expect(source, contains('final memberEfektif ='));
+    expect(source, isNot(contains('_semuaCaraBayarUntukMemberAwal ? null')));
+    expect(source, contains('int? get _memberCaraBayarAktif =>'));
+    expect(source, contains('_memberTerpilih?.id'));
   });
 
   test('mengganti member mengaktifkan kembali filter jenis member', () {
     final awal = source.indexOf('Future<void> _pilihMember() async');
     final akhir = source.indexOf('void _hapusMember()', awal);
     final method = source.substring(awal, akhir);
-    expect(method, contains('_semuaCaraBayarUntukMemberAwal = false'));
     expect(method, contains('_muatCaraBayarUntukMember(terpilih.id)'));
   });
 

@@ -673,7 +673,10 @@ class ApiException implements Exception {
           final lower = s.toLowerCase();
           return lower.contains('perbaiki data sesuai penjelasan') ||
               lower.contains('hubungi admin/supervisor') ||
-              lower.contains('coba kembali');
+              lower.contains('coba kembali') ||
+              lower.contains('muat ulang halaman dan periksa kembali data') ||
+              lower.contains('coba sekali lagi setelah beberapa saat') ||
+              lower.contains('buka detail error lalu salin');
         });
     final judulServer = judul?.trim() ?? '';
     final judulServerGenerik = judulServer.isEmpty ||

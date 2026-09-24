@@ -31,6 +31,32 @@ class PengaturanPembayaran {
     }
   }
 
+  /// Refresh tidak boleh mengganti pilihan kasir secara diam-diam. Jika izin
+  /// dicabut, kosongkan pilihan agar kasir memilih ulang sebelum membayar.
+  /// Default tipe tetap wajib dihormati bila tipe mengunci metode.
+  CaraBayar? pilihSaatPenyegaran(
+    List<CaraBayar> daftar, {
+    required int? idTerpilih,
+    required int? idDefaultMember,
+    required bool terkunci,
+    bool perluKonfirmasi = false,
+  }) {
+    CaraBayar? cari(int? id) {
+      for (final cara in daftar) {
+        if (cara.id == id) return cara;
+      }
+      return null;
+    }
+
+    if (terkunci) {
+      return cari(idDefaultMember) ??
+          (daftar.length == 1 ? daftar.first : null);
+    }
+    if (perluKonfirmasi) return null;
+    if (idTerpilih != null) return cari(idTerpilih);
+    return cari(idDefaultMember) ?? pilihDefault(daftar);
+  }
+
   CaraBayar? pilihDefault(List<CaraBayar> daftar) {
     if (daftar.isEmpty) return null;
     final tersimpan = _caraBayarDefaultId;
