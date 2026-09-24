@@ -60,6 +60,10 @@ class _HrdDasarScreenState extends State<HrdDasarScreen> {
                       value: 6,
                       icon: Icon(Icons.task_alt_outlined),
                       label: Text('Kinerja')),
+                  ButtonSegment(
+                      value: 7,
+                      icon: Icon(Icons.history_edu_outlined),
+                      label: Text('Riwayat')),
                 ],
                 selected: {_tab},
                 onSelectionChanged: (v) => setState(() => _tab = v.first),
@@ -74,6 +78,7 @@ class _HrdDasarScreenState extends State<HrdDasarScreen> {
           _PayrollTab(),
           _KarierGajiTab(),
           _KinerjaPegawaiTab(),
+          _RiwayatPegawaiTab(),
         ])),
       ]),
     );
@@ -1752,6 +1757,147 @@ class _KinerjaPegawaiTabState extends State<_KinerjaPegawaiTab> {
                 )))
             .toList(),
       );
+}
+
+class _RiwayatPegawaiTab extends StatefulWidget {
+  const _RiwayatPegawaiTab();
+  @override
+  State<_RiwayatPegawaiTab> createState() => _RiwayatPegawaiTabState();
+}
+
+class _RiwayatPegawaiTabState extends State<_RiwayatPegawaiTab> {
+  bool _memuat = true;
+  String? _error;
+  List<Map<String, dynamic>> _pegawai = [];
+  int? _pegawaiId;
+  Map<String, dynamic> _data = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _muatPegawai();
+  }
+
+  Future<void> _muatPegawai() async {
+    setStateIfMounted(() {
+      _memuat = true;
+      _error = null;
+    });
+    try {
+      final r = await ApiClient.instance
+          .aksi('hrd_pegawai_daftar', {'page_size': 500});
+      _pegawai =
+          ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+      final saya = (r['pegawaiSayaId'] as num?)?.toInt();
+      _pegawaiId = saya ??
+          (_pegawai.isEmpty ? null : (_pegawai.first['id'] as num).toInt());
+      if (_pegawaiId != null) await _muatRiwayat(aturMemuat: false);
+    } catch (e) {
+      _error = '$e';
+    } finally {
+      setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  Future<void> _muatRiwayat({bool aturMemuat = true}) async {
+    if (_pegawaiId == null) return;
+    if (aturMemuat) setStateIfMounted(() => _memuat = true);
+    try {
+      final r = await ApiClient.instance
+          .aksi('hrd_riwayat_pegawai', {'pegawai_id': _pegawaiId});
+      setStateIfMounted(
+          () => _data = Map<String, dynamic>.from(r['data'] as Map? ?? {}));
+    } catch (e) {
+      setStateIfMounted(() => _error = '$e');
+    } finally {
+      if (aturMemuat) setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  List<Map<String, dynamic>> _rows(String key) =>
+      ((_data[key] as List?) ?? const []).cast<Map<String, dynamic>>();
+
+  Widget _bagian(String judul, IconData icon, List<Map<String, dynamic>> rows,
+      String Function(Map<String, dynamic>) subtitle) {
+    return Card(
+        clipBehavior: Clip.antiAlias,
+        child: ExpansionTile(
+            initiallyExpanded: true,
+            leading: Icon(icon),
+            title: Text(judul),
+            subtitle: Text('${rows.length} data'),
+            children: rows.isEmpty
+                ? const [
+                    Padding(
+                        padding: EdgeInsets.all(18),
+                        child: Text('Belum ada data.'))
+                  ]
+                : rows
+                    .map((row) => ListTile(
+                        dense: true,
+                        title: Text('${row['nama'] ?? '-'}'),
+                        subtitle: Text(subtitle(row))))
+                    .toList()));
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(children: [
+        Row(children: [
+          Expanded(
+              child: DropdownButtonFormField<int>(
+                  value: _pegawaiId,
+                  isExpanded: true,
+                  decoration:
+                      const InputDecoration(labelText: 'Pegawai yang dilihat'),
+                  items: _pegawai
+                      .map((p) => DropdownMenuItem<int>(
+                          value: (p['id'] as num).toInt(),
+                          child: Text(
+                              '${p['nama'] ?? '-'} · ${p['kode'] ?? '-'}')))
+                      .toList(),
+                  onChanged: (v) async {
+                    setState(() => _pegawaiId = v);
+                    await _muatRiwayat();
+                  })),
+          const SizedBox(width: 8),
+          IconButton(onPressed: _muatRiwayat, icon: const Icon(Icons.refresh))
+        ]),
+        const SizedBox(height: 12),
+        Expanded(
+            child: _memuat
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(
+                        child: Text(_error!,
+                            style: const TextStyle(color: Colors.red)))
+                    : ListView(children: [
+                        _bagian('Pendidikan', Icons.school_outlined,
+                            _rows('pendidikan'), (r) {
+                          final periode =
+                              '${r['mulai'] ?? '-'}–${r['selesai'] ?? '-'}';
+                          return '$periode · ${r['jurusan'] ?? '-'} · Ijazah ${r['nomor'] ?? '-'}';
+                        }),
+                        _bagian(
+                            'Pelatihan & Sertifikasi',
+                            Icons.workspace_premium_outlined,
+                            _rows('pelatihan'), (r) {
+                          return '${r['jenis'] ?? '-'} · ${r['mulai'] ?? '-'} s.d. ${r['selesai'] ?? '-'}'
+                              '${r['sertifikasi'] == true ? ' · Bersertifikat' : ''}';
+                        }),
+                        _bagian('Keluarga', Icons.family_restroom_outlined,
+                            _rows('keluarga'), (r) {
+                          return '${r['hubungan'] ?? '-'} · ${r['tanggalLahir'] ?? '-'} · ${r['pekerjaan'] ?? '-'}';
+                        }),
+                        _bagian(
+                            'Riwayat Pekerjaan',
+                            Icons.work_history_outlined,
+                            _rows('pekerjaan'), (r) {
+                          return '${r['jabatan'] ?? '-'} · ${r['mulai'] ?? '-'}–${r['selesai'] ?? '-'} · Pimpinan ${r['pimpinan'] ?? '-'}';
+                        }),
+                      ]))
+      ]));
 }
 
 class _FormRealisasiKinerja extends StatefulWidget {
