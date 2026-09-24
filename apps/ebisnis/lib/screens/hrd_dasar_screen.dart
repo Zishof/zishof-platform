@@ -566,7 +566,7 @@ class _PayrollTab extends StatefulWidget {
 }
 
 class _PayrollTabState extends State<_PayrollTab> {
-  bool _memuat = true;
+  bool _memuat = true, _bolehKelola = false;
   String? _error;
   List<Map<String, dynamic>> _slip = [], _pengajuan = [];
   final _rupiah =
@@ -593,6 +593,7 @@ class _PayrollTabState extends State<_PayrollTab> {
             .cast<Map<String, dynamic>>();
         _pengajuan = ((hasil[1]['data'] as List?) ?? const [])
             .cast<Map<String, dynamic>>();
+        _bolehKelola = hasil[1]['bolehKelola'] == true;
       });
     } catch (e) {
       setStateIfMounted(() => _error = '$e');
@@ -648,6 +649,24 @@ class _PayrollTabState extends State<_PayrollTab> {
     final ok = await showDialog<bool>(
         context: context, builder: (_) => const _FormPengajuanPayroll());
     if (ok == true) await _muat();
+  }
+
+  Future<void> _putusanPengajuan(Map<String, dynamic> row) async {
+    try {
+      await ApiClient.instance
+          .aksi('hrd_pengajuan_putusan', {'id': row['id'], 'setujui': true});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Pengajuan disetujui untuk diproses payroll; belum dicairkan.')));
+      }
+      await _muat();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
   }
 
   @override
@@ -734,8 +753,22 @@ class _PayrollTabState extends State<_PayrollTab> {
                               subtitle: Text(
                                   '${p['tanggal'] ?? '-'} · ${p['status'] ?? 'MENUNGGU'}\n${p['keterangan'] ?? ''}'),
                               isThreeLine: true,
-                              trailing: Text(
-                                  _rupiah.format((p['nilai'] as num?) ?? 0))));
+                              trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(_rupiah
+                                        .format((p['nilai'] as num?) ?? 0)),
+                                    if (_bolehKelola &&
+                                        p['status'] != 'DISETUJUI') ...[
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                          tooltip:
+                                              'Setujui untuk proses payroll',
+                                          onPressed: () => _putusanPengajuan(p),
+                                          icon: const Icon(
+                                              Icons.approval_outlined))
+                                    ]
+                                  ])));
                     }))
       ]);
 }

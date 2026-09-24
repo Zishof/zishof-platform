@@ -20,6 +20,7 @@ void main() {
       'hrd_pengajuan_jenis',
       'hrd_pengajuan_daftar',
       'hrd_pengajuan_simpan',
+      'hrd_pengajuan_putusan',
     ]) {
       expect(layar, contains("'$aksi'"));
     }
