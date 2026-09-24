@@ -374,8 +374,10 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
   late bool _aktif;
   late bool _ikutHpp;
   late bool _ikutJual;
+  late bool _ikutCustomMenu;
 
   final List<_BahanGrupBaris> _bahan = [];
+  final List<Map<String, dynamic>> _ekstra = [];
 
   // Aturan Diskon tertaut (berlaku utk semua anggota, dievaluasi server).
   int? _aturanDiskonId;
@@ -408,6 +410,7 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
     // harganya terisi); grup BARU default mati = murni pengelompokan.
     _ikutHpp = a?['ikut_hpp'] == true;
     _ikutJual = a?['ikut_harga_jual'] == true;
+    _ikutCustomMenu = a?['ikut_custom_menu'] == true;
     _aturanDiskonId = (a?['aturan_diskon'] as num?)?.toInt();
     for (final b in (a?['bahan_baku'] as List? ?? const [])) {
       final m = Map<String, dynamic>.from(b as Map);
@@ -419,6 +422,10 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
         qtyAwal: '${m['qty'] ?? 1}',
         hargaAwal: '${m['harga'] ?? 0}',
       ));
+    }
+    for (final id in (a?['ekstra_pilihan'] as List? ?? const [])) {
+      final nilai = id is num ? id.toInt() : int.tryParse('$id');
+      if (nilai != null) _ekstra.add({'id': nilai, 'nama': 'Ekstra #$nilai'});
     }
     _muatDiskonOpsi();
     if (_baru) {
@@ -506,6 +513,15 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
     setStateIfMounted(() => _bahan.add(_BahanGrupBaris(
         produkId: (dipilih['id'] as num?)?.toInt(),
         nama: '${dipilih['nama']}')));
+  }
+
+  Future<void> _tambahEkstra() async {
+    final dipilih = await _dialogCariProduk(
+        judul: 'Pilih Ekstra / Custom Menu', jenisItem: 'EKSTRA');
+    if (dipilih == null) return;
+    setStateIfMounted(() {
+      if (!_ekstra.any((x) => x['id'] == dipilih['id'])) _ekstra.add(dipilih);
+    });
   }
 
   // ---------- Produk anggota ----------
@@ -847,11 +863,41 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
                       style: TextStyle(fontSize: 11)),
                   value: _ikutJual,
                   onChanged: (v) => setState(() => _ikutJual = v)),
-              if (!_ikutHpp && !_ikutJual)
+              SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Custom Menu mengikuti Grup Produk'),
+                  subtitle: const Text(
+                      'Pilihan ekstra/topping disalin ke seluruh produk anggota di semua toko',
+                      style: TextStyle(fontSize: 11)),
+                  value: _ikutCustomMenu,
+                  onChanged: (v) => setState(() => _ikutCustomMenu = v)),
+              if (!_ikutHpp && !_ikutJual && !_ikutCustomMenu)
                 const Text(
-                    'Kedua pilihan mati: grup hanya menjadi pengelompokan, '
+                    'Semua kebijakan mati: grup hanya menjadi pengelompokan, '
                     'harga & resep tiap produk tetap dikelola per toko.',
                     style: TextStyle(fontSize: 12)),
+              _judulBagian('Ekstra / Custom Menu Grup', aksi: [
+                TextButton.icon(
+                    onPressed: _tambahEkstra,
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Tambah Ekstra')),
+              ]),
+              if (_ekstra.isEmpty)
+                const Text(
+                    'Belum ada pilihan ekstra. Daftar kosong akan menghapus pilihan lokal anggota hanya saat kebijakan custom menu dinyalakan.',
+                    style: TextStyle(fontSize: 12)),
+              for (var i = 0; i < _ekstra.length; i++)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.add_circle_outline, size: 18),
+                  title: Text(
+                      '${_ekstra[i]['nama'] ?? 'Ekstra #${_ekstra[i]['id']}'}'),
+                  trailing: IconButton(
+                      tooltip: 'Hapus pilihan ekstra',
+                      onPressed: () => setState(() => _ekstra.removeAt(i)),
+                      icon: const Icon(Icons.close, size: 18)),
+                ),
               _judulBagian('Bahan Baku (Resep Grup)', aksi: [
                 TextButton.icon(
                     onPressed: _tambahBahan,
@@ -1016,6 +1062,8 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
               'harga_jual': _angka(_hargaJual.text),
               'ikut_hpp': _ikutHpp,
               'ikut_harga_jual': _ikutJual,
+              'ikut_custom_menu': _ikutCustomMenu,
+              'ekstra_pilihan': _ekstra.map((e) => e['id']).toList(),
               'aturan_diskon': _aturanDiskonId,
               'bahan_baku': _bahan
                   .map((b) => {

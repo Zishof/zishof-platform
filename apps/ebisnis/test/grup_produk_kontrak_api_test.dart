@@ -25,6 +25,9 @@ void main() {
     expect(source, contains("'grup_produk_simpan'"));
     expect(source, contains("'harga_beli'"));
     expect(source, contains("'harga_jual'"));
+    expect(source, contains("'ikut_custom_menu'"));
+    expect(source, contains("'ekstra_pilihan'"));
+    expect(source, contains("jenisItem: 'EKSTRA'"));
 
     // Hapus ber-konfirmasi; server menolak grup yang masih dipakai produk.
     expect(source, contains("'grup_produk_hapus'"));
