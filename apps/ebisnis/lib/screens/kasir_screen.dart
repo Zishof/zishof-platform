@@ -116,6 +116,18 @@ class _KasirScreenState extends State<KasirScreen> {
   DateTime? _waktuTransaksiAwal;
   bool _semuaCaraBayarUntukMemberAwal = false;
   int _versiTransaksi = 0;
+  String _jenisPenjualan = 'TOKO';
+  Map<int, double> _hargaKanal = {};
+
+  static const Map<String, String> _labelKanalPenjualan = {
+    'TOKO': 'Toko',
+    'DINE_IN': 'Dine In',
+    'TAKEAWAY': 'Take Away',
+    'GOFOOD': 'GoFood',
+    'GRABFOOD': 'GrabFood',
+    'SHOPEEFOOD': 'ShopeeFood',
+    'ONLINE_LAIN': 'Online Lain',
+  };
 
   /// "Harga Coret" (preview katalog, gap-closure Fase 2 Stretch) -- peta
   /// produkId->nominal diskon dari evaluasi PUBLIK (`diskon_evaluasi` TANPA
@@ -297,6 +309,7 @@ class _KasirScreenState extends State<KasirScreen> {
     try {
       await _sinkronKatalogDanKonfigurasi(
           tampilkanErrorJikaKosong: _semuaProduk.isEmpty);
+      await _muatHargaKanal(_jenisPenjualan);
       await _periksaSesiKas();
       await _terapkanBukaShiftOtomatis();
       await _periksaJadwalTutupOtomatis();
@@ -306,6 +319,46 @@ class _KasirScreenState extends State<KasirScreen> {
         setStateIfMounted(() => _pesanError = 'Gagal memuat data POS: $e');
       }
     }
+  }
+
+  Future<void> _muatHargaKanal(String kanal) async {
+    final hasil = kanal == 'TOKO'
+        ? <String, dynamic>{'data': const []}
+        : await ApiClient.instance
+            .aksi('harga_kanal_efektif', {'kanal': kanal});
+    final peta = <int, double>{};
+    for (final raw in (hasil['data'] as List?) ?? const []) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      final id = (row['produkId'] as num?)?.toInt();
+      final harga = (row['harga'] as num?)?.toDouble();
+      if (id != null && harga != null && harga > 0) peta[id] = harga;
+    }
+    if (!mounted) return;
+    setStateIfMounted(() {
+      _jenisPenjualan = kanal;
+      _hargaKanal = peta;
+      for (final item in _keranjang) {
+        item.hargaKanal = peta[item.produk.id];
+      }
+      _versiTransaksi++;
+    });
+    _siarkanKeranjangKasir();
+  }
+
+  Future<void> _pilihKanalPenjualan(String kanal) async {
+    try {
+      await _muatHargaKanal(kanal);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Harga kanal belum dapat dimuat: $e')));
+    }
+  }
+
+  ItemKeranjang _itemDenganHargaKanal(Produk produk,
+      {int jumlah = 1, List<ItemEkstra> ekstra = const []}) {
+    return ItemKeranjang(produk: produk, jumlah: jumlah, ekstra: ekstra)
+      ..hargaKanal = _hargaKanal[produk.id];
   }
 
   Future<void> _terapkanBukaShiftOtomatis() async {
@@ -1172,7 +1225,7 @@ class _KasirScreenState extends State<KasirScreen> {
         }
         tempatkanItemKeranjangTerbaruDiDepan(_keranjang, item);
       } else {
-        final barisBaru = ItemKeranjang(produk: p, jumlah: jumlahAwal);
+        final barisBaru = _itemDenganHargaKanal(p, jumlah: jumlahAwal);
         if (kemasan != null) {
           barisBaru.kemasanNama = '${kemasan['nama'] ?? ''}';
           barisBaru.kemasanQtyDasar = (kemasan['qtyDasar'] as num?)?.round();
@@ -1266,7 +1319,7 @@ class _KasirScreenState extends State<KasirScreen> {
           ..jumlah = item.jumlah + faktor.round();
         tempatkanItemKeranjangTerbaruDiDepan(_keranjang, item);
       } else {
-        final baris = ItemKeranjang(produk: p, jumlah: faktor.round())
+        final baris = _itemDenganHargaKanal(p, jumlah: faktor.round())
           ..satuanJualId = p.satuanPackId
           ..satuanJualNama = p.satuanPackNama
           ..qtyInput = 1
@@ -1356,7 +1409,7 @@ class _KasirScreenState extends State<KasirScreen> {
         tempatkanItemKeranjangTerbaruDiDepan(_keranjang, item);
       } else {
         _keranjang.insert(
-            0, ItemKeranjang(produk: p, jumlah: jumlahAwal, ekstra: dipilih));
+            0, _itemDenganHargaKanal(p, jumlah: jumlahAwal, ekstra: dipilih));
       }
       if (_kataKunciController.text.isNotEmpty || _kataKunci.isNotEmpty) {
         _kataKunciController.clear();
@@ -1612,6 +1665,7 @@ class _KasirScreenState extends State<KasirScreen> {
         memberAwal: _memberAwal,
         waktuTransaksiAwal: _waktuTransaksiAwal,
         semuaCaraBayarUntukMemberAwal: _semuaCaraBayarUntukMemberAwal,
+        jenisPenjualan: _jenisPenjualan,
       ),
     ));
     await _perbaruiJumlahPending();
@@ -1874,6 +1928,29 @@ class _KasirScreenState extends State<KasirScreen> {
       ];
 
   List<Widget> get _tombolAksi => [
+        PopupMenuButton<String>(
+          tooltip: 'Pilih kanal penjualan dan harga yang berlaku',
+          onSelected: _pilihKanalPenjualan,
+          itemBuilder: (_) => _labelKanalPenjualan.entries
+              .map((e) =>
+                  PopupMenuItem<String>(value: e.key, child: Text(e.value)))
+              .toList(),
+          child: Container(
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: Theme.of(context).colorScheme.outline),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.sell_outlined, size: 18),
+              const SizedBox(width: 8),
+              Text(_labelKanalPenjualan[_jenisPenjualan] ?? _jenisPenjualan),
+              const SizedBox(width: 4),
+              const Icon(Icons.arrow_drop_down, size: 18),
+            ]),
+          ),
+        ),
         if (defaultTargetPlatform == TargetPlatform.windows) ...[
           _tombolToolbar(
               icon: const Icon(Icons.add_shopping_cart_outlined, size: 18),
@@ -2299,6 +2376,7 @@ class _KasirScreenState extends State<KasirScreen> {
                   minimumSize: Size.zero),
             ),
       onSelesai: _setelahTransaksiSelesai,
+      jenisPenjualan: _jenisPenjualan,
     );
     if (_fokusKeranjang) {
       // Stack (bukan Column polos) -- dropdown hasil pencarian WAJIB jadi

@@ -2666,6 +2666,15 @@ class _TabPenjualanKasir extends StatefulWidget {
 
 class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
     with JejakGalat {
+  static const _labelJenisPenjualan = <String, String>{
+    'TOKO': 'Toko',
+    'DINE_IN': 'Dine In',
+    'TAKEAWAY': 'Take Away',
+    'GOFOOD': 'GoFood',
+    'GRABFOOD': 'GrabFood',
+    'SHOPEEFOOD': 'ShopeeFood',
+    'ONLINE_LAIN': 'Online Lain',
+  };
   static const _pageSize = 10;
   late DateTime _mulai;
   late DateTime _sampai;
@@ -2693,12 +2702,16 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
   /// Filter metode bayar (permintaan rekonsiliasi tim keuangan). Kosong = semua metode.
   String _metode = '';
   List<String> _daftarMetode = [];
+  String _jenisPenjualan = '';
+  List<String> _daftarJenisPenjualan =
+      _labelJenisPenjualan.keys.toList(growable: false);
 
   Map<String, dynamic> _payload({int? page, int pageSize = _pageSize}) => {
         'tglMulai': _formatTanggalServer.format(_mulai),
         'tglSampai': _formatTanggalServer.format(_sampai),
         if (_kasir.isNotEmpty) 'kasir': _kasir,
         if (_metode.isNotEmpty) 'metode': _metode,
+        if (_jenisPenjualan.isNotEmpty) 'jenisPenjualan': _jenisPenjualan,
         'page': page ?? _halaman,
         'pageSize': pageSize,
       };
@@ -2752,6 +2765,11 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
         if (_kasir.isNotEmpty && !_daftarKasir.contains(_kasir)) {
           _daftarKasir = [_kasir, ..._daftarKasir];
         }
+        final kanal = ((hasil['daftarJenisPenjualan'] as List?) ?? [])
+            .map((e) => '$e'.trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
+        if (kanal.isNotEmpty) _daftarJenisPenjualan = kanal;
       });
     } catch (e) {
       setStateIfMounted(() => _error = terapkanGalat(e));
@@ -2801,6 +2819,7 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
           'Kasir',
           'Nota',
           'Pembeli',
+          'Kanal',
           'Metode',
           'Penerimaan'
         ],
@@ -2810,6 +2829,8 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
                   '${row['kasir'] ?? '-'}',
                   '${row['nomorNota'] ?? '-'}',
                   '${row['pembeli'] ?? 'Umum'}',
+                  _labelJenisPenjualan['${row['jenisPenjualan']}'] ??
+                      '${row['jenisPenjualan'] ?? 'Toko'}',
                   StrukScreen.labelPembayaran(row),
                   _formatRupiah.format(row['totalBiaya'] ?? 0),
                 ])
@@ -2844,6 +2865,7 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
         DynamicReportColumn('kasir', 'Kasir'),
         DynamicReportColumn('nomorNota', 'Nota'),
         DynamicReportColumn('pembeli', 'Pembeli'),
+        DynamicReportColumn('jenisPenjualanTampil', 'Kanal'),
         DynamicReportColumn('metodeTampil', 'Metode'),
         DynamicReportColumn('qty', 'Qty', numeric: true),
         DynamicReportColumn('bayarTunai', 'Tunai', numeric: true),
@@ -2854,6 +2876,9 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
           .map((row) => {
                 ...row,
                 'waktuTampil': _formatWaktu(row['waktu']),
+                'jenisPenjualanTampil':
+                    _labelJenisPenjualan['${row['jenisPenjualan']}'] ??
+                        '${row['jenisPenjualan'] ?? 'Toko'}',
                 'metodeTampil': StrukScreen.labelPembayaran(row),
               })
           .toList(),
@@ -2937,6 +2962,24 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
               onChanged: (v) => setStateIfMounted(() => _metode = v ?? ''),
             ),
           ),
+          SizedBox(
+            width: 200,
+            child: DropdownButtonFormField<String>(
+              value: _jenisPenjualan,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                  labelText: 'Kanal Penjualan',
+                  prefixIcon: Icon(Icons.sell_outlined),
+                  isDense: true),
+              items: [
+                const DropdownMenuItem(value: '', child: Text('Semua kanal')),
+                ..._daftarJenisPenjualan.map((k) => DropdownMenuItem(
+                    value: k, child: Text(_labelJenisPenjualan[k] ?? k))),
+              ],
+              onChanged: (v) =>
+                  setStateIfMounted(() => _jenisPenjualan = v ?? ''),
+            ),
+          ),
           FilledButton.icon(
               onPressed: _memuat ? null : _terapkan,
               icon: const Icon(Icons.filter_alt_outlined, size: 17),
@@ -3007,13 +3050,14 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
 
   Widget _tabel() {
     return AppDataTable(
-      minWidth: 1040,
+      minWidth: 1160,
       emptyText: 'Belum ada penjualan pada periode dan kasir ini.',
       columns: const [
         AppTableColumn('Waktu', flex: 2),
         AppTableColumn('Kasir', flex: 2),
         AppTableColumn('Nota', flex: 4),
         AppTableColumn('Pembeli', flex: 2),
+        AppTableColumn('Kanal', flex: 2),
         AppTableColumn('Metode', flex: 2),
         AppTableColumn('Penerimaan', flex: 2, align: TextAlign.right),
         AppTableColumn('Aksi', width: 70, align: TextAlign.center),
@@ -3028,6 +3072,10 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
                       flex: 4,
                       style: const TextStyle(fontWeight: FontWeight.w700)),
                   AppTableCell.text('${row['pembeli'] ?? 'Umum'}', flex: 2),
+                  AppTableCell.text(
+                      _labelJenisPenjualan['${row['jenisPenjualan']}'] ??
+                          '${row['jenisPenjualan'] ?? 'Toko'}',
+                      flex: 2),
                   AppTableCell.text(StrukScreen.labelPembayaran(row), flex: 2),
                   AppTableCell(
                       flex: 2,
@@ -3040,6 +3088,9 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
                           rincian: {
                             'Kasir': '${row['kasir'] ?? '-'}',
                             'Pembeli': '${row['pembeli'] ?? 'Umum'}',
+                            'Kanal': _labelJenisPenjualan[
+                                    '${row['jenisPenjualan']}'] ??
+                                '${row['jenisPenjualan'] ?? 'Toko'}',
                             'Metode': StrukScreen.labelPembayaran(row),
                           },
                           textAlign: TextAlign.right,

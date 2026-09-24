@@ -27,6 +27,7 @@ final _fmtTgl = DateFormat('yyyy-MM-dd');
 /// terkunci (perubahan = versi baru); "hapus versi" = nonaktif.
 /// Tab 3 Harga Jual Customer (`si_customer_price_*`): sama, per customer-produk;
 /// baris tanpa customer = daftar harga UMUM (dasar layar 13).
+/// Tab 4 Harga per Kanal: versi efektif untuk dine in, takeaway, dan marketplace.
 class HargaScreen extends StatefulWidget {
   const HargaScreen({super.key});
 
@@ -41,7 +42,7 @@ class _HargaScreenState extends State<HargaScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 3, vsync: this);
+    _tab = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -70,6 +71,7 @@ class _HargaScreenState extends State<HargaScreen>
               Tab(text: 'Analisis Harga'),
               Tab(text: 'Harga Beli Supplier'),
               Tab(text: 'Harga Jual Customer'),
+              Tab(text: 'Harga per Kanal'),
             ],
           ),
         ),
@@ -78,6 +80,7 @@ class _HargaScreenState extends State<HargaScreen>
             _TabAnalisisHarga(),
             _TabHargaVersi(jenis: 'beli'),
             _TabHargaVersi(jenis: 'jual'),
+            _TabHargaKanal(),
           ]),
         ),
       ]),
@@ -800,6 +803,312 @@ class _FormVersiHargaState extends State<_FormVersiHarga> with JejakGalat {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+const _labelKanalHarga = <String, String>{
+  'DINE_IN': 'Dine In',
+  'TAKEAWAY': 'Take Away',
+  'GOFOOD': 'GoFood',
+  'GRABFOOD': 'GrabFood',
+  'SHOPEEFOOD': 'ShopeeFood',
+  'ONLINE_LAIN': 'Online Lain',
+};
+
+class _TabHargaKanal extends StatefulWidget {
+  const _TabHargaKanal();
+
+  @override
+  State<_TabHargaKanal> createState() => _TabHargaKanalState();
+}
+
+class _TabHargaKanalState extends State<_TabHargaKanal> with JejakGalat {
+  bool _memuat = true;
+  String? _error;
+  String _kanal = '';
+  List<Map<String, dynamic>> _data = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  Future<void> _muat() async {
+    setStateIfMounted(() {
+      _memuat = true;
+      _error = null;
+    });
+    try {
+      final hasil = await ApiClient.instance.aksi(
+          'si_selling_price_channel_list',
+          {if (_kanal.isNotEmpty) 'kanal': _kanal});
+      setStateIfMounted(() {
+        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _memuat = false;
+      });
+    } catch (e) {
+      setStateIfMounted(() {
+        _memuat = false;
+        _error = terapkanGalat(e);
+      });
+    }
+  }
+
+  Future<void> _tambah() async {
+    final tersimpan = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const _FormHargaKanal(),
+    );
+    if (tersimpan == true) await _muat();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bolehKelola = Sesi.instance.bolehAksiIs('harga', 'create') ||
+        Sesi.instance.bolehAksiIs('harga', 'update');
+    if (_memuat) return const Center(child: CircularProgressIndicator());
+    if (_error != null) {
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(_error!, textAlign: TextAlign.center),
+          const SizedBox(height: 12),
+          ElevatedButton(onPressed: _muat, child: const Text('Coba Lagi')),
+        ]),
+      );
+    }
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: bolehKelola
+          ? FloatingActionButton.extended(
+              onPressed: _tambah,
+              icon: const Icon(Icons.add),
+              label: const Text('Harga Kanal'))
+          : null,
+      body: RefreshIndicator(
+        onRefresh: _muat,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
+          children: [
+            Wrap(spacing: 10, runSpacing: 8, children: [
+              SizedBox(
+                width: 230,
+                child: DropdownButtonFormField<String>(
+                  value: _kanal,
+                  decoration: const InputDecoration(
+                      labelText: 'Kanal Penjualan',
+                      prefixIcon: Icon(Icons.sell_outlined),
+                      isDense: true),
+                  items: [
+                    const DropdownMenuItem(
+                        value: '', child: Text('Semua kanal')),
+                    ..._labelKanalHarga.entries.map((e) =>
+                        DropdownMenuItem(value: e.key, child: Text(e.value))),
+                  ],
+                  onChanged: (v) {
+                    _kanal = v ?? '';
+                    _muat();
+                  },
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(top: 10),
+                child: Text(
+                  'Harga terbaru yang tanggal efektifnya sudah berlaku dipakai otomatis oleh kasir.',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 12),
+            AppDataTable(
+              minWidth: 900,
+              emptyText: 'Belum ada harga khusus kanal.',
+              columns: const [
+                AppTableColumn('Kanal', flex: 2),
+                AppTableColumn('Produk', flex: 4),
+                AppTableColumn('Harga', flex: 2, align: TextAlign.right),
+                AppTableColumn('Tgl Efektif', flex: 2),
+                AppTableColumn('Status', flex: 1, align: TextAlign.center),
+                AppTableColumn('Keterangan', flex: 3),
+              ],
+              rows: _data
+                  .map((v) => AppTableRowData(cells: [
+                        AppTableCell.text(
+                            _labelKanalHarga['${v['kanal']}'] ??
+                                '${v['kanal']}',
+                            flex: 2),
+                        AppTableCell.text(
+                            '${v['produkKode']} — ${v['produkNama']}',
+                            flex: 4,
+                            maxLines: 2),
+                        AppTableCell.text(_fmtRp.format(v['harga'] ?? 0),
+                            flex: 2,
+                            align: TextAlign.right,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w700)),
+                        AppTableCell.text('${v['tanggalEfektif']}', flex: 2),
+                        AppTableCell(
+                          flex: 1,
+                          align: TextAlign.center,
+                          child: StatusPill(
+                            label: v['aktif'] == true ? 'Aktif' : 'Nonaktif',
+                            warna: v['aktif'] == true
+                                ? AppColors.success
+                                : AppColors.danger,
+                          ),
+                        ),
+                        AppTableCell.text('${v['keterangan'] ?? '-'}',
+                            flex: 3, maxLines: 2),
+                      ]))
+                  .toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FormHargaKanal extends StatefulWidget {
+  const _FormHargaKanal();
+
+  @override
+  State<_FormHargaKanal> createState() => _FormHargaKanalState();
+}
+
+class _FormHargaKanalState extends State<_FormHargaKanal> with JejakGalat {
+  final _harga = TextEditingController();
+  final _keterangan = TextEditingController();
+  DateTime _tanggal = DateTime.now();
+  String _kanal = 'DINE_IN';
+  Map<String, dynamic>? _produk;
+  bool _menyimpan = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _harga.dispose();
+    _keterangan.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pilihProduk() async {
+    final hasil = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _SheetCari(
+          judul: 'Pilih Produk',
+          aksi: 'si_price_analysis',
+          labelBaris: (r) => '${r['kode']} — ${r['nama']}'),
+    );
+    if (hasil != null) setStateIfMounted(() => _produk = hasil);
+  }
+
+  Future<void> _simpan() async {
+    final nilai = double.tryParse(_harga.text.replaceAll(',', '.'));
+    if (_produk == null || nilai == null || nilai <= 0) {
+      setStateIfMounted(() => _error = 'Produk dan harga positif wajib diisi.');
+      return;
+    }
+    setStateIfMounted(() {
+      _menyimpan = true;
+      _error = null;
+    });
+    try {
+      // Perubahan harga berversi sengaja online-only: konflik versi efektif
+      // tidak aman digabungkan dari antrean offline tanpa keputusan pengguna.
+      await ApiClient.instance.aksi('si_selling_price_channel_save', {
+        'produk_id': _produk!['produkId'] ?? _produk!['id'],
+        'kanal': _kanal,
+        'harga': nilai,
+        'tanggal_efektif': _fmtTgl.format(_tanggal),
+        'keterangan': _keterangan.text.trim(),
+      });
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      setStateIfMounted(() => _error = terapkanGalat(e));
+    } finally {
+      if (mounted) setStateIfMounted(() => _menyimpan = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: DraggableScrollableSheet(
+        initialChildSize: .78,
+        expand: false,
+        builder: (context, sc) => AppFormSheet(
+          scrollController: sc,
+          title: 'Harga per Kanal Penjualan',
+          subtitle: 'Versi baru berlaku mulai tanggal efektif yang dipilih.',
+          icon: Icons.sell_outlined,
+          errorText: _error,
+          errorDetail: detailUntuk(_error),
+          actions: [
+            OutlinedButton(
+                onPressed:
+                    _menyimpan ? null : () => Navigator.of(context).pop(false),
+                child: const Text('Batal')),
+            ElevatedButton.icon(
+                onPressed: _menyimpan ? null : _simpan,
+                icon: _menyimpan
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.save_outlined, size: 18),
+                label: const Text('Simpan Versi')),
+          ],
+          children: [
+            AppFormSection(judul: 'Harga Kanal', children: [
+              DropdownButtonFormField<String>(
+                value: _kanal,
+                decoration: const InputDecoration(labelText: 'Kanal *'),
+                items: _labelKanalHarga.entries
+                    .map((e) =>
+                        DropdownMenuItem(value: e.key, child: Text(e.value)))
+                    .toList(),
+                onChanged: (v) => setStateIfMounted(() => _kanal = v!),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: _pilihProduk,
+                icon: const Icon(Icons.search, size: 16),
+                label: Text(_produk == null
+                    ? 'Pilih Produk *'
+                    : '${_produk!['kode']} — ${_produk!['nama']}'),
+              ),
+              const SizedBox(height: 10),
+              AppFormTextField(
+                label: 'Harga *',
+                controller: _harga,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+              ),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final t = await showDatePicker(
+                      context: context,
+                      initialDate: _tanggal,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2100));
+                  if (t != null) setStateIfMounted(() => _tanggal = t);
+                },
+                icon: const Icon(Icons.event, size: 16),
+                label: Text('Tgl Efektif: ${_fmtTgl.format(_tanggal)}'),
+              ),
+              const SizedBox(height: 10),
+              AppFormTextField(
+                  label: 'Keterangan', controller: _keterangan, maxLines: 2),
+            ]),
+          ],
         ),
       ),
     );
