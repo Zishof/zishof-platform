@@ -14,11 +14,17 @@ void main() {
       'hrd_cuti_simpan',
       'hrd_cuti_putusan',
       'hrd_kehadiran_daftar',
+      'hrd_payroll_daftar',
+      'hrd_slip_detail',
+      'hrd_pengajuan_jenis',
+      'hrd_pengajuan_daftar',
+      'hrd_pengajuan_simpan',
     ]) {
       expect(layar, contains("'$aksi'"));
     }
     expect(shell, contains('MenuEBisnis.hrdDasar'));
     expect(shell, contains("MenuEBisnis.hrdDasar: 'hrd_dasar'"));
     expect(shell, contains("_GrupMenuShell('SDM'"));
+    expect(layar, contains('Ajukan Lembur / Kasbon'));
   });
 }
