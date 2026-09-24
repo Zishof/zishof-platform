@@ -159,6 +159,15 @@ class _PegawaiTabState extends State<_PegawaiTab> {
             ));
   }
 
+  Future<void> _profil(Map<String, dynamic> pegawai) async {
+    final ok = await showDialog<bool>(
+        context: context,
+        builder: (_) => _FormProfilPegawai(
+            pegawaiId: (pegawai['id'] as num).toInt(),
+            bolehKelola: _bolehKelola));
+    if (ok == true) await _muat();
+  }
+
   @override
   Widget build(BuildContext context) => _PanelDaftar(
         header: TextField(
@@ -187,6 +196,12 @@ class _PegawaiTabState extends State<_PegawaiTab> {
                   trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                     Chip(
                         label: Text(p['aktif'] == true ? 'Aktif' : 'Nonaktif')),
+                    IconButton(
+                        tooltip: _bolehKelola
+                            ? 'Lihat atau ubah profil pegawai'
+                            : 'Lihat profil pegawai',
+                        icon: const Icon(Icons.contact_page_outlined),
+                        onPressed: () => _profil(p)),
                     if (_bolehKelola) ...[
                       const SizedBox(width: 6),
                       if (('${p['akunUserId'] ?? ''}').isNotEmpty)
@@ -210,6 +225,188 @@ class _PegawaiTabState extends State<_PegawaiTab> {
                 ))
             .toList(),
       );
+}
+
+class _FormProfilPegawai extends StatefulWidget {
+  const _FormProfilPegawai(
+      {required this.pegawaiId, required this.bolehKelola});
+  final int pegawaiId;
+  final bool bolehKelola;
+  @override
+  State<_FormProfilPegawai> createState() => _FormProfilPegawaiState();
+}
+
+class _FormProfilPegawaiState extends State<_FormProfilPegawai> {
+  final Map<String, TextEditingController> _c = {};
+  bool _memuat = true, _simpan = false;
+  String? _error;
+
+  TextEditingController _controller(String key) =>
+      _c.putIfAbsent(key, TextEditingController.new);
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _c.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _muat() async {
+    try {
+      final r = await ApiClient.instance
+          .aksi('hrd_pegawai_detail', {'pegawai_id': widget.pegawaiId});
+      final data = Map<String, dynamic>.from(r['data'] as Map? ?? const {});
+      for (final entry in data.entries) {
+        _controller(entry.key).text = '${entry.value ?? ''}';
+      }
+    } catch (e) {
+      _error = '$e';
+    } finally {
+      setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  Future<void> _pilihTanggal() async {
+    final awal = DateTime.tryParse(_controller('tanggalLahir').text) ??
+        DateTime(1990, 1, 1);
+    final tanggal = await showDatePicker(
+        context: context,
+        initialDate: awal,
+        firstDate: DateTime(1940),
+        lastDate: DateTime.now());
+    if (tanggal != null) {
+      _controller('tanggalLahir').text =
+          DateFormat('yyyy-MM-dd').format(tanggal);
+    }
+  }
+
+  Future<void> _kirim() async {
+    if (_controller('nama').text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nama pegawai wajib diisi.')));
+      return;
+    }
+    setState(() => _simpan = true);
+    try {
+      await ApiClient.instance.aksi('hrd_pegawai_profil_simpan', {
+        'pegawai_id': widget.pegawaiId,
+        'nama': _controller('nama').text.trim(),
+        'email': _controller('email').text.trim(),
+        'hp': _controller('hp').text.trim(),
+        'telepon': _controller('telepon').text.trim(),
+        'kelamin': _controller('kelamin').text.trim(),
+        'tempat_lahir': _controller('tempatLahir').text.trim(),
+        'tanggal_lahir': _controller('tanggalLahir').text.trim(),
+        'alamat': _controller('alamat').text.trim(),
+        'ktp': _controller('ktp').text.trim(),
+        'status_perkawinan': _controller('statusPerkawinan').text.trim(),
+        'golongan_darah': _controller('golonganDarah').text.trim(),
+        'nomor_kk': _controller('nomorKk').text.trim(),
+        'nama_ibu': _controller('namaIbu').text.trim(),
+        'nama_darurat': _controller('namaDarurat').text.trim(),
+        'telepon_darurat': _controller('teleponDarurat').text.trim(),
+        'status_darurat': _controller('statusDarurat').text.trim(),
+        'keterangan': _controller('keterangan').text.trim(),
+      });
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      setStateIfMounted(() => _simpan = false);
+    }
+  }
+
+  Widget _field(String key, String label,
+          {int maxLines = 1, bool readOnly = false, VoidCallback? onTap}) =>
+      SizedBox(
+          width: maxLines > 1 ? 700 : 330,
+          child: TextField(
+              controller: _controller(key),
+              enabled: widget.bolehKelola || readOnly,
+              readOnly: readOnly || !widget.bolehKelola,
+              onTap: onTap,
+              maxLines: maxLines,
+              decoration: InputDecoration(labelText: label)));
+
+  @override
+  Widget build(BuildContext context) => Dialog(
+      child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 780, maxHeight: 760),
+          child: Column(children: [
+            ListTile(
+                leading: const Icon(Icons.contact_page_outlined),
+                title: const Text('Profil Pegawai'),
+                subtitle: Text(widget.bolehKelola
+                    ? 'Data induk pegawai dari modul HRD ZK'
+                    : 'Mode baca'),
+                trailing: IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close))),
+            const Divider(height: 1),
+            Expanded(
+                child: _memuat
+                    ? const Center(child: CircularProgressIndicator())
+                    : _error != null
+                        ? Center(
+                            child: Text(_error!,
+                                style: const TextStyle(color: Colors.red)))
+                        : SingleChildScrollView(
+                            padding: const EdgeInsets.all(20),
+                            child: Wrap(spacing: 12, runSpacing: 12, children: [
+                              _field('kode', 'Kode pegawai', readOnly: true),
+                              _field('nama', 'Nama lengkap *'),
+                              _field('jabatan', 'Jabatan', readOnly: true),
+                              _field('golongan', 'Golongan', readOnly: true),
+                              _field('email', 'Email'),
+                              _field('hp', 'Nomor HP'),
+                              _field('telepon', 'Telepon'),
+                              _field('kelamin', 'Jenis kelamin'),
+                              _field('tempatLahir', 'Tempat lahir'),
+                              _field('tanggalLahir', 'Tanggal lahir',
+                                  readOnly: true,
+                                  onTap: widget.bolehKelola
+                                      ? _pilihTanggal
+                                      : null),
+                              _field('ktp', 'Nomor KTP'),
+                              _field('nomorKk', 'Nomor kartu keluarga'),
+                              _field('statusPerkawinan', 'Status perkawinan'),
+                              _field('golonganDarah', 'Golongan darah'),
+                              _field('namaIbu', 'Nama ibu kandung'),
+                              _field('namaDarurat', 'Kontak darurat'),
+                              _field('teleponDarurat', 'Telepon darurat'),
+                              _field(
+                                  'statusDarurat', 'Hubungan kontak darurat'),
+                              _field('alamat', 'Alamat', maxLines: 3),
+                              _field('keterangan', 'Keterangan', maxLines: 3),
+                            ]))),
+            if (widget.bolehKelola) ...[
+              const Divider(height: 1),
+              Padding(
+                  padding: const EdgeInsets.all(12),
+                  child:
+                      Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                    TextButton(
+                        onPressed:
+                            _simpan ? null : () => Navigator.pop(context),
+                        child: const Text('Batal')),
+                    const SizedBox(width: 8),
+                    FilledButton.icon(
+                        onPressed: _simpan ? null : _kirim,
+                        icon: const Icon(Icons.save_outlined),
+                        label: Text(_simpan ? 'Menyimpan…' : 'Simpan Profil')),
+                  ]))
+            ]
+          ])));
 }
 
 class _FormAkunPegawai extends StatefulWidget {
