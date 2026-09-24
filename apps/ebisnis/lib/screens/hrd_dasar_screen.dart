@@ -51,6 +51,10 @@ class _HrdDasarScreenState extends State<HrdDasarScreen> {
                       value: 4,
                       icon: Icon(Icons.payments_outlined),
                       label: Text('Payroll')),
+                  ButtonSegment(
+                      value: 5,
+                      icon: Icon(Icons.trending_up_outlined),
+                      label: Text('Karier & Gaji')),
                 ],
                 selected: {_tab},
                 onSelectionChanged: (v) => setState(() => _tab = v.first),
@@ -63,6 +67,7 @@ class _HrdDasarScreenState extends State<HrdDasarScreen> {
           _KehadiranTab(),
           _KedisiplinanTab(),
           _PayrollTab(),
+          _KarierGajiTab(),
         ])),
       ]),
     );
@@ -80,6 +85,7 @@ class _PegawaiTabState extends State<_PegawaiTab> {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
+  bool _bolehKelola = false;
 
   @override
   void initState() {
@@ -101,8 +107,10 @@ class _PegawaiTabState extends State<_PegawaiTab> {
     try {
       final r = await ApiClient.instance.aksi('hrd_pegawai_daftar',
           {'keyword': _cari.text.trim(), 'page_size': 200});
-      setStateIfMounted(() => _data =
-          ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>());
+      setStateIfMounted(() {
+        _data = ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+        _bolehKelola = r['bolehKelola'] == true;
+      });
     } catch (e) {
       setStateIfMounted(() => _error = '$e');
     } finally {
@@ -135,10 +143,142 @@ class _PegawaiTabState extends State<_PegawaiTab> {
                       'Akun: ${('${p['akunUserId'] ?? ''}').isEmpty ? 'belum ditautkan' : p['akunUserId']} · '
                       'Fingerprint: ${p['fingerprintTerdaftar'] == true ? 'terdaftar' : 'belum'}'),
                   isThreeLine: true,
-                  trailing: Chip(
-                      label: Text(p['aktif'] == true ? 'Aktif' : 'Nonaktif')),
+                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Chip(
+                        label: Text(p['aktif'] == true ? 'Aktif' : 'Nonaktif')),
+                    if (_bolehKelola) ...[
+                      const SizedBox(width: 6),
+                      IconButton(
+                          tooltip: ('${p['akunUserId'] ?? ''}').isEmpty
+                              ? 'Buat akun pegawai'
+                              : 'Perbarui akun pegawai',
+                          icon: const Icon(Icons.manage_accounts_outlined),
+                          onPressed: () async {
+                            final ok = await showDialog<bool>(
+                                context: context,
+                                builder: (_) => _FormAkunPegawai(pegawai: p));
+                            if (ok == true) await _muat();
+                          })
+                    ]
+                  ]),
                 ))
             .toList(),
+      );
+}
+
+class _FormAkunPegawai extends StatefulWidget {
+  const _FormAkunPegawai({required this.pegawai});
+  final Map<String, dynamic> pegawai;
+  @override
+  State<_FormAkunPegawai> createState() => _FormAkunPegawaiState();
+}
+
+class _FormAkunPegawaiState extends State<_FormAkunPegawai> {
+  late final TextEditingController _userId, _nama, _email;
+  final _password = TextEditingController();
+  bool _aktif = true, _simpan = false, _sembunyikan = true;
+
+  bool get _baru => ('${widget.pegawai['akunUserId'] ?? ''}').trim().isEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    _userId =
+        TextEditingController(text: '${widget.pegawai['akunUserId'] ?? ''}');
+    _nama = TextEditingController(text: '${widget.pegawai['nama'] ?? ''}');
+    _email = TextEditingController();
+    _aktif = widget.pegawai['akunAktif'] != false;
+  }
+
+  @override
+  void dispose() {
+    _userId.dispose();
+    _nama.dispose();
+    _email.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _kirim() async {
+    if (_userId.text.trim().length < 4 ||
+        (_baru && _password.text.length < 8)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Username minimal 4 karakter dan password awal minimal 8 karakter.')));
+      return;
+    }
+    setState(() => _simpan = true);
+    try {
+      await ApiClient.instance.aksi('hrd_akun_pegawai_simpan', {
+        'pegawai_id': widget.pegawai['id'],
+        'user_id': _userId.text.trim(),
+        'nama': _nama.text.trim(),
+        'email': _email.text.trim(),
+        'password': _password.text,
+        'aktif': _aktif,
+      });
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      setStateIfMounted(() => _simpan = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text(_baru ? 'Buat Akun Pegawai' : 'Perbarui Akun Pegawai'),
+        content: SizedBox(
+            width: 480,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text('${widget.pegawai['nama'] ?? '-'}',
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              TextField(
+                  controller: _userId,
+                  enabled: _baru,
+                  decoration: const InputDecoration(labelText: 'Username *')),
+              const SizedBox(height: 12),
+              TextField(
+                  controller: _nama,
+                  decoration:
+                      const InputDecoration(labelText: 'Nama tampilan')),
+              const SizedBox(height: 12),
+              TextField(
+                  controller: _email,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(labelText: 'Email')),
+              if (_baru) ...[
+                const SizedBox(height: 12),
+                TextField(
+                    controller: _password,
+                    obscureText: _sembunyikan,
+                    decoration: InputDecoration(
+                        labelText: 'Password awal *',
+                        suffixIcon: IconButton(
+                            onPressed: () =>
+                                setState(() => _sembunyikan = !_sembunyikan),
+                            icon: Icon(_sembunyikan
+                                ? Icons.visibility
+                                : Icons.visibility_off))))
+              ],
+              SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _aktif,
+                  onChanged: (v) => setState(() => _aktif = v),
+                  title: const Text('Akun aktif')),
+            ])),
+        actions: [
+          TextButton(
+              onPressed: _simpan ? null : () => Navigator.pop(context),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: _simpan ? null : _kirim,
+              child: Text(_simpan ? 'Menyimpan…' : 'Simpan')),
+        ],
       );
 }
 
@@ -893,6 +1033,338 @@ class _FormPengajuanPayrollState extends State<_FormPengajuanPayroll> {
           FilledButton(
               onPressed: _simpan ? null : _kirim,
               child: Text(_simpan ? 'Menyimpan…' : 'Kirim Pengajuan'))
+        ],
+      );
+}
+
+class _KarierGajiTab extends StatefulWidget {
+  const _KarierGajiTab();
+  @override
+  State<_KarierGajiTab> createState() => _KarierGajiTabState();
+}
+
+class _KarierGajiTabState extends State<_KarierGajiTab> {
+  bool _memuat = true, _bolehKelola = false;
+  String? _error;
+  List<Map<String, dynamic>> _data = [];
+  final _rupiah =
+      NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  Future<void> _muat() async {
+    setStateIfMounted(() {
+      _memuat = true;
+      _error = null;
+    });
+    try {
+      final r = await ApiClient.instance
+          .aksi('hrd_kenaikan_gaji_daftar', {'page_size': 300});
+      setStateIfMounted(() {
+        _data = ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+        _bolehKelola = r['bolehKelola'] == true;
+      });
+    } catch (e) {
+      setStateIfMounted(() => _error = '$e');
+    } finally {
+      setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  Future<void> _tambah() async {
+    final ok = await showDialog<bool>(
+        context: context, builder: (_) => const _FormKenaikanGaji());
+    if (ok == true) await _muat();
+  }
+
+  Future<void> _putusan(Map<String, dynamic> row, bool setujui) async {
+    try {
+      await ApiClient.instance.aksi(
+          'hrd_kenaikan_gaji_putusan', {'id': row['id'], 'setujui': setujui});
+      await _muat();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
+  Color _warna(String status) => status == 'DISETUJUI'
+      ? Colors.green
+      : status == 'DITOLAK'
+          ? Colors.red
+          : Colors.orange;
+
+  @override
+  Widget build(BuildContext context) => _PanelDaftar(
+        header: Row(children: [
+          Expanded(
+              child: Text('Kenaikan gaji berkala',
+                  style: Theme.of(context).textTheme.titleMedium)),
+          IconButton(onPressed: _muat, icon: const Icon(Icons.refresh)),
+          if (_bolehKelola)
+            FilledButton.icon(
+                onPressed: _tambah,
+                icon: const Icon(Icons.add_chart),
+                label: const Text('Ajukan Kenaikan')),
+        ]),
+        memuat: _memuat,
+        error: _error,
+        kosong: 'Belum ada riwayat kenaikan gaji.',
+        children: _data.map((r) {
+          final status = '${r['status'] ?? 'BELUM DIPROSES'}';
+          return Card(
+              child: ListTile(
+            leading: CircleAvatar(
+                child: Icon(status == 'DISETUJUI'
+                    ? Icons.trending_up
+                    : Icons.schedule)),
+            title: Text('${r['pegawai'] ?? '-'} · SK ${r['noSk'] ?? '-'}'),
+            subtitle: Text(
+                'TMT ${r['tmt'] ?? '-'} · Masa kerja ${r['masaKerjaTahun'] ?? 0} th ${r['masaKerjaBulan'] ?? 0} bln\n'
+                '${_rupiah.format((r['gajiLama'] as num?) ?? 0)} → ${_rupiah.format((r['gajiBaru'] as num?) ?? 0)}'
+                '${('${r['keterangan'] ?? ''}').isEmpty ? '' : ' · ${r['keterangan']}'}'),
+            isThreeLine: true,
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              Chip(
+                  label: Text(status),
+                  labelStyle: TextStyle(color: _warna(status))),
+              if (_bolehKelola && status == 'BELUM DIPROSES')
+                PopupMenuButton<bool>(
+                    onSelected: (v) => _putusan(r, v),
+                    itemBuilder: (_) => const [
+                          PopupMenuItem(value: true, child: Text('Setujui')),
+                          PopupMenuItem(value: false, child: Text('Tolak')),
+                        ])
+            ]),
+          ));
+        }).toList(),
+      );
+}
+
+class _FormKenaikanGaji extends StatefulWidget {
+  const _FormKenaikanGaji();
+  @override
+  State<_FormKenaikanGaji> createState() => _FormKenaikanGajiState();
+}
+
+class _FormKenaikanGajiState extends State<_FormKenaikanGaji> {
+  List<Map<String, dynamic>> _pegawai = [], _gaji = [];
+  int? _pegawaiId, _gajiLamaId, _gajiBaruId;
+  final _noSk = TextEditingController(),
+      _tahun = TextEditingController(text: '0'),
+      _bulan = TextEditingController(text: '0'),
+      _keterangan = TextEditingController();
+  DateTime _tanggalSk = DateTime.now(),
+      _tmt = DateTime.now(),
+      _berikutnya = DateTime(
+          DateTime.now().year + 2, DateTime.now().month, DateTime.now().day);
+  bool _memuat = true, _simpan = false;
+  final _rupiah =
+      NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+
+  @override
+  void initState() {
+    super.initState();
+    _muatPilihan();
+  }
+
+  @override
+  void dispose() {
+    _noSk.dispose();
+    _tahun.dispose();
+    _bulan.dispose();
+    _keterangan.dispose();
+    super.dispose();
+  }
+
+  Future<void> _muatPilihan() async {
+    try {
+      final r = await Future.wait([
+        ApiClient.instance.aksi('hrd_pegawai_daftar', {'page_size': 200}),
+        ApiClient.instance.aksi('hrd_gaji_pokok_daftar', {}),
+      ]);
+      setStateIfMounted(() {
+        _pegawai =
+            ((r[0]['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+        _gaji =
+            ((r[1]['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+        if (_pegawai.isNotEmpty) {
+          _pegawaiId = (_pegawai.first['id'] as num).toInt();
+        }
+        if (_gaji.isNotEmpty) {
+          _gajiLamaId = (_gaji.first['id'] as num).toInt();
+          _gajiBaruId = (_gaji.first['id'] as num).toInt();
+        }
+      });
+    } finally {
+      setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  Future<DateTime> _pilih(DateTime awal) async =>
+      await showDatePicker(
+          context: context,
+          initialDate: awal,
+          firstDate: DateTime(2000),
+          lastDate: DateTime(2100)) ??
+      awal;
+
+  String _labelGaji(Map<String, dynamic> g) =>
+      '${g['golongan'] ?? '-'} · ${g['masaKerja'] ?? 0} th · ${_rupiah.format((g['gaji'] as num?) ?? 0)}';
+
+  Future<void> _kirim() async {
+    final tahun = int.tryParse(_tahun.text) ?? -1,
+        bulan = int.tryParse(_bulan.text) ?? -1;
+    if (_pegawaiId == null ||
+        _gajiLamaId == null ||
+        _gajiBaruId == null ||
+        _noSk.text.trim().isEmpty ||
+        tahun < 0 ||
+        bulan < 0 ||
+        bulan > 11) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text('Lengkapi pegawai, SK, masa kerja, dan gaji lama/baru.')));
+      return;
+    }
+    setState(() => _simpan = true);
+    try {
+      final f = DateFormat('yyyy-MM-dd');
+      await ApiClient.instance.aksi('hrd_kenaikan_gaji_simpan', {
+        'pegawai_id': _pegawaiId,
+        'no_sk': _noSk.text.trim(),
+        'tanggal_sk': f.format(_tanggalSk),
+        'tmt': f.format(_tmt),
+        'naik_berikutnya': f.format(_berikutnya),
+        'masa_kerja_tahun': tahun,
+        'masa_kerja_bulan': bulan,
+        'gaji_lama_id': _gajiLamaId,
+        'gaji_baru_id': _gajiBaruId,
+        'keterangan': _keterangan.text.trim(),
+      });
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      setStateIfMounted(() => _simpan = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Ajukan Kenaikan Gaji Berkala'),
+        content: SizedBox(
+            width: 620,
+            child: _memuat
+                ? const Center(child: CircularProgressIndicator())
+                : SingleChildScrollView(
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    DropdownButtonFormField<int>(
+                        value: _pegawaiId,
+                        decoration:
+                            const InputDecoration(labelText: 'Pegawai *'),
+                        isExpanded: true,
+                        items: _pegawai
+                            .map((p) => DropdownMenuItem(
+                                value: (p['id'] as num).toInt(),
+                                child: Text('${p['nama'] ?? '-'}')))
+                            .toList(),
+                        onChanged: (v) => setState(() => _pegawaiId = v)),
+                    const SizedBox(height: 12),
+                    TextField(
+                        controller: _noSk,
+                        decoration:
+                            const InputDecoration(labelText: 'Nomor SK *')),
+                    const SizedBox(height: 12),
+                    Wrap(spacing: 8, runSpacing: 8, children: [
+                      OutlinedButton.icon(
+                          onPressed: () async {
+                            final d = await _pilih(_tanggalSk);
+                            setStateIfMounted(() => _tanggalSk = d);
+                          },
+                          icon: const Icon(Icons.event),
+                          label: Text(
+                              'Tanggal SK ${DateFormat('dd-MM-yyyy').format(_tanggalSk)}')),
+                      OutlinedButton.icon(
+                          onPressed: () async {
+                            final d = await _pilih(_tmt);
+                            setStateIfMounted(() => _tmt = d);
+                          },
+                          icon: const Icon(Icons.play_circle_outline),
+                          label: Text(
+                              'TMT ${DateFormat('dd-MM-yyyy').format(_tmt)}')),
+                      OutlinedButton.icon(
+                          onPressed: () async {
+                            final d = await _pilih(_berikutnya);
+                            setStateIfMounted(() => _berikutnya = d);
+                          },
+                          icon: const Icon(Icons.upcoming_outlined),
+                          label: Text(
+                              'Berikutnya ${DateFormat('dd-MM-yyyy').format(_berikutnya)}')),
+                    ]),
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      Expanded(
+                          child: TextField(
+                              controller: _tahun,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                  labelText: 'Masa kerja tahun *'))),
+                      const SizedBox(width: 8),
+                      Expanded(
+                          child: TextField(
+                              controller: _bulan,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                  labelText: 'Masa kerja bulan (0-11) *'))),
+                    ]),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                        value: _gajiLamaId,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                            labelText: 'Gaji pokok lama *'),
+                        items: _gaji
+                            .map((g) => DropdownMenuItem(
+                                value: (g['id'] as num).toInt(),
+                                child: Text(_labelGaji(g))))
+                            .toList(),
+                        onChanged: (v) => setState(() => _gajiLamaId = v)),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                        value: _gajiBaruId,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                            labelText: 'Gaji pokok baru *'),
+                        items: _gaji
+                            .map((g) => DropdownMenuItem(
+                                value: (g['id'] as num).toInt(),
+                                child: Text(_labelGaji(g))))
+                            .toList(),
+                        onChanged: (v) => setState(() => _gajiBaruId = v)),
+                    const SizedBox(height: 12),
+                    TextField(
+                        controller: _keterangan,
+                        maxLines: 2,
+                        decoration:
+                            const InputDecoration(labelText: 'Keterangan')),
+                  ]))),
+        actions: [
+          TextButton(
+              onPressed: _simpan ? null : () => Navigator.pop(context),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: _simpan || _memuat ? null : _kirim,
+              child: Text(_simpan ? 'Menyimpan…' : 'Kirim')),
         ],
       );
 }
