@@ -14,6 +14,7 @@ void main() {
       'hrd_cuti_simpan',
       'hrd_cuti_putusan',
       'hrd_kehadiran_daftar',
+      'hrd_kehadiran_ringkasan',
       'hrd_payroll_daftar',
       'hrd_slip_detail',
       'hrd_pengajuan_jenis',
@@ -26,5 +27,7 @@ void main() {
     expect(shell, contains("MenuEBisnis.hrdDasar: 'hrd_dasar'"));
     expect(shell, contains("_GrupMenuShell('SDM'"));
     expect(layar, contains('Ajukan Lembur / Kasbon'));
+    expect(layar, contains('Kedisiplinan'));
+    expect(layar, contains('Fingerprint:'));
   });
 }

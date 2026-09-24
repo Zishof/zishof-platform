@@ -27,34 +27,41 @@ class _HrdDasarScreenState extends State<HrdDasarScreen> {
       body: Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: SegmentedButton<int>(
-            segments: const [
-              ButtonSegment(
-                  value: 0,
-                  icon: Icon(Icons.badge_outlined),
-                  label: Text('Pegawai')),
-              ButtonSegment(
-                  value: 1,
-                  icon: Icon(Icons.event_available_outlined),
-                  label: Text('Cuti & Izin')),
-              ButtonSegment(
-                  value: 2,
-                  icon: Icon(Icons.access_time_outlined),
-                  label: Text('Kehadiran')),
-              ButtonSegment(
-                  value: 3,
-                  icon: Icon(Icons.payments_outlined),
-                  label: Text('Payroll')),
-            ],
-            selected: {_tab},
-            onSelectionChanged: (v) => setState(() => _tab = v.first),
-          ),
+          child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SegmentedButton<int>(
+                segments: const [
+                  ButtonSegment(
+                      value: 0,
+                      icon: Icon(Icons.badge_outlined),
+                      label: Text('Pegawai')),
+                  ButtonSegment(
+                      value: 1,
+                      icon: Icon(Icons.event_available_outlined),
+                      label: Text('Cuti & Izin')),
+                  ButtonSegment(
+                      value: 2,
+                      icon: Icon(Icons.access_time_outlined),
+                      label: Text('Kehadiran')),
+                  ButtonSegment(
+                      value: 3,
+                      icon: Icon(Icons.insights_outlined),
+                      label: Text('Kedisiplinan')),
+                  ButtonSegment(
+                      value: 4,
+                      icon: Icon(Icons.payments_outlined),
+                      label: Text('Payroll')),
+                ],
+                selected: {_tab},
+                onSelectionChanged: (v) => setState(() => _tab = v.first),
+              )),
         ),
         Expanded(
             child: IndexedStack(index: _tab, children: const [
           _PegawaiTab(),
           _CutiTab(),
           _KehadiranTab(),
+          _KedisiplinanTab(),
           _PayrollTab(),
         ])),
       ]),
@@ -124,7 +131,10 @@ class _PegawaiTabState extends State<_PegawaiTab> {
                           : '${p['nama']}'.trim()[0].toUpperCase())),
                   title: Text('${p['nama'] ?? '-'}'),
                   subtitle: Text(
-                      '${p['kode'] ?? '-'} · ${p['jabatan'] ?? '-'} · Masuk ${p['tanggalMasuk'] ?? '-'}'),
+                      '${p['kode'] ?? '-'} · ${p['jabatan'] ?? '-'} · Masuk ${p['tanggalMasuk'] ?? '-'}\n'
+                      'Akun: ${('${p['akunUserId'] ?? ''}').isEmpty ? 'belum ditautkan' : p['akunUserId']} · '
+                      'Fingerprint: ${p['fingerprintTerdaftar'] == true ? 'terdaftar' : 'belum'}'),
+                  isThreeLine: true,
                   trailing: Chip(
                       label: Text(p['aktif'] == true ? 'Aktif' : 'Nonaktif')),
                 ))
@@ -355,12 +365,32 @@ class _KehadiranTabState extends State<_KehadiranTab> {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
-  final DateTime _dari = DateTime.now().subtract(const Duration(days: 30));
-  final DateTime _sampai = DateTime.now();
+  DateTime _dari = DateTime.now().subtract(const Duration(days: 30));
+  DateTime _sampai = DateTime.now();
   @override
   void initState() {
     super.initState();
     _muat();
+  }
+
+  Future<void> _pilihPeriode(bool mulai) async {
+    final awal = mulai ? _dari : _sampai;
+    final nilai = await showDatePicker(
+        context: context,
+        initialDate: awal,
+        firstDate: DateTime(2020),
+        lastDate: DateTime(2100));
+    if (nilai == null) return;
+    setState(() {
+      if (mulai) {
+        _dari = nilai;
+        if (_sampai.isBefore(_dari)) _sampai = _dari;
+      } else {
+        _sampai = nilai;
+        if (_dari.isAfter(_sampai)) _dari = _sampai;
+      }
+    });
+    await _muat();
   }
 
   Future<void> _muat() async {
@@ -386,10 +416,15 @@ class _KehadiranTabState extends State<_KehadiranTab> {
 
   @override
   Widget build(BuildContext context) => _PanelDaftar(
-      header: Row(children: [
-        Expanded(
-            child: Text('Riwayat 30 hari terakhir',
-                style: Theme.of(context).textTheme.titleMedium)),
+      header: Wrap(alignment: WrapAlignment.end, spacing: 8, children: [
+        OutlinedButton.icon(
+            onPressed: () => _pilihPeriode(true),
+            icon: const Icon(Icons.date_range_outlined),
+            label: Text(DateFormat('dd-MM-yyyy').format(_dari))),
+        OutlinedButton.icon(
+            onPressed: () => _pilihPeriode(false),
+            icon: const Icon(Icons.event_available_outlined),
+            label: Text(DateFormat('dd-MM-yyyy').format(_sampai))),
         IconButton(icon: const Icon(Icons.refresh), onPressed: _muat)
       ]),
       memuat: _memuat,
@@ -412,6 +447,116 @@ class _KehadiranTabState extends State<_KehadiranTab> {
     if (s.isEmpty) return '-';
     return s.length >= 16 ? s.substring(11, 16) : s;
   }
+}
+
+class _KedisiplinanTab extends StatefulWidget {
+  const _KedisiplinanTab();
+  @override
+  State<_KedisiplinanTab> createState() => _KedisiplinanTabState();
+}
+
+class _KedisiplinanTabState extends State<_KedisiplinanTab> {
+  bool _memuat = true;
+  String? _error;
+  Map<String, dynamic> _ringkasan = {};
+  List<Map<String, dynamic>> _data = [];
+  final DateTime _dari = DateTime(DateTime.now().year, DateTime.now().month, 1);
+  final DateTime _sampai = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  Future<void> _muat() async {
+    setStateIfMounted(() {
+      _memuat = true;
+      _error = null;
+    });
+    try {
+      final f = DateFormat('yyyy-MM-dd');
+      final r = await ApiClient.instance.aksi('hrd_kehadiran_ringkasan', {
+        'dari': f.format(_dari),
+        'sampai': f.format(_sampai),
+        'page_size': 5000
+      });
+      final rows =
+          ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+      rows.sort((a, b) => ((b['tepatWaktu'] as num?) ?? 0)
+          .compareTo((a['tepatWaktu'] as num?) ?? 0));
+      setStateIfMounted(() {
+        _ringkasan = r;
+        _data = rows;
+      });
+    } catch (e) {
+      setStateIfMounted(() => _error = '$e');
+    } finally {
+      setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  Widget _kpi(String label, dynamic value, Color color) => Card(
+      child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('${value ?? 0}',
+                style: TextStyle(
+                    color: color, fontSize: 24, fontWeight: FontWeight.bold)),
+            Text(label)
+          ])));
+
+  @override
+  Widget build(BuildContext context) => Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(children: [
+        Row(children: [
+          Expanded(
+              child: Text(
+                  'Kedisiplinan ${DateFormat('dd-MM-yyyy').format(_dari)} s.d. ${DateFormat('dd-MM-yyyy').format(_sampai)}',
+                  style: Theme.of(context).textTheme.titleMedium)),
+          IconButton(onPressed: _muat, icon: const Icon(Icons.refresh))
+        ]),
+        const SizedBox(height: 12),
+        if (!_memuat && _error == null)
+          Wrap(spacing: 12, runSpacing: 12, children: [
+            _kpi('Catatan presensi', _ringkasan['total'], Colors.blue),
+            _kpi('Tepat waktu', _ringkasan['tepatWaktu'], Colors.green),
+            _kpi('Terlambat', _ringkasan['terlambat'], Colors.orange),
+            _kpi('Izin / cuti / sakit', _ringkasan['izin'], Colors.purple),
+          ]),
+        const SizedBox(height: 12),
+        Expanded(
+            child: _memuat
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(
+                        child: Text(_error!,
+                            style: const TextStyle(color: Colors.red)))
+                    : _data.isEmpty
+                        ? const Center(
+                            child: Text('Belum ada data pada periode ini.'))
+                        : ListView.builder(
+                            itemCount: _data.length,
+                            itemBuilder: (_, i) {
+                              final row = _data[i];
+                              final total = (row['total'] as num?) ?? 0;
+                              final tepat = (row['tepatWaktu'] as num?) ?? 0;
+                              final rasio =
+                                  total == 0 ? 0 : tepat * 100 / total;
+                              return Card(
+                                  child: ListTile(
+                                      leading:
+                                          CircleAvatar(child: Text('${i + 1}')),
+                                      title: Text('${row['pegawai'] ?? '-'}'),
+                                      subtitle: Text(
+                                          'Tepat waktu ${row['tepatWaktu'] ?? 0} · Terlambat ${row['terlambat'] ?? 0} · Izin ${row['izin'] ?? 0}'),
+                                      trailing: Text(
+                                          '${rasio.toStringAsFixed(0)}%',
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold))));
+                            }))
+      ]));
 }
 
 class _PayrollTab extends StatefulWidget {
