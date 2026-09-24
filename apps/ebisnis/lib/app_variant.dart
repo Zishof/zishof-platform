@@ -20,6 +20,11 @@ class AppVariant {
   /// Windows; entrypoint menggerakkan AppProductProfile runtime).
   static const isInventorySales = kode == 'inventory_sales';
 
+  /// Varian AB Chicken. Kode build dan namespace memakai ejaan `abchicken`,
+  /// sedangkan host produksi mempertahankan ejaan domain `abchiken`.
+  /// Build: `-t lib/main_abchicken.dart --dart-define=EBISNIS_VARIANT=abchicken`.
+  static const isAbChicken = kode == 'abchicken';
+
   /// Varian "POS Apotik" (eFarmasi) -- penjualan obat resep/bebas dgn batch-
   /// kedaluwarsa & obat terkendali; backend Java AIS + modul SIRS (JALAN 1).
   /// Build: `-t lib/main_apotik.dart --dart-define=EBISNIS_VARIANT=apotik`.
@@ -58,7 +63,7 @@ class AppVariant {
   /// nama tampilan sehingga perubahan branding tidak pernah mencampur DB,
   /// backup transaksi, atau konfigurasi antar aplikasi yang dipasang pada
   /// komputer/perangkat yang sama.
-  static const storageNamespace = isAlBahjah
+  static const _storageNamespaceNonAbChicken = isAlBahjah
       ? 'albahjah'
       : (isNahl
           ? 'nahl'
@@ -74,7 +79,10 @@ class AppVariant {
                               ? 'petra'
                               : (isFrozenFood ? 'frozenfood' : 'ebisnis')))))));
 
-  static const namaAplikasi = isAlBahjah
+  static const storageNamespace =
+      isAbChicken ? 'abchicken' : _storageNamespaceNonAbChicken;
+
+  static const _namaAplikasiNonAbChicken = isAlBahjah
       ? 'Al-Bahjah POS'
       : (isNahl
           ? 'TokoQu Al-Bahjah An Nahl'
@@ -91,7 +99,10 @@ class AppVariant {
                               : (isFrozenFood
                                   ? 'Sarimpi Jaya Frozen POS'
                                   : 'eBisnis')))))));
-  static const namaSidebar = isAlBahjah
+  static const namaAplikasi =
+      isAbChicken ? 'AB Chicken' : _namaAplikasiNonAbChicken;
+
+  static const _namaSidebarNonAbChicken = isAlBahjah
       ? 'Al-Bahjah POS'
       : (isNahl
           ? 'TokoQu An Nahl'
@@ -108,7 +119,10 @@ class AppVariant {
                               : (isFrozenFood
                                   ? 'Sarimpi Jaya Frozen'
                                   : 'eBisnis POS')))))));
-  static const updateAssetKeyword = isAlBahjah
+  static const namaSidebar =
+      isAbChicken ? 'AB Chicken Operations' : _namaSidebarNonAbChicken;
+
+  static const _updateAssetKeywordNonAbChicken = isAlBahjah
       ? 'albahjah'
       : (isNahl
           ? 'nahl'
@@ -124,10 +138,13 @@ class AppVariant {
                               ? 'petra'
                               : (isFrozenFood ? 'frozenfood' : 'ebisnis')))))));
 
-  /// Kanal rilis harus berbeda untuk Al-Bahjah dan Nahl. Nama installer Nahl
+  static const updateAssetKeyword =
+      isAbChicken ? 'abchicken' : _updateAssetKeywordNonAbChicken;
+
+  /// Kanal rilis harus berbeda untuk setiap varian agar paket tidak tertukar.
   /// mengandung teks "Al-Bahjah An-Nahl", sehingga memilih rilis global lalu
   /// hanya mencocokkan nama aset dapat membuat Al-Bahjah menarik paket Nahl.
-  static const String? updateTagPrefix = isAlBahjah
+  static const String? _updateTagPrefixNonAbChicken = isAlBahjah
       ? 'albahjah-'
       : (isInventorySales
           ? 'inventory-sales-'
@@ -141,8 +158,13 @@ class AppVariant {
                           ? 'petra-'
                           : (isFrozenFood
                               ? 'frozenfood-'
-                              : (isNahl ? 'nahl-' : (isEBisnis ? 'v' : null))))))));
-  static const labelPerangkat = isAlBahjah
+                              : (isNahl
+                                  ? 'nahl-'
+                                  : (isEBisnis ? 'v' : null))))))));
+  static const String? updateTagPrefix =
+      isAbChicken ? 'abchicken-' : _updateTagPrefixNonAbChicken;
+
+  static const _labelPerangkatNonAbChicken = isAlBahjah
       ? 'Al-Bahjah POS Flutter Pilot'
       : (isNahl
           ? 'TokoQu Al-Bahjah An Nahl Flutter'
@@ -159,7 +181,10 @@ class AppVariant {
                               : (isFrozenFood
                                   ? 'Sarimpi Jaya Frozen POS Flutter'
                                   : 'eBisnis Flutter Pilot')))))));
-  static const logoAsset = isAlBahjah
+  static const labelPerangkat =
+      isAbChicken ? 'AB Chicken POS & Operations' : _labelPerangkatNonAbChicken;
+
+  static const _logoAssetNonAbChicken = isAlBahjah
       ? 'assets/images/albahjah/icon.png'
       : (isNahl
           ? 'assets/images/nahl/icon.png'
@@ -175,10 +200,13 @@ class AppVariant {
                               ? 'assets/images/frozenfood/icon.png'
                               : 'assets/images/ebisnis/icon.png'))))));
 
+  static const logoAsset =
+      isAbChicken ? 'assets/images/abchicken/icon.png' : _logoAssetNonAbChicken;
+
   /// Latar layar masuk mengikuti unit usaha. Aset sengaja dipisah per varian
   /// agar identitas eBisnis umum, Inventory, Apotik, eMedik, dan Al-Bahjah
   /// tetap konsisten pada build Desktop maupun Android.
-  static const loginBackgroundAsset = isAlBahjah
+  static const _loginBackgroundAssetNonAbChicken = isAlBahjah
       ? 'assets/images/albahjah/login-background.png'
       : (isNahl
           ? 'assets/images/nahl/login-background.jpg'
@@ -194,11 +222,15 @@ class AppVariant {
                               ? 'assets/images/frozenfood/login-background.png'
                               : 'assets/images/ebisnis/login-background.png'))))));
 
+  static const loginBackgroundAsset = isAbChicken
+      ? 'assets/images/abchicken/login-background.png'
+      : _loginBackgroundAssetNonAbChicken;
+
   /// Judul kartu di layar Masuk -- BEDA dari [namaAplikasi] (yang tetap dipakai
   /// di window title/sidebar/label perangkat/update asset keyword). Al-Bahjah
   /// minta identitas unit usaha ("Unit Usaha Al Bahjah"), bukan nama produk
   /// "Al-Bahjah POS", HANYA di kartu login.
-  static const judulLogin = isAlBahjah
+  static const _judulLoginNonAbChicken = isAlBahjah
       ? 'Unit Usaha Al Bahjah'
       : (isNahl
           ? 'TokoQu Al-Bahjah An Nahl'
@@ -206,9 +238,12 @@ class AppVariant {
               ? 'Masuk eKantin'
               : (isFrozenFood ? 'Sarimpi Jaya Frozen' : namaAplikasi)));
 
+  static const judulLogin =
+      isAbChicken ? 'AB Chicken Operations' : _judulLoginNonAbChicken;
+
   /// Sub-judul (tagline) di bawah judul kartu Masuk. Al-Bahjah minta kalimat
   /// visi-misi pesantren menggantikan "Masuk sebagai Kasir" generik.
-  static const subJudulLogin = isAlBahjah
+  static const _subJudulLoginNonAbChicken = isAlBahjah
       ? 'Membangun Masyarakat Berahlaq Mulia, Bersendikan Al-Qur’an dan Sunnah Rasulullah SAW'
       : (isNahl
           ? 'Menyiapkan generasi Qur’ani yang berakhlakul karimah dan berwawasan global'
@@ -223,6 +258,10 @@ class AppVariant {
                           : (isFrozenFood
                               ? 'Produk Frozen Food & Olahan Daging Berkualitas'
                               : 'Masuk ke sistem operasional eBisnis'))))));
+
+  static const subJudulLogin = isAbChicken
+      ? 'Satu alur untuk outlet, gudang pusat, produksi, pengiriman, dan keuangan'
+      : _subJudulLoginNonAbChicken;
 
   /// ── Identitas panel kiri layar Masuk (khusus Petra) ────────────────────
   /// Versi web eKantin Petra memakai kartu dua kolom: panel biru berisi

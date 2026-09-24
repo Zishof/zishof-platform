@@ -129,6 +129,8 @@ flutter:
     - assets/images/nahl/login-background.jpg
     - assets/images/inventory_sales/icon.png
     - assets/images/inventory_sales/login-background.png
+    - assets/images/abchicken/icon.png
+    - assets/images/abchicken/login-background.png
     - assets/images/apotik/icon.png
     - assets/images/apotik/login-background.png
     - assets/images/emedik/icon.png

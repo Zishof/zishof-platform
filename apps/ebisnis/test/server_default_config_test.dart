@@ -6,7 +6,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   test('server bawaan sesuai varian build', () {
-    if (AppVariant.isAlBahjah) {
+    if (AppVariant.isAbChicken) {
+      expect(AppSetting.baseUrlHost, 'abchiken.ebisnis.id');
+      expect(AppSetting.baseUrlContextPath, 'ebisnis');
+    } else if (AppVariant.isAlBahjah) {
       expect(AppSetting.baseUrlHost, 'ecampus.staialbahjah.ac.id');
       expect(AppSetting.baseUrlContextPath, 'albahjah');
     } else if (AppVariant.isNahl) {
@@ -42,7 +45,10 @@ void main() {
 
     await ServerConfig.instance.muat();
 
-    if (AppVariant.isAlBahjah) {
+    if (AppVariant.isAbChicken) {
+      expect(ServerConfig.instance.host, 'abchiken.ebisnis.id');
+      expect(ServerConfig.instance.contextPath, 'ebisnis');
+    } else if (AppVariant.isAlBahjah) {
       expect(ServerConfig.instance.host, 'dev.ecampus.id');
       expect(ServerConfig.instance.contextPath, 'ecampus');
     } else if (AppVariant.isNahl) {
@@ -63,7 +69,10 @@ void main() {
 
     await ServerConfig.instance.muat();
 
-    if (AppVariant.isAlBahjah) {
+    if (AppVariant.isAbChicken) {
+      expect(ServerConfig.instance.host, 'abchiken.ebisnis.id');
+      expect(ServerConfig.instance.contextPath, 'ebisnis');
+    } else if (AppVariant.isAlBahjah) {
       expect(ServerConfig.instance.host, 'ecampus.staialbahjah.ac.id');
       expect(ServerConfig.instance.contextPath, 'albahjah');
     } else if (AppVariant.isNahl) {

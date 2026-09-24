@@ -47,15 +47,17 @@ class AppSetting {
   /// https://ecampus.staialbahjah.ac.id/albahjah, eKantin Petra memakai
   /// https://kantinpcu.ecampus.id/petra, dan Sarimpi Jaya Frozen memakai
   /// https://sarimpijaya.ebisnis.id/ebisnis.
-  static const String baseUrlHost = AppVariant.isAlBahjah
-      ? 'ecampus.staialbahjah.ac.id'
-      : (AppVariant.isNahl
-          ? 'an-nahl.santri.info'
-          : (AppVariant.isPetra
-              ? 'kantinpcu.ecampus.id'
-              : (AppVariant.isFrozenFood
-                  ? 'sarimpijaya.ebisnis.id'
-                  : 'ebisnis.id')));
+  static const String baseUrlHost = AppVariant.isAbChicken
+      ? 'abchiken.ebisnis.id'
+      : (AppVariant.isAlBahjah
+          ? 'ecampus.staialbahjah.ac.id'
+          : (AppVariant.isNahl
+              ? 'an-nahl.santri.info'
+              : (AppVariant.isPetra
+                  ? 'kantinpcu.ecampus.id'
+                  : (AppVariant.isFrozenFood
+                      ? 'sarimpijaya.ebisnis.id'
+                      : 'ebisnis.id'))));
   static const String baseUrlContextPath = AppVariant.isAlBahjah
       ? 'albahjah'
       : (AppVariant.isNahl
@@ -68,8 +70,9 @@ class AppSetting {
   /// logo -- lihat juga aksen emas tambahan di `AppTheme._base` dan sidebar
   /// hijau di `AppColors`, keduanya HANYA aktif utk varian ini). Varian lain
   /// tetap biru spt sebelumnya.
-  static const AppThemeWarna temaBawaan =
-      AppVariant.isAlBahjah || AppVariant.isNahl
+  static const AppThemeWarna temaBawaan = AppVariant.isAbChicken
+      ? AppThemeWarna.merah
+      : AppVariant.isAlBahjah || AppVariant.isNahl
           ? AppThemeWarna.hijau
           : AppThemeWarna.biru;
 }

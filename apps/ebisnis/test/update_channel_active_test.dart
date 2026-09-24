@@ -9,6 +9,9 @@ void main() {
     } else if (AppVariant.kode == 'nahl') {
       expect(AppVariant.updateAssetKeyword, 'nahl');
       expect(AppVariant.updateTagPrefix, 'nahl-');
+    } else if (AppVariant.kode == 'abchicken') {
+      expect(AppVariant.updateAssetKeyword, 'abchicken');
+      expect(AppVariant.updateTagPrefix, 'abchicken-');
     } else if (AppVariant.isEBisnis) {
       expect(AppVariant.updateAssetKeyword, 'ebisnis');
       expect(AppVariant.updateTagPrefix, 'v');

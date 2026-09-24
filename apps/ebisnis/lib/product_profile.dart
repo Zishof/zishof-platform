@@ -5,6 +5,7 @@ import 'screens/kasir_screen.dart';
 import 'screens/inventory_sales/beranda_is_screen.dart';
 import 'screens/apotik/beranda_apotik_screen.dart';
 import 'screens/mitrainap/beranda_mitrainap_screen.dart';
+import 'screens/abchicken/operasi_abchicken_screen.dart';
 import 'sesi.dart';
 
 /// Grup fitur yang bisa diaktifkan per produk -- gerbang level VARIAN (bukan
@@ -84,6 +85,16 @@ class AppProductProfile {
           namaSidebar: 'Inventory & Sales',
           updateAssetKeyword: 'inventorysales',
           logoAsset: 'assets/images/inventory_sales/icon.png',
+          fiturGrup: const {FiturGrup.pos, FiturGrup.inventorySales},
+        );
+
+  const AppProductProfile.abChicken()
+      : this._(
+          kode: 'abchicken',
+          namaAplikasi: 'AB Chicken',
+          namaSidebar: 'AB Chicken Operations',
+          updateAssetKeyword: 'abchicken',
+          logoAsset: 'assets/images/abchicken/icon.png',
           fiturGrup: const {FiturGrup.pos, FiturGrup.inventorySales},
         );
 
@@ -168,6 +179,7 @@ class AppProductProfile {
     if (AppVariant.isInventorySales) {
       return const AppProductProfile.inventorySales();
     }
+    if (AppVariant.isAbChicken) return const AppProductProfile.abChicken();
     if (AppVariant.isApotik) return const AppProductProfile.apotik();
     if (AppVariant.isEmedik) return const AppProductProfile.emedik();
     if (AppVariant.isMitraInap) return const AppProductProfile.mitrainap();
@@ -182,6 +194,8 @@ class AppProductProfile {
   static AppProductProfile aktif = AppProductProfile.dariDartDefine();
 
   bool get isInventorySales => fiturGrup.contains(FiturGrup.inventorySales);
+
+  bool get isAbChicken => kode == 'abchicken';
 
   bool get isApotik => fiturGrup.contains(FiturGrup.apotik);
 
@@ -206,6 +220,7 @@ class AppProductProfile {
     if (kode == 'petra') return 'petra-';
     if (kode == 'frozenfood') return 'frozenfood-';
     if (kode == 'nahl') return 'nahl-';
+    if (kode == 'abchicken') return 'abchicken-';
     // eBisnis memakai kanal rilis utama `v*`. Prefix eksplisit diperlukan
     // supaya checker tidak membaca `releases/latest` yang dapat menunjuk rilis
     // Al-Bahjah/Nahl/Apotik terbaru dan menutupi pembaruan eBisnis.
@@ -220,6 +235,9 @@ class AppProductProfile {
   /// beranda per-aktor (Admin/Pemilik -> dasbor modul; Sales -> "Sesi Hari
   /// Ini") -- landing POS existing (KasirScreen) TIDAK berubah utk varian lama.
   Widget buatLayarAwal() {
+    if (isAbChicken) {
+      return const OperasiRantaiPasokScreen();
+    }
     if (isInventorySales) {
       return const BerandaInventorySalesScreen();
     }
