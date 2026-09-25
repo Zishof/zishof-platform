@@ -1205,12 +1205,18 @@ class CoreDb {
             detail.addAll(Map<String, dynamic>.from(jsonDecode(mentah) as Map));
           }
           const pemetaan = {
-            'harga_beli': 'hargaBeli', 'keterangan': 'keterangan',
-            'satuan_id': 'satuanId', 'satuan_pembelian_id': 'satuanPembelianId',
-            'bahan_baku': 'bahanBaku', 'harga_beli_manual': 'hargaBeliManual',
-            'rute': 'rute', 'perlu_qc': 'perluQc',
-            'pack_aktif': 'packAktif', 'satuan_pack_id': 'satuanPackId',
-            'harga_pack': 'hargaPack', 'kebijakan_retur_id': 'kebijakanReturId',
+            'harga_beli': 'hargaBeli',
+            'keterangan': 'keterangan',
+            'satuan_id': 'satuanId',
+            'satuan_pembelian_id': 'satuanPembelianId',
+            'bahan_baku': 'bahanBaku',
+            'harga_beli_manual': 'hargaBeliManual',
+            'rute': 'rute',
+            'perlu_qc': 'perluQc',
+            'pack_aktif': 'packAktif',
+            'satuan_pack_id': 'satuanPackId',
+            'harga_pack': 'hargaPack',
+            'kebijakan_retur_id': 'kebijakanReturId',
           };
           for (final e in pemetaan.entries) {
             if (payload.containsKey(e.key)) detail[e.value] = payload[e.key];
@@ -1340,14 +1346,32 @@ class CoreDb {
         argumen.add(jenis);
       }
     }
-    return database.query(
-      'produk_cache',
-      where: syarat.isEmpty ? null : syarat.join(' AND '),
-      whereArgs: argumen.isEmpty ? null : argumen,
-      orderBy: 'nama COLLATE NOCASE ASC, id ASC',
-      limit: limit,
-      offset: offset,
-    );
+    try {
+      return await database.query(
+        'produk_cache',
+        where: syarat.isEmpty ? null : syarat.join(' AND '),
+        whereArgs: argumen.isEmpty ? null : argumen,
+        orderBy: 'nama COLLATE NOCASE ASC, id ASC',
+        limit: limit,
+        offset: offset,
+      );
+    } catch (_) {
+      try {
+        return await database.query(
+          'produk_cache',
+          where: syarat.isEmpty ? null : syarat.join(' AND '),
+          whereArgs: argumen.isEmpty ? null : argumen,
+          orderBy: 'id ASC',
+          limit: limit,
+          offset: offset,
+        );
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('produkCacheMaster gagal kueri lokal: $e');
+        }
+        return const <Map<String, Object?>>[];
+      }
+    }
   }
 
   /// Jumlah pasangan filter [produkCacheMaster], dipisah dari pengambilan
@@ -1381,11 +1405,18 @@ class CoreDb {
         argumen.add(jenis);
       }
     }
-    final hasil = await database.rawQuery(
-      'SELECT COUNT(*) AS n FROM produk_cache${syarat.isEmpty ? '' : ' WHERE ${syarat.join(' AND ')}'}',
-      argumen,
-    );
-    return (hasil.first['n'] as num?)?.toInt() ?? 0;
+    try {
+      final hasil = await database.rawQuery(
+        'SELECT COUNT(*) AS n FROM produk_cache${syarat.isEmpty ? '' : ' WHERE ${syarat.join(' AND ')}'}',
+        argumen.isEmpty ? null : argumen,
+      );
+      return (hasil.first['n'] as num?)?.toInt() ?? 0;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('jumlahProdukCacheMaster gagal kueri lokal: $e');
+      }
+      return 0;
+    }
   }
 
   /// Resolusi id produk EKSTRA (dari [Produk.ekstraPilihan] produk dasar)
@@ -1985,11 +2016,15 @@ class CoreDb {
   }
 
   Future<String?> ambilCacheReferensi(String kunci) async {
-    final database = await db;
-    final hasil = await database
-        .query('cache_referensi', where: 'kunci = ?', whereArgs: [kunci]);
-    if (hasil.isEmpty) return null;
-    return hasil.first['nilai_json'] as String?;
+    try {
+      final database = await db;
+      final hasil = await database
+          .query('cache_referensi', where: 'kunci = ?', whereArgs: [kunci]);
+      if (hasil.isEmpty) return null;
+      return hasil.first['nilai_json'] as String?;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Membaca snapshot daftar generik memakai LIMIT/OFFSET SQLite. Snapshot
@@ -2001,62 +2036,71 @@ class CoreDb {
     required int offset,
   }) async {
     if (limit <= 0 || offset < 0) return null;
-    final database = await db;
-    final hitungIndeks = await database.rawQuery(
-        'SELECT COUNT(*) AS jumlah FROM cache_referensi_baris WHERE kunci = ?',
-        [kunci]);
-    final jumlah = hitungIndeks.isEmpty
-        ? 0
-        : (hitungIndeks.first['jumlah'] as num).toInt();
-    if (jumlah == 0) {
-      final nilai = await ambilCacheReferensi(kunci);
-      if (nilai == null) return null;
-      final daftar = await _uraiDaftarReferensi(nilai);
-      if (daftar == null) return null;
-      await database
-          .transaction((txn) => _indeksDaftarReferensi(txn, kunci, daftar));
-    }
-    final hitungAktif = await database.rawQuery('''
-          SELECT COUNT(*) AS jumlah FROM cache_referensi_baris
-          WHERE kunci = ? AND dihapus = 0
-        ''', [kunci]);
-    final total =
-        hitungAktif.isEmpty ? 0 : (hitungAktif.first['jumlah'] as num).toInt();
-    final rows = await database.query(
-      'cache_referensi_baris',
-      columns: ['nilai_json'],
-      where: 'kunci = ? AND dihapus = 0',
-      whereArgs: [kunci],
-      orderBy: 'urutan ASC',
-      limit: limit,
-      offset: offset,
-    );
-    final data = <dynamic>[];
-    for (final row in rows) {
-      try {
-        data.add(jsonDecode(row['nilai_json'] as String));
-      } catch (_) {
-        // Satu baris rusak tidak boleh menggagalkan seluruh halaman.
+    try {
+      final database = await db;
+      final hitungIndeks = await database.rawQuery(
+          'SELECT COUNT(*) AS jumlah FROM cache_referensi_baris WHERE kunci = ?',
+          [kunci]);
+      final jumlah = hitungIndeks.isEmpty
+          ? 0
+          : (hitungIndeks.first['jumlah'] as num).toInt();
+      if (jumlah == 0) {
+        final nilai = await ambilCacheReferensi(kunci);
+        if (nilai == null) return null;
+        final daftar = await _uraiDaftarReferensi(nilai);
+        if (daftar == null) return null;
+        await database
+            .transaction((txn) => _indeksDaftarReferensi(txn, kunci, daftar));
       }
+      final hitungAktif = await database.rawQuery('''
+            SELECT COUNT(*) AS jumlah FROM cache_referensi_baris
+            WHERE kunci = ? AND dihapus = 0
+          ''', [kunci]);
+      final total = hitungAktif.isEmpty
+          ? 0
+          : (hitungAktif.first['jumlah'] as num).toInt();
+      final rows = await database.query(
+        'cache_referensi_baris',
+        columns: ['nilai_json'],
+        where: 'kunci = ? AND dihapus = 0',
+        whereArgs: [kunci],
+        orderBy: 'urutan ASC',
+        limit: limit,
+        offset: offset,
+      );
+      final data = <dynamic>[];
+      for (final row in rows) {
+        try {
+          data.add(jsonDecode(row['nilai_json'] as String));
+        } catch (_) {
+          // Satu baris rusak tidak boleh menggagalkan seluruh halaman.
+        }
+      }
+      return HalamanCacheReferensi(data, total);
+    } catch (_) {
+      return null;
     }
-    return HalamanCacheReferensi(data, total);
   }
 
   /// GENERIK utk semua modul CRUD: true bila cache daftar [kunci] sudah ada
   /// dan tidak kosong -- pemeriksaan murah (tanpa parse JSON penuh) sebagai
   /// pemicu "perlu sinkron awal ber-progress" saat cache lokal masih kosong.
   Future<bool> adaCacheReferensiList(String kunci) async {
-    final nilai = await ambilCacheReferensi(kunci);
-    if (nilai == null) return false;
-    final ringkas = nilai.trim();
-    return ringkas.length > 2 && ringkas != '[]';
+    try {
+      final nilai = await ambilCacheReferensi(kunci);
+      if (nilai == null) return false;
+      final ringkas = nilai.trim();
+      return ringkas.length > 2 && ringkas != '[]';
+    } catch (_) {
+      return false;
+    }
   }
 
   /// GENERIK: jumlah baris pada cache daftar [kunci] (0 bila belum ada/rusak).
   Future<int> jumlahCacheReferensiList(String kunci) async {
-    final nilai = await ambilCacheReferensi(kunci);
-    if (nilai == null) return 0;
     try {
+      final nilai = await ambilCacheReferensi(kunci);
+      if (nilai == null) return 0;
       final data = jsonDecode(nilai);
       return data is List ? data.length : 0;
     } catch (_) {

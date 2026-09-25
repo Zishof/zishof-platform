@@ -291,14 +291,17 @@ class DynamicReportDesigner {
       sheetName: 'Laporan',
       headers: columns.map((c) => c.label).toList(),
       rows: [
-        ...rows
-            .map((row) => columns.map((c) => '${row[c.key] ?? ''}').toList()),
+        ...rows.map((row) => columns.map((c) {
+              final v = row[c.key];
+              if (c.numeric && v is num) return v;
+              return '${v ?? ''}';
+            }).toList()),
         if (model.showTotals)
           columns
               .map((c) => c == columns.first
                   ? 'TOTAL'
                   : c.numeric
-                      ? '${total[c.key] ?? 0}'
+                      ? (total[c.key] ?? 0)
                       : '')
               .toList(),
       ],

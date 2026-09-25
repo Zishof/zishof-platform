@@ -4,7 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show compute;
+import 'package:flutter/foundation.dart' show compute, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -206,46 +206,53 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
       // Jangan mengurai `master:produk_list` di thread UI: setelah sinkron
       // penuh snapshot itu dapat berisi 50 ribu baris. SQLite mengerjakan
       // filter, hitung, dan pagination; layar hanya membentuk 15 model.
-      final hasilLokal = await Future.wait<Object>([
-        CoreDb.instance.produkCacheMaster(
+      // Dijalankan secara sekuensial (bukan Future.wait paralel) untuk
+      // mencegah tabrakan SQLite statement di Windows FFI driver (code 21 MISUSE).
+      try {
+        final barisLokal = await CoreDb.instance.produkCacheMaster(
           keyword: kataKunci,
           kategoriId: kategoriId,
           jenisItem: jenisItem,
           limit: _itemPerHalaman,
           offset: halaman * _itemPerHalaman,
-        ),
-        CoreDb.instance.jumlahProdukCacheMaster(
+        );
+        final totalLokal = await CoreDb.instance.jumlahProdukCacheMaster(
           keyword: kataKunci,
           kategoriId: kategoriId,
           jenisItem: jenisItem,
-        ),
-        CoreDb.instance.outboxMasterPending(),
-        CoreDb.instance.outboxMasterGagal(batas: 500),
-      ]);
-      if (!mounted || generasi != _generasiMuat) return;
-      final barisLokal = hasilLokal[0] as List<Map<String, Object?>>;
-      final produkLokal = barisLokal
-          .map(Produk.cacheRowKeJson)
-          .map(Produk.fromJson)
-          .toList(growable: false);
-      final totalLokal = hasilLokal[1] as int;
-      idProdukDilindungi = <int>{
-        for (final baris in <Map<String, Object?>>[
-          ...(hasilLokal[2] as List<Map<String, Object?>>),
-          ...(hasilLokal[3] as List<Map<String, Object?>>),
-        ])
-          if ('${baris['kunci'] ?? ''}'.startsWith('produk:'))
-            if (int.tryParse('${baris['kunci']}'.substring('produk:'.length)) !=
-                null)
-              int.parse('${baris['kunci']}'.substring('produk:'.length)),
-      };
-      lokalTersedia = produkLokal.isNotEmpty || totalLokal > 0;
-      if (lokalTersedia) {
-        setStateIfMounted(() {
-          _semuaProduk = produkLokal;
-          _totalProduk = totalLokal;
-          _memuat = false;
-        });
+        );
+        final pendingOutbox = await CoreDb.instance.outboxMasterPending();
+        final gagalOutbox = await CoreDb.instance.outboxMasterGagal(batas: 500);
+
+        if (!mounted || generasi != _generasiMuat) return;
+        final produkLokal = barisLokal
+            .map(Produk.cacheRowKeJson)
+            .map(Produk.fromJson)
+            .toList(growable: false);
+        idProdukDilindungi = <int>{
+          for (final baris in <Map<String, Object?>>[
+            ...pendingOutbox,
+            ...gagalOutbox,
+          ])
+            if ('${baris['kunci'] ?? ''}'.startsWith('produk:'))
+              if (int.tryParse(
+                      '${baris['kunci']}'.substring('produk:'.length)) !=
+                  null)
+                int.parse('${baris['kunci']}'.substring('produk:'.length)),
+        };
+        lokalTersedia = produkLokal.isNotEmpty || totalLokal > 0;
+        if (lokalTersedia) {
+          setStateIfMounted(() {
+            _semuaProduk = produkLokal;
+            _totalProduk = totalLokal;
+            _memuat = false;
+          });
+        }
+      } catch (eLokal) {
+        if (kDebugMode) {
+          debugPrint(
+              'Pemuatan cache lokal produk dilewati karena galat: $eLokal');
+        }
       }
 
       // Segarkan SATU halaman dari server. Kegagalan server tidak membuang

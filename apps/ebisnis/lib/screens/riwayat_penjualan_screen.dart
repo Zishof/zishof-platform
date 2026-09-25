@@ -2544,20 +2544,47 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
               'cashback': i['cashback'] ?? 0,
             })
         .toList();
+    final totalBiaya = (detail['totalBiaya'] as num?)?.toDouble() ??
+        (row['totalBiaya'] as num?)?.toDouble() ??
+        0;
+    final pajak = (detail['pajak'] as num?)?.toDouble() ??
+        (row['pajak'] as num?)?.toDouble() ??
+        0;
+
+    final subtotalItem = itemStruk.fold<double>(
+        0,
+        (sum, i) =>
+            sum +
+            ((i['harga'] as num).toDouble() * (i['qty'] as num).toDouble() -
+                ((i['diskon'] as num?) ?? 0).toDouble()));
+    final diskonFaktur = (detail['diskonFaktur'] as num?)?.toDouble() ??
+        (row['diskonFaktur'] as num?)?.toDouble() ??
+        ((subtotalItem + pajak - totalBiaya) > 0.01
+            ? (subtotalItem + pajak - totalBiaya)
+            : 0.0);
+
+    final saldo = (detail['saldo'] as num?)?.toDouble() ??
+        (detail['sisaSaldo'] as num?)?.toDouble() ??
+        (row['saldo'] as num?)?.toDouble();
+    final uangDiterima = (detail['bayarTunai'] as num?)?.toDouble() ??
+        (row['bayarTunai'] as num?)?.toDouble();
+    final kembalian = (detail['kembalian'] as num?)?.toDouble() ??
+        (row['kembalian'] as num?)?.toDouble();
+
     await Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => StrukScreen(
         kode: '${detail['kode'] ?? row['nomorNota'] ?? ''}',
         waktu: _formatWaktu(row['waktu']),
         item: itemStruk,
-        total: (detail['totalBiaya'] as num?)?.toDouble() ??
-            (row['totalBiaya'] as num?)?.toDouble() ??
-            0,
+        total: totalBiaya,
         metode: '${row['metode'] ?? ''}',
         pembayaran: StrukScreen.pembayaranDariSumber(detail, row),
-        pajak: (row['pajak'] as num?)?.toDouble() ?? 0,
+        pajak: pajak,
+        diskonFaktur: diskonFaktur,
         pelanggan: '${detail['pembeli'] ?? row['pembeli'] ?? ''}',
-        saldo: StrukScreen.saldoDariSumber(detail) ??
-            StrukScreen.saldoDariSumber(row),
+        uangDiterima: uangDiterima,
+        kembalian: kembalian,
+        saldo: saldo,
         modeCetakUlang: true,
         nomorAntrian: '${detail['nomorAntrian'] ?? ''}',
         catatanPesanan: '${detail['keterangan'] ?? ''}',

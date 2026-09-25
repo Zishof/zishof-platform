@@ -2306,12 +2306,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                         const SizedBox(width: 12),
                         SizedBox(
                           width: 360,
-                          child: Align(
-                            alignment: Alignment.topCenter,
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: _panelCheckout(samping: true),
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight: constraints.maxHeight,
                             ),
+                            child: _panelCheckout(samping: true),
                           ),
                         ),
                       ],

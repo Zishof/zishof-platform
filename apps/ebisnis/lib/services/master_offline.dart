@@ -682,9 +682,9 @@ class MasterOffline {
   }) async {
     pastikanTimer();
     List? lokal;
-    final tersimpan = await CoreDb.instance.ambilCacheReferensi(cacheKey);
-    if (tersimpan != null) {
-      try {
+    try {
+      final tersimpan = await CoreDb.instance.ambilCacheReferensi(cacheKey);
+      if (tersimpan != null) {
         final paginasi = paginasiLokalUntukTest(body);
         if (paginasi != null) {
           final halaman = await CoreDb.instance.ambilCacheReferensiHalaman(
@@ -706,9 +706,10 @@ class MasterOffline {
         if (paginasi == null) {
           onData(_hasilDaftar(lokal, dariServer: false, fieldData: fieldData));
         }
-      } catch (_) {
-        lokal = null; // cache rusak -- lanjut jalur server biasa.
       }
+    } catch (_) {
+      lokal =
+          null; // cache rusak atau sqlite error -- lanjut jalur server biasa.
     }
     try {
       final hasil = await ApiClient.instance.aksi(aksi, body);

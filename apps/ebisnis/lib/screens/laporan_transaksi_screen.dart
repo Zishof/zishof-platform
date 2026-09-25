@@ -1647,8 +1647,8 @@ class _TabSesiState extends State<_TabSesi> with JejakGalat {
         'waktuTutup': _formatWaktu(row['waktuTutup']),
         'modalAwal': row['modalAwal'] ?? 0,
         'penjualanTunai': row['totalTunai'] ?? 0,
-        'kasSeharusnya':
-            ((row['modalAwal'] as num?) ?? 0) + ((row['totalTunai'] as num?) ?? 0),
+        'kasSeharusnya': ((row['modalAwal'] as num?) ?? 0) +
+            ((row['totalTunai'] as num?) ?? 0),
         'jumlahKasTunai': row['saldoAkhir'] ?? 0,
         'selisih': row['selisih'] ?? 0,
         'returPenjualan': row['returPenjualan'] ?? 0,
@@ -3759,10 +3759,10 @@ Future<void> _lihatRincianPenerimaan(
                           final row = data[i];
                           final ekspor =
                               barisEksporRincianPenerimaan(ringkasan, row);
-                          final nominalMetode = (ekspor['penerimaanMetode']
-                                  as num?) ??
-                              (row['totalBiaya'] as num?) ??
-                              0;
+                          final nominalMetode =
+                              (ekspor['penerimaanMetode'] as num?) ??
+                                  (row['totalBiaya'] as num?) ??
+                                  0;
                           final totalNota = (ekspor['totalNota'] as num?) ??
                               (row['totalBiaya'] as num?) ??
                               0;
@@ -3856,6 +3856,19 @@ String kodeKanonisRekapProduk(Object? kodeMentah, Object? namaMentah) {
 }
 
 @visibleForTesting
+double hitungTotalBarisRincian(Map<String, dynamic> row) {
+  final qty = (row['qty'] as num?)?.toDouble() ?? 1.0;
+  final harga = (row['hargaSatuan'] as num?)?.toDouble() ?? 0.0;
+  final diskon = (row['diskon'] as num?)?.toDouble() ?? 0.0;
+  final totalDb = (row['total'] as num?)?.toDouble() ?? 0.0;
+  // Anomali DB historis/koneksi lama: baris tersimpan dengan total = harga satuan padahal qty > 1
+  if (qty > 1 && (totalDb - harga).abs() < 0.01) {
+    return (qty * harga) - diskon;
+  }
+  return totalDb > 0 ? totalDb : ((qty * harga) - diskon);
+}
+
+@visibleForTesting
 List<Map<String, dynamic>> rekapProdukDariRincian(
     List<Map<String, dynamic>> baris) {
   final peta = <String, Map<String, dynamic>>{};
@@ -3894,7 +3907,8 @@ List<Map<String, dynamic>> rekapProdukDariRincian(
     if ((row['kategori'] as String).isEmpty && kat.isNotEmpty) {
       row['kategori'] = kat;
     }
-    row['qty'] = (row['qty'] as double) + ((b['qty'] as num?)?.toDouble() ?? 0);
+    final qtyBaris = (b['qty'] as num?)?.toDouble() ?? 0;
+    row['qty'] = (row['qty'] as double) + qtyBaris;
     // Diskon IKUT direkap, bukan hanya diserap ke dalam total.
     //
     // Laporan An Nahl 17-09-2026: "Roti bakar 7.000 x 4 = 28.000 tapi jadi
@@ -3904,12 +3918,11 @@ List<Map<String, dynamic>> rekapProdukDariRincian(
     // apa pun yang tampil di layar. Bruto dan Diskon sekarang ikut, supaya
     // aritmatikanya utuh: Bruto - Diskon = Total.
     final diskonBaris = (b['diskon'] as num?)?.toDouble() ?? 0;
-    final totalBaris = (b['total'] as num?)?.toDouble() ?? 0;
+    final totalBaris = hitungTotalBarisRincian(b);
     row['diskonRekap'] = (row['diskonRekap'] as double) + diskonBaris;
     row['brutoRekap'] =
         (row['brutoRekap'] as double) + totalBaris + diskonBaris;
-    row['total'] =
-        (row['total'] as double) + ((b['total'] as num?)?.toDouble() ?? 0);
+    row['total'] = (row['total'] as double) + totalBaris;
     nota
         .putIfAbsent(kunci, () => <String>{})
         .add('${b['idTransaksi'] ?? b['nomorNota'] ?? ''}');
@@ -3959,8 +3972,14 @@ Future<HasilBarisRincian> _ambilSemuaBarisRincianProduk(
       'page': halaman,
       'pageSize': ukuranHalaman,
     });
-    hasil.addAll(
-        ((respons['data'] as List?) ?? const []).cast<Map<String, dynamic>>());
+    final batch =
+        ((respons['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+    for (final row in batch) {
+      hasil.add({
+        ...row,
+        'total': hitungTotalBarisRincian(row),
+      });
+    }
     final totalTransaksi = (respons['total'] as num?)?.toInt() ?? 0;
     totalHalaman = totalHalamanRincian(totalTransaksi, ukuranHalaman);
     halaman++;
@@ -4033,8 +4052,15 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
         'page': _halaman,
         'pageSize': _pageSize,
       });
+      final listRaw =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       setStateIfMounted(() {
-        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _data = listRaw
+            .map((row) => {
+                  ...row,
+                  'total': hitungTotalBarisRincian(row),
+                })
+            .toList();
         _totalTransaksi = (hasil['total'] as num?)?.toInt() ?? 0;
       });
     } catch (e) {
@@ -4133,6 +4159,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
       rows: rows
           .map((row) => {
                 ...row,
+                'total': hitungTotalBarisRincian(row),
                 'waktuTampil': _formatWaktu(row['waktu']),
               })
           .toList(),
