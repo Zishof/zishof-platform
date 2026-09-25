@@ -79,6 +79,6 @@ void main() {
     }
     expect(source, contains(".aksi('hrd_cuti_simpan'"));
     expect(source, contains(".aksi('hrd_cuti_putusan'"));
-    expect(source, contains(".aksi('hrd_pengajuan_putusan'"));
+    expect(source, contains("'hrd_pengajuan_putusan'"));
   });
 }

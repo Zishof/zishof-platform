@@ -1409,14 +1409,32 @@ class _PayrollTabState extends State<_PayrollTab> {
     if (ok == true) await _muat();
   }
 
-  Future<void> _putusanPengajuan(Map<String, dynamic> row) async {
+  Future<void> _putusanPengajuan(Map<String, dynamic> row, bool setujui) async {
+    final lanjut = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+              title: Text(setujui ? 'Setujui pengajuan' : 'Tolak pengajuan'),
+              content: Text(setujui
+                  ? 'Persetujuan akan membentuk ${row['jumlahAngsur'] ?? 1} angsuran payroll dan mengunci pengajuan. Nilai serta jadwal tidak dapat diubah setelah ini.'
+                  : 'Pengajuan akan ditolak sebelum masuk payroll. Pegawai perlu membuat pengajuan baru bila ada koreksi.'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Batal')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: Text(setujui ? 'Setujui & Kunci' : 'Tolak'))
+              ],
+            ));
+    if (lanjut != true) return;
     try {
-      await ApiClient.instance
-          .aksi('hrd_pengajuan_putusan', {'id': row['id'], 'setujui': true});
+      final hasil = await ApiClient.instance
+          .aksi('hrd_pengajuan_putusan', {'id': row['id'], 'setujui': setujui});
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-                'Pengajuan disetujui untuk diproses payroll; belum dicairkan.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(setujui
+                ? '${hasil['angsuranDibuat'] ?? 0} angsuran payroll dibuat dan pengajuan dikunci.'
+                : 'Pengajuan ditolak sebelum masuk payroll.')));
       }
       await _muat();
     } catch (e) {
@@ -1500,16 +1518,22 @@ class _PayrollTabState extends State<_PayrollTab> {
                       return Card(
                           child: ListTile(
                               leading: Icon(
-                                  p['status'] == 'DISETUJUI'
+                                  p['status'] == 'DISETUJUI_TERKUNCI'
                                       ? Icons.check_circle_outline
-                                      : Icons.hourglass_top,
-                                  color: p['status'] == 'DISETUJUI'
+                                      : p['status'] == 'DITOLAK'
+                                          ? Icons.cancel_outlined
+                                          : Icons.hourglass_top,
+                                  color: p['status'] == 'DISETUJUI_TERKUNCI'
                                       ? Colors.green
-                                      : Colors.orange),
+                                      : p['status'] == 'DITOLAK'
+                                          ? Colors.red
+                                          : Colors.orange),
                               title: Text(
                                   '${p['jenis'] ?? '-'} · ${p['pegawai'] ?? '-'}'),
                               subtitle: Text(
-                                  '${p['tanggal'] ?? '-'} · ${p['status'] ?? 'MENUNGGU'}\n${p['keterangan'] ?? ''}'),
+                                  '${p['tanggal'] ?? '-'} · ${p['status'] ?? 'MENUNGGU'}\n'
+                                  '${p['keterangan'] ?? ''}\n'
+                                  'Angsuran: ${p['angsuranPayroll'] ?? 0} · Masuk slip: ${p['masukSlip'] ?? 0} · Diposting: ${p['diposting'] ?? 0}'),
                               isThreeLine: true,
                               trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -1517,12 +1541,17 @@ class _PayrollTabState extends State<_PayrollTab> {
                                     Text(_rupiah
                                         .format((p['nilai'] as num?) ?? 0)),
                                     if (_bolehKelola &&
-                                        p['status'] != 'DISETUJUI') ...[
+                                        p['status'] == 'MENUNGGU') ...[
                                       const SizedBox(width: 8),
                                       IconButton(
-                                          tooltip:
-                                              'Setujui untuk proses payroll',
-                                          onPressed: () => _putusanPengajuan(p),
+                                          tooltip: 'Tolak sebelum payroll',
+                                          onPressed: () =>
+                                              _putusanPengajuan(p, false),
+                                          icon: const Icon(Icons.close)),
+                                      IconButton(
+                                          tooltip: 'Setujui dan kunci payroll',
+                                          onPressed: () =>
+                                              _putusanPengajuan(p, true),
                                           icon: const Icon(
                                               Icons.approval_outlined))
                                     ]

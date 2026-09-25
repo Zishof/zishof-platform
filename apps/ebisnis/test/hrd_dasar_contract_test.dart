@@ -31,6 +31,11 @@ void main() {
     expect(shell, contains("MenuEBisnis.hrdDasar: 'hrd_dasar'"));
     expect(shell, contains("_GrupMenuShell('SDM'"));
     expect(layar, contains('Ajukan Lembur / Kasbon'));
+    expect(layar, contains('Setujui & Kunci'));
+    expect(layar, contains('Angsuran:'));
+    expect(layar, contains("'angsuranPayroll'"));
+    expect(layar, contains("'masukSlip'"));
+    expect(layar, contains("'diposting'"));
     expect(layar, contains('Kedisiplinan'));
     expect(layar, contains('Fingerprint:'));
     expect(layar, contains('Master HRD'));
