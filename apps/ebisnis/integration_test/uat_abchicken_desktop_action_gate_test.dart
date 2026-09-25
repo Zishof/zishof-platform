@@ -22,6 +22,7 @@ void main() {
     const password = String.fromEnvironment('POS_TEST_PASSWORD');
     const host = String.fromEnvironment('POS_TEST_HOST');
     const contextPath = String.fromEnvironment('POS_TEST_CONTEXT');
+    const https = bool.fromEnvironment('POS_TEST_HTTPS', defaultValue: true);
     expect(username, isNotEmpty);
     expect(password, isNotEmpty);
     expect(host, isNotEmpty);
@@ -34,13 +35,16 @@ void main() {
     addTearDown(() => CoreDb.instance.tutup());
 
     await ServerConfig.instance
-        .simpan(host: host, contextPath: contextPath, https: true);
-    final login = await ApiClient.instance.aksi('login', {
-      'username': username,
-      'password': password,
-      'labelPerangkat': 'UAT-AB-Chicken-Aksi-Desktop',
-    });
-    await ApiClient.instance.simpanToken(login['token'] as String);
+        .simpan(host: host, contextPath: contextPath, https: https);
+    await ApiClient.instance.muatTokenTersimpan();
+    if (!ApiClient.instance.sudahLogin) {
+      final login = await _aksiBacaDenganRetry('login', {
+        'username': username,
+        'password': password,
+        'labelPerangkat': 'UAT-AB-Chicken-Aksi-Desktop',
+      });
+      await ApiClient.instance.simpanToken(login['token'] as String);
+    }
 
     final sebelum = await _ringkasan();
     final jurnalSebelum = (sebelum['jurnalTerposting'] as num).toInt();
@@ -128,8 +132,8 @@ void main() {
     expect(jurnalSesudah, jurnalSebelum + 6,
         reason:
             'BAST, tagihan, pembayaran, produksi, pengiriman, dan POS harus menambah enam jurnal.');
-    final integritas = await ApiClient.instance
-        .aksi('si_restaurant_integrity', const <String, dynamic>{});
+    final integritas = await _aksiBacaDenganRetry(
+        'si_restaurant_integrity', const <String, dynamic>{});
     final gagal = (integritas['checks'] as List? ?? const [])
         .where((e) => (e as Map)['lulus'] != true)
         .toList();
@@ -150,22 +154,21 @@ void main() {
 }
 
 Future<Map<String, dynamic>> _ringkasan() async {
-  final hasil = await ApiClient.instance
-      .aksi('si_restaurant_summary', const <String, dynamic>{});
+  final hasil = await _aksiBacaDenganRetry(
+      'si_restaurant_summary', const <String, dynamic>{});
   return Map<String, dynamic>.from(hasil['data'] as Map);
 }
 
-Future<Map<String, dynamic>> _barisPertama(String proses, String status) async {
-  final hasil = await ApiClient.instance.aksi('si_restaurant_${proses}_list', {
+Future<Map<String, dynamic>?> _cariBarisPertama(
+    String proses, String status) async {
+  final hasil = await _aksiBacaDenganRetry('si_restaurant_${proses}_list', {
     'status': status,
     'posting': 'BELUM',
     'halaman': 1,
     'batas': 1,
   });
   final data = hasil['data'] as List? ?? const [];
-  expect(data, isNotEmpty,
-      reason:
-          'Tidak ada dokumen $proses berstatus $status yang belum diposting.');
+  if (data.isEmpty) return null;
   return Map<String, dynamic>.from(data.first as Map);
 }
 
@@ -178,16 +181,27 @@ Future<void> _jalankanStatus(
   bool posting = false,
   String? statusSetelahPosting,
 }) async {
-  final row = await _barisPertama(proses, status.first);
-  final nomor = '${row['nomor']}';
+  Map<String, dynamic>? row;
+  var indeksAwal = 0;
+  for (; indeksAwal < status.length - 1; indeksAwal++) {
+    row = await _cariBarisPertama(proses, status[indeksAwal]);
+    if (row != null) break;
+  }
+  expect(row, isNotNull,
+      reason:
+          'Tidak ada dokumen $proses yang dapat melanjutkan alur ${status.join(' → ')}.');
+  final nomor = '${row!['nomor']}';
   await _bukaNomor(tester, proses, nomor);
   await _tunggu(tester, () => find.text(nomor).evaluate().isNotEmpty,
       alasan: '$nomor tidak muncul pada pencarian Desktop.');
-  await _potret(tester, '$urutan-$proses-${status.first.toLowerCase()}');
+  await _potret(
+      tester, '$urutan-$proses-${status[indeksAwal].toLowerCase()}');
 
-  for (var i = 1; i < status.length; i++) {
+  for (var i = indeksAwal + 1; i < status.length; i++) {
     final tujuan = status[i];
     await _ubahStatusBaris(tester, nomor, tujuan);
+    await _tungguStatusServer(proses, nomor, tujuan);
+    await _bukaNomor(tester, proses, nomor);
     await _tunggu(tester, () => _barisBerstatus(nomor, tujuan),
         alasan: '$nomor tidak terlihat berstatus $tujuan di Desktop.');
     if (tujuan == 'APPROVED' ||
@@ -204,28 +218,79 @@ Future<void> _jalankanStatus(
   if (posting) {
     jurnalId = await _postingBaris(tester, nomor, urutan, proses);
     akhir = statusSetelahPosting!;
+    await _tungguStatusServer(proses, nomor, akhir);
+    await _bukaNomor(tester, proses, nomor);
     await _tunggu(tester, () => _barisBerstatus(nomor, akhir),
         alasan: '$nomor tidak terlihat sebagai $akhir setelah posting.');
     await _potret(tester, '$urutan-$proses-posted');
   }
 
   hasil.writeln(
-      '$urutan,$proses,$nomor,${status.first},$akhir,$posting,$jurnalId,LULUS');
+      '$urutan,$proses,$nomor,${status[indeksAwal]},$akhir,$posting,$jurnalId,LULUS');
 }
 
 Future<void> _postingPenjualan(WidgetTester tester, StringBuffer hasil) async {
   const proses = 'pos_sale';
-  final row = await _barisPertama(proses, 'DRAF');
+  final daftar = await _aksiBacaDenganRetry(
+      'si_restaurant_pos_sale_list', const <String, dynamic>{
+    'status': 'DRAF',
+    'posting': 'BELUM',
+    'cari': 'UAT-AB-POS',
+    'halaman': 1,
+    'batas': 1,
+  });
+  final data = daftar['data'] as List? ?? const [];
+  expect(data, isNotEmpty,
+      reason: 'Tidak ada penjualan outlet AB Chicken yang siap diposting.');
+  final row = Map<String, dynamic>.from(data.first as Map);
   final nomor = '${row['nomor']}';
   await _bukaNomor(tester, proses, nomor);
   await _tunggu(tester, () => find.text(nomor).evaluate().isNotEmpty,
       alasan: '$nomor tidak muncul pada daftar POS DRAF.');
   await _potret(tester, '10-pos_sale-draf');
   final jurnalId = await _postingBaris(tester, nomor, '10', proses);
+  await _tungguStatusServer(proses, nomor, 'TERPOSTING');
+  await _bukaNomor(tester, proses, nomor);
   await _tunggu(tester, () => _barisBerstatus(nomor, 'TERPOSTING'),
       alasan: '$nomor tidak terlihat TERPOSTING setelah posting POS.');
   await _potret(tester, '10-pos_sale-posted');
   hasil.writeln('10,$proses,$nomor,DRAF,TERPOSTING,true,$jurnalId,LULUS');
+}
+
+Future<void> _tungguStatusServer(
+    String proses, String nomor, String status) async {
+  final batas = DateTime.now().add(const Duration(seconds: 90));
+  while (DateTime.now().isBefore(batas)) {
+    final hasil = await _aksiBacaDenganRetry(
+        'si_restaurant_${proses}_list', <String, dynamic>{
+      'cari': nomor,
+      'status': status,
+      'halaman': 1,
+      'batas': 5,
+    });
+    final cocok = (hasil['data'] as List? ?? const []).any((raw) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      return '${row['nomor']}' == nomor && '${row['status']}' == status;
+    });
+    if (cocok) return;
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+  }
+  fail('$nomor tidak berstatus $status pada server setelah posting.');
+}
+
+Future<Map<String, dynamic>> _aksiBacaDenganRetry(
+    String aksi, Map<String, dynamic> body) async {
+  Object? galatTerakhir;
+  for (var percobaan = 1; percobaan <= 5; percobaan++) {
+    try {
+      return await ApiClient.instance.aksi(aksi, body);
+    } on ApiException catch (e) {
+      galatTerakhir = e;
+      if (percobaan == 5) rethrow;
+      await Future<void>.delayed(Duration(seconds: percobaan));
+    }
+  }
+  throw StateError('Permintaan $aksi gagal: $galatTerakhir');
 }
 
 Future<void> _bukaNomor(

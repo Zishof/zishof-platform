@@ -69,6 +69,7 @@ void main() {
     const password = String.fromEnvironment('POS_TEST_PASSWORD');
     const host = String.fromEnvironment('POS_TEST_HOST');
     const contextPath = String.fromEnvironment('POS_TEST_CONTEXT');
+    const https = bool.fromEnvironment('POS_TEST_HTTPS', defaultValue: true);
     expect(username, isNotEmpty);
     expect(password, isNotEmpty);
     expect(host, isNotEmpty);
@@ -81,13 +82,16 @@ void main() {
     addTearDown(() => CoreDb.instance.tutup());
 
     await ServerConfig.instance
-        .simpan(host: host, contextPath: contextPath, https: true);
-    final login = await ApiClient.instance.aksi('login', {
-      'username': username,
-      'password': password,
-      'labelPerangkat': 'UAT-AB-Chicken-Laporan-Desktop',
-    });
-    await ApiClient.instance.simpanToken(login['token'] as String);
+        .simpan(host: host, contextPath: contextPath, https: https);
+    await ApiClient.instance.muatTokenTersimpan();
+    if (!ApiClient.instance.sudahLogin) {
+      final login = await ApiClient.instance.aksi('login', {
+        'username': username,
+        'password': password,
+        'labelPerangkat': 'UAT-AB-Chicken-Laporan-Desktop',
+      });
+      await ApiClient.instance.simpanToken(login['token'] as String);
+    }
 
     final hasil = StringBuffer('urutan,id,judul,baris,hasil\n');
     for (var i = 0; i < _laporan.length; i++) {
@@ -97,7 +101,6 @@ void main() {
         'r': laporan['id'],
         'tglMulai': '2026-09-01',
         'tglSampai': '2026-09-30',
-        'satkerId': '0',
       });
       final jumlah = (langsung['baris'] as List? ?? const []).length;
       expect(jumlah, greaterThan(0),
@@ -127,10 +130,7 @@ Future<void> _bukaLaporan(
         'ket': laporan['ket'],
         'satker': true,
       },
-      satuanKerja: const [
-        {'id': 0, 'kode': 'TEN-2026-000001', 'nama': 'AB Chicken'}
-      ],
-      satuanKerjaDefault: 0,
+      satuanKerja: const [],
     ),
   ));
   await _beriWaktu(tester, detik: 2);

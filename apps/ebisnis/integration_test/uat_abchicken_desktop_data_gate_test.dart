@@ -37,6 +37,7 @@ void main() {
     const password = String.fromEnvironment('POS_TEST_PASSWORD');
     const host = String.fromEnvironment('POS_TEST_HOST');
     const contextPath = String.fromEnvironment('POS_TEST_CONTEXT');
+    const https = bool.fromEnvironment('POS_TEST_HTTPS', defaultValue: true);
     expect(username, isNotEmpty, reason: 'POS_TEST_USERNAME wajib diisi.');
     expect(password, isNotEmpty, reason: 'POS_TEST_PASSWORD wajib diisi.');
     expect(host, isNotEmpty, reason: 'POS_TEST_HOST wajib diisi.');
@@ -52,7 +53,7 @@ void main() {
     addTearDown(() => CoreDb.instance.tutup());
 
     await ServerConfig.instance
-        .simpan(host: host, contextPath: contextPath, https: true);
+        .simpan(host: host, contextPath: contextPath, https: https);
     final login = await ApiClient.instance.aksi('login', {
       'username': username,
       'password': password,
