@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_variant.dart';
 import '../api_client.dart';
 import '../product_profile.dart';
+import '../sesi.dart';
 import '../theme/app_colors.dart';
 import 'pengaturan_server_screen.dart';
 import '../widgets/safe_state.dart';
@@ -92,6 +93,14 @@ class _LoginScreenState extends State<LoginScreen> {
       }
       await ApiClient.instance.simpanTenantId(ikat.tenantAktifId,
           tenantKode: ikat.tenantKode, tenantNama: ikat.tenantNama);
+
+      // Semua varian harus mempunyai konteks pengguna/toko sebelum layar
+      // pertama dibuka. Varian ABChicken langsung masuk ke Pusat Operasi,
+      // sehingga tidak melewati KasirScreen yang dahulu menjadi satu-satunya
+      // pemuat konfigurasi. Tanpa langkah ini Sesi.userId masih kosong dan
+      // cache lokal-dulu HRD menolak pembacaan walaupun login serta tenant sah.
+      final konfig = await ApiClient.instance.aksi('konfigurasi');
+      Sesi.instance.terapkanKonfig(konfig);
 
       // Bukti kata sandi disimpan HANYA sesudah server menerimanya, supaya
       // jalur luring tidak pernah lebih longgar daripada keputusan server.
