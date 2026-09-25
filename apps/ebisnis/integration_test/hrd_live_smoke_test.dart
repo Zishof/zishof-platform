@@ -32,6 +32,25 @@ void main() {
         reason: 'Login tidak menghasilkan token.');
     await ApiClient.instance.simpanToken(login['token'] as String);
 
+    final master = await ApiClient.instance.aksi('hrd_master_daftar', const {});
+    expect(master['status'], anyOf('00', 'success'),
+        reason: 'Master organisasi dan shift ZK tidak dapat dibaca.');
+    for (final key in const [
+      'unitKerja',
+      'golongan',
+      'jabatan',
+      'tipePegawai',
+      'departemen',
+      'levelJabatan',
+      'jenisCuti',
+      'jenisShift',
+      'waktuShift',
+      'liburNasional',
+      'liburRutin',
+    ]) {
+      expect(master[key], isA<List>(), reason: 'Master $key tidak valid.');
+    }
+
     final pegawai = await ApiClient.instance
         .aksi('hrd_pegawai_daftar', const {'page_size': 500});
     final rows =

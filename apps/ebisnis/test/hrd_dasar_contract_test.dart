@@ -8,6 +8,7 @@ void main() {
     final shell = File('lib/widgets/app_shell.dart').readAsStringSync();
 
     for (final aksi in const [
+      'hrd_master_daftar',
       'hrd_pegawai_daftar',
       'hrd_jenis_cuti_daftar',
       'hrd_cuti_daftar',
@@ -30,5 +31,7 @@ void main() {
     expect(layar, contains('Ajukan Lembur / Kasbon'));
     expect(layar, contains('Kedisiplinan'));
     expect(layar, contains('Fingerprint:'));
+    expect(layar, contains('Master HRD'));
+    expect(layar, contains('Master organisasi dan jadwal kerja dari modul ZK'));
   });
 }

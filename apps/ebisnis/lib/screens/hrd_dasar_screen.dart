@@ -64,6 +64,10 @@ class _HrdDasarScreenState extends State<HrdDasarScreen> {
                       value: 7,
                       icon: Icon(Icons.history_edu_outlined),
                       label: Text('Riwayat')),
+                  ButtonSegment(
+                      value: 8,
+                      icon: Icon(Icons.account_tree_outlined),
+                      label: Text('Master HRD')),
                 ],
                 selected: {_tab},
                 onSelectionChanged: (v) => setState(() => _tab = v.first),
@@ -79,6 +83,7 @@ class _HrdDasarScreenState extends State<HrdDasarScreen> {
           _KarierGajiTab(),
           _KinerjaPegawaiTab(),
           _RiwayatPegawaiTab(),
+          _MasterHrdTab(),
         ])),
       ]),
     );
@@ -2053,6 +2058,129 @@ class _RiwayatPegawaiTabState extends State<_RiwayatPegawaiTab> {
                         }),
                       ]))
       ]));
+}
+
+class _MasterHrdTab extends StatefulWidget {
+  const _MasterHrdTab();
+
+  @override
+  State<_MasterHrdTab> createState() => _MasterHrdTabState();
+}
+
+class _MasterHrdTabState extends State<_MasterHrdTab> {
+  bool _memuat = true;
+  String? _error;
+  String _cakupan = '';
+  Map<String, List<Map<String, dynamic>>> _kelompok = {};
+
+  static const _judul = <String, (String, IconData)>{
+    'unitKerja': ('Unit Kerja', Icons.account_tree_outlined),
+    'departemen': ('Departemen Payroll', Icons.apartment_outlined),
+    'jabatan': ('Jabatan Fungsional', Icons.workspace_premium_outlined),
+    'levelJabatan': ('Level Jabatan', Icons.stairs_outlined),
+    'golongan': ('Golongan & Pangkat', Icons.military_tech_outlined),
+    'tipePegawai': ('Tipe Pegawai', Icons.groups_outlined),
+    'jenisCuti': ('Jenis Cuti & Izin', Icons.event_available_outlined),
+    'jenisShift': ('Pola Shift Pegawai', Icons.calendar_month_outlined),
+    'waktuShift': ('Jam Shift', Icons.schedule_outlined),
+    'liburNasional': ('Libur Nasional', Icons.flag_outlined),
+    'liburRutin': ('Libur Rutin', Icons.weekend_outlined),
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  Future<void> _muat() async {
+    setStateIfMounted(() {
+      _memuat = true;
+      _error = null;
+    });
+    try {
+      final r = await ApiClient.instance.aksi('hrd_master_daftar', {});
+      final data = <String, List<Map<String, dynamic>>>{};
+      for (final key in _judul.keys) {
+        data[key] = ((r[key] as List?) ?? const [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+      }
+      setStateIfMounted(() {
+        _kelompok = data;
+        _cakupan = '${r['cakupan'] ?? ''}';
+      });
+    } catch (e) {
+      setStateIfMounted(() => _error = '$e');
+    } finally {
+      setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  String _rincian(String key, Map<String, dynamic> row) {
+    switch (key) {
+      case 'unitKerja':
+        return 'Induk: ${row['parent']?.toString().trim().isEmpty == false ? row['parent'] : '-'} · Level ${row['level'] ?? '-'}';
+      case 'golongan':
+        return '${row['kode'] ?? '-'} · Pangkat ${row['pangkat']?.toString().trim().isEmpty == false ? row['pangkat'] : '-'}';
+      case 'jabatan':
+        return '${row['kode'] ?? '-'} · Level ${row['level'] ?? '-'} · Induk ${row['parent']?.toString().trim().isEmpty == false ? row['parent'] : '-'}';
+      case 'tipePegawai':
+        return '${row['kode'] ?? '-'} · Presensi ${row['presensi'] == true ? 'Ya' : 'Tidak'} · Lembur ${row['lembur'] == true ? 'Ya' : 'Tidak'} · Konsumsi ${row['konsumsi'] == true ? 'Ya' : 'Tidak'}';
+      case 'jenisCuti':
+        return '${row['kode'] ?? '-'} · ${row['keterangan'] ?? ''}';
+      case 'jenisShift':
+        return '${row['jumlahShift'] ?? 0} shift · ${row['berlakuMulai'] ?? '-'} s.d. ${row['berlakuSampai']?.toString().isEmpty == false ? row['berlakuSampai'] : '-'} · ${row['berotasi'] == true ? 'Rotasi' : 'Tetap'}';
+      case 'waktuShift':
+        return '${row['kode'] ?? '-'} · ${row['mulai'] ?? '-'}–${row['sampai'] ?? '-'} · ${row['jam'] ?? 0} jam';
+      case 'liburNasional':
+        return '${row['tanggal'] ?? '-'}${row['sampai']?.toString().isEmpty == false ? ' s.d. ${row['sampai']}' : ''}${row['liburPanjang'] == true ? ' · Libur panjang' : ''}';
+      case 'liburRutin':
+        return 'Nomor hari ${row['hari'] ?? '-'} · ${row['libur'] == true ? 'Libur' : 'Hari kerja'}';
+      default:
+        return '${row['keterangan'] ?? ''}';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => _PanelDaftar(
+        header: Card(
+            child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(children: [
+                  const Icon(Icons.info_outline),
+                  const SizedBox(width: 10),
+                  Expanded(
+                      child: Text(_cakupan.isEmpty
+                          ? 'Master organisasi dan jadwal kerja dari modul ZK.'
+                          : _cakupan)),
+                  IconButton(
+                      tooltip: 'Muat ulang master HRD',
+                      onPressed: _muat,
+                      icon: const Icon(Icons.refresh)),
+                ]))),
+        memuat: _memuat,
+        error: _error,
+        kosong: 'Belum ada master HRD yang tersedia.',
+        children: _judul.entries.map((entry) {
+          final rows = _kelompok[entry.key] ?? const [];
+          return Card(
+              clipBehavior: Clip.antiAlias,
+              child: ExpansionTile(
+                  leading: Icon(entry.value.$2),
+                  title: Text(entry.value.$1),
+                  subtitle: Text('${rows.length} data dari modul ZK'),
+                  children: rows.isEmpty
+                      ? const [ListTile(title: Text('Belum ada data.'))]
+                      : rows
+                          .map((row) => ListTile(
+                                dense: true,
+                                title: Text('${row['nama'] ?? '-'}'),
+                                subtitle: Text(_rincian(entry.key, row)),
+                              ))
+                          .toList()));
+        }).toList(),
+      );
 }
 
 class _FormRealisasiKinerja extends StatefulWidget {
