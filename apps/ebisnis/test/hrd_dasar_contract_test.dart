@@ -40,5 +40,6 @@ void main() {
     expect(layar, contains("'PELATIHAN'"));
     expect(layar, contains("'KELUARGA'"));
     expect(layar, contains("'PEKERJAAN'"));
+    expect(layar, contains("'PELANGGARAN'"));
   });
 }

@@ -2028,8 +2028,13 @@ class _RiwayatPegawaiTabState extends State<_RiwayatPegawaiTab> {
       List<Map<String, dynamic>> rows,
       String Function(Map<String, dynamic>) subtitle) {
     final dapatUbah = _bolehKelola &&
-        const {'PENDIDIKAN', 'PELATIHAN', 'KELUARGA', 'PEKERJAAN'}
-            .contains(jenis);
+        const {
+          'PENDIDIKAN',
+          'PELATIHAN',
+          'KELUARGA',
+          'PEKERJAAN',
+          'PELANGGARAN'
+        }.contains(jenis);
     return Card(
         clipBehavior: Clip.antiAlias,
         child: ExpansionTile(
@@ -2176,10 +2181,12 @@ class _FormRiwayatPegawaiState extends State<_FormRiwayatPegawai> {
       _nomor,
       _pekerjaan,
       _keterangan;
-  bool _sertifikasi = false, _simpan = false;
+  bool _sertifikasi = false, _aktif = true, _simpan = false;
 
-  bool get _tanggal => widget.jenis == 'PELATIHAN';
+  bool get _tanggal =>
+      widget.jenis == 'PELATIHAN' || widget.jenis == 'PELANGGARAN';
   bool get _keluarga => widget.jenis == 'KELUARGA';
+  bool get _pelanggaran => widget.jenis == 'PELANGGARAN';
 
   @override
   void initState() {
@@ -2190,7 +2197,8 @@ class _FormRiwayatPegawaiState extends State<_FormRiwayatPegawai> {
         text:
             '${d[_keluarga ? 'hubungan' : widget.jenis == 'PEKERJAAN' ? 'jabatan' : 'jurusan'] ?? ''}');
     _mulai = TextEditingController(
-        text: '${d[_keluarga ? 'tanggalLahir' : 'mulai'] ?? ''}');
+        text:
+            '${d[_keluarga ? 'tanggalLahir' : _pelanggaran ? 'tanggal' : 'mulai'] ?? ''}');
     _selesai = TextEditingController(text: '${d['selesai'] ?? ''}');
     _nomor = TextEditingController(
         text:
@@ -2198,6 +2206,7 @@ class _FormRiwayatPegawaiState extends State<_FormRiwayatPegawai> {
     _pekerjaan = TextEditingController(text: '${d['pekerjaan'] ?? ''}');
     _keterangan = TextEditingController(text: '${d['keterangan'] ?? ''}');
     _sertifikasi = d['sertifikasi'] == true;
+    _aktif = d['aktif'] != false;
   }
 
   @override
@@ -2231,6 +2240,7 @@ class _FormRiwayatPegawaiState extends State<_FormRiwayatPegawai> {
         'nomor': _nomor.text.trim(),
         'pekerjaan': _pekerjaan.text.trim(),
         'sertifikasi': _sertifikasi,
+        'aktif': _aktif,
         'keterangan': _keterangan.text.trim(),
       });
       if (mounted) Navigator.pop(context, true);
@@ -2249,7 +2259,8 @@ class _FormRiwayatPegawaiState extends State<_FormRiwayatPegawai> {
         'PENDIDIKAN': 'Pendidikan',
         'PELATIHAN': 'Pelatihan / Sertifikasi',
         'KELUARGA': 'Keluarga',
-        'PEKERJAAN': 'Riwayat Pekerjaan'
+        'PEKERJAAN': 'Riwayat Pekerjaan',
+        'PELANGGARAN': 'Pelanggaran & Hukuman'
       }[widget.jenis] ??
       widget.jenis;
 
@@ -2266,15 +2277,17 @@ class _FormRiwayatPegawaiState extends State<_FormRiwayatPegawai> {
                       labelText:
                           _keluarga ? 'Nama anggota keluarga *' : 'Nama *')),
               const SizedBox(height: 10),
-              TextField(
-                  controller: _rincian,
-                  decoration: InputDecoration(
-                      labelText: _keluarga
-                          ? 'Hubungan'
-                          : widget.jenis == 'PEKERJAAN'
-                              ? 'Jabatan'
-                              : 'Jurusan / bidang')),
-              const SizedBox(height: 10),
+              if (!_pelanggaran) ...[
+                TextField(
+                    controller: _rincian,
+                    decoration: InputDecoration(
+                        labelText: _keluarga
+                            ? 'Hubungan'
+                            : widget.jenis == 'PEKERJAAN'
+                                ? 'Jabatan'
+                                : 'Jurusan / bidang')),
+                const SizedBox(height: 10),
+              ],
               Row(children: [
                 Expanded(
                     child: TextField(
@@ -2282,10 +2295,12 @@ class _FormRiwayatPegawaiState extends State<_FormRiwayatPegawai> {
                         decoration: InputDecoration(
                             labelText: _keluarga
                                 ? 'Tanggal lahir (yyyy-MM-dd)'
-                                : _tanggal
-                                    ? 'Tanggal mulai (yyyy-MM-dd)'
-                                    : 'Tahun mulai'))),
-                if (!_keluarga) ...[
+                                : _pelanggaran
+                                    ? 'Tanggal pelanggaran (yyyy-MM-dd)'
+                                    : _tanggal
+                                        ? 'Tanggal mulai (yyyy-MM-dd)'
+                                        : 'Tahun mulai'))),
+                if (!_keluarga && !_pelanggaran) ...[
                   const SizedBox(width: 8),
                   Expanded(
                       child: TextField(
@@ -2296,15 +2311,17 @@ class _FormRiwayatPegawaiState extends State<_FormRiwayatPegawai> {
                                   : 'Tahun selesai')))
                 ]
               ]),
-              const SizedBox(height: 10),
-              TextField(
-                  controller: _nomor,
-                  decoration: InputDecoration(
-                      labelText: _keluarga
-                          ? 'Jenis kelamin'
-                          : widget.jenis == 'PEKERJAAN'
-                              ? 'Nama pimpinan'
-                              : 'Nomor ijazah / sertifikat')),
+              if (!_pelanggaran) ...[
+                const SizedBox(height: 10),
+                TextField(
+                    controller: _nomor,
+                    decoration: InputDecoration(
+                        labelText: _keluarga
+                            ? 'Jenis kelamin'
+                            : widget.jenis == 'PEKERJAAN'
+                                ? 'Nama pimpinan'
+                                : 'Nomor ijazah / sertifikat')),
+              ],
               if (_keluarga) ...[
                 const SizedBox(height: 10),
                 TextField(
@@ -2317,6 +2334,12 @@ class _FormRiwayatPegawaiState extends State<_FormRiwayatPegawai> {
                     value: _sertifikasi,
                     onChanged: (v) => setState(() => _sertifikasi = v == true),
                     title: const Text('Pelatihan bersertifikat')),
+              if (_pelanggaran)
+                CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _aktif,
+                    onChanged: (v) => setState(() => _aktif = v == true),
+                    title: const Text('Pelanggaran / hukuman masih aktif')),
               const SizedBox(height: 10),
               TextField(
                   controller: _keterangan,
