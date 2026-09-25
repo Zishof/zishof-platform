@@ -1,8 +1,14 @@
+import 'dart:convert';
+
+import 'package:barcode/barcode.dart' as bc;
+import 'package:core_hw/core_hw.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../api_client.dart';
 import 'anggota/member_biometric_panel.dart';
+import 'attendance_photo_capture_screen.dart';
+import '../services/biometric_capture_bridge.dart';
 import '../services/hrd_local_first.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/safe_state.dart';
@@ -896,9 +902,10 @@ class _KehadiranTab extends StatefulWidget {
 }
 
 class _KehadiranTabState extends State<_KehadiranTab> {
-  bool _memuat = true;
+  bool _memuat = true, _memproses = false;
   String? _error;
   List<Map<String, dynamic>> _data = [];
+  String _qrPresensi = '';
   DateTime _dari = DateTime.now().subtract(const Duration(days: 30));
   DateTime _sampai = DateTime.now();
   @override
@@ -940,8 +947,11 @@ class _KehadiranTabState extends State<_KehadiranTab> {
         'page_size': 500
       };
       await HrdLocalFirst.baca('hrd_kehadiran_daftar', body, onData: (r) {
-        setStateIfMounted(() => _data =
-            ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>());
+        setStateIfMounted(() {
+          _data =
+              ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+          _qrPresensi = '${r['qrPresensi'] ?? ''}';
+        });
       });
     } catch (e) {
       setStateIfMounted(() => _error = '$e');
@@ -950,9 +960,123 @@ class _KehadiranTabState extends State<_KehadiranTab> {
     }
   }
 
+  Future<String?> _pilihArah() => showDialog<String>(
+      context: context,
+      builder: (context) =>
+          SimpleDialog(title: const Text('Pilih jenis presensi'), children: [
+            SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, '0'),
+                child: const ListTile(
+                    leading: Icon(Icons.login), title: Text('Masuk'))),
+            SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, '1'),
+                child: const ListTile(
+                    leading: Icon(Icons.logout), title: Text('Pulang')))
+          ]));
+
+  Future<void> _presensi(String metode) async {
+    if (_memproses) return;
+    final state = await _pilihArah();
+    if (state == null || !mounted) return;
+    final payload = <String, dynamic>{
+      'state': state,
+      'metode': metode,
+      'captured_at_epoch': DateTime.now().millisecondsSinceEpoch,
+      'clientMutationId':
+          'hrd-presensi-${DateTime.now().microsecondsSinceEpoch}'
+    };
+    try {
+      setStateIfMounted(() => _memproses = true);
+      String aksi = 'absen';
+      if (metode == 'FOTO') {
+        final bytes = await AttendancePhotoCaptureScreen.ambil(context);
+        if (bytes == null) return;
+        payload['foto_base64'] = base64Encode(bytes);
+      } else if (metode == 'QR') {
+        final kode = await BarcodeScannerScreen.pindai(context,
+            judul: 'Scan QR Presensi Toko');
+        if (kode == null || kode.trim().isEmpty) return;
+        payload['kode_qr'] = kode.trim();
+      } else if (metode == 'FINGERPRINT') {
+        final bridge = PosBiometricCaptureBridge();
+        final device = await bridge.capabilities();
+        final server = await ApiClient.instance.aksi('biometrik_kemampuan');
+        final readiness = PosBiometricReadiness(device: device, server: server);
+        if (!readiness.verificationReady('FINGERPRINT')) {
+          throw StateError(readiness.reason('FINGERPRINT', enrollment: false));
+        }
+        final sample = await bridge.capture('FINGERPRINT');
+        payload.addAll({
+          'modality': sample.modality,
+          'probe_base64': sample.templateBase64,
+          'template_format': sample.templateFormat,
+          'provider': sample.provider,
+          'liveness_score': sample.livenessScore,
+        });
+        aksi = 'biometrik_absen';
+      }
+      final hasil = await ApiClient.instance.aksi(aksi, payload);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${hasil['description'] ?? 'Presensi tersimpan.'}')));
+      await _muat();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      setStateIfMounted(() => _memproses = false);
+    }
+  }
+
+  Future<void> _tampilkanKodeQr() async {
+    if (_qrPresensi.isEmpty) return;
+    await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: const Text('QR Presensi Toko'),
+              content: Column(mainAxisSize: MainAxisSize.min, children: [
+                Container(
+                    color: Colors.white,
+                    padding: const EdgeInsets.all(12),
+                    child: CustomPaint(
+                        size: const Size.square(220),
+                        painter: _QrPresensiPainter(_qrPresensi))),
+                const SizedBox(height: 12),
+                const Text(
+                    'Tampilkan atau cetak QR ini di area presensi toko.'),
+                const SizedBox(height: 8),
+                SelectableText(_qrPresensi)
+              ]),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Tutup'))
+              ],
+            ));
+  }
+
   @override
   Widget build(BuildContext context) => _PanelDaftar(
       header: Wrap(alignment: WrapAlignment.end, spacing: 8, children: [
+        FilledButton.icon(
+            onPressed: _memproses ? null : () => _presensi('FOTO'),
+            icon: const Icon(Icons.photo_camera_outlined),
+            label: const Text('Presensi Foto')),
+        OutlinedButton.icon(
+            onPressed: _memproses ? null : () => _presensi('QR'),
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('Scan QR')),
+        OutlinedButton.icon(
+            onPressed: _memproses ? null : () => _presensi('FINGERPRINT'),
+            icon: const Icon(Icons.fingerprint),
+            label: const Text('Fingerprint')),
+        if (_qrPresensi.isNotEmpty)
+          IconButton(
+              onPressed: _tampilkanKodeQr,
+              tooltip: 'Lihat kode QR toko',
+              icon: const Icon(Icons.qr_code_2)),
         OutlinedButton.icon(
             onPressed: () => _pilihPeriode(true),
             icon: const Icon(Icons.date_range_outlined),
@@ -983,6 +1107,29 @@ class _KehadiranTabState extends State<_KehadiranTab> {
     if (s.isEmpty) return '-';
     return s.length >= 16 ? s.substring(11, 16) : s;
   }
+}
+
+class _QrPresensiPainter extends CustomPainter {
+  const _QrPresensiPainter(this.data);
+  final String data;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = Colors.black;
+    for (final element in bc.Barcode.qrCode()
+        .make(data, width: size.width, height: size.height, drawText: false)) {
+      if (element is bc.BarcodeBar && element.black) {
+        canvas.drawRect(
+            Rect.fromLTWH(
+                element.left, element.top, element.width, element.height),
+            paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _QrPresensiPainter oldDelegate) =>
+      oldDelegate.data != data;
 }
 
 class _KedisiplinanTab extends StatefulWidget {
