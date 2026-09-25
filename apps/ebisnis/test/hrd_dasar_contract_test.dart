@@ -43,6 +43,10 @@ void main() {
     expect(layar, contains("'PELANGGARAN'"));
     expect(layar, contains("'PENILAIAN'"));
     expect(layar, contains('Atasan pejabat penilai'));
+    expect(layar, contains("'tahap': tahap"));
+    expect(layar, contains("_putusan(r, 'ATASAN', v)"));
+    expect(layar, contains("_putusan(r, 'HRD', v)"));
+    expect(layar, contains('Catatan penolakan (wajib)'));
     expect(layar, contains("'prestasi_kerja'"));
   });
 }

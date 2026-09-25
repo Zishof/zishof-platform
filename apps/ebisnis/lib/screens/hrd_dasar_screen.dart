@@ -685,7 +685,7 @@ class _CutiTab extends StatefulWidget {
 }
 
 class _CutiTabState extends State<_CutiTab> {
-  bool _memuat = true, _bolehKelola = false;
+  bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
   @override
@@ -705,7 +705,6 @@ class _CutiTabState extends State<_CutiTab> {
         setStateIfMounted(() {
           _data =
               ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
-          _bolehKelola = r['dariServer'] == true && r['bolehKelola'] == true;
         });
       });
     } catch (e) {
@@ -721,17 +720,74 @@ class _CutiTabState extends State<_CutiTab> {
     if (ok == true) await _muat();
   }
 
-  Future<void> _putusan(Map<String, dynamic> row, bool setujui) async {
-    await ApiClient.instance
-        .aksi('hrd_cuti_putusan', {'id': row['id'], 'setujui': setujui});
-    await _muat();
+  Future<void> _putusan(
+      Map<String, dynamic> row, String tahap, bool setujui) async {
+    final catatan = TextEditingController();
+    final lanjut = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+              title: Text(
+                  '${setujui ? 'Setujui' : 'Tolak'} sebagai ${tahap == 'ATASAN' ? 'Atasan' : 'HRD'}'),
+              content: TextField(
+                  controller: catatan,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                      labelText: setujui
+                          ? 'Catatan (opsional)'
+                          : 'Catatan penolakan (wajib)',
+                      hintText: 'Tuliskan hasil pemeriksaan pengajuan')),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Batal')),
+                FilledButton(
+                    onPressed: () {
+                      if (!setujui && catatan.text.trim().isEmpty) return;
+                      Navigator.pop(ctx, true);
+                    },
+                    child: Text(setujui ? 'Setujui' : 'Tolak'))
+              ],
+            ));
+    if (lanjut != true) {
+      catatan.dispose();
+      return;
+    }
+    try {
+      await ApiClient.instance.aksi('hrd_cuti_putusan', {
+        'id': row['id'],
+        'tahap': tahap,
+        'setujui': setujui,
+        'catatan': catatan.text.trim()
+      });
+      await _muat();
+    } finally {
+      catatan.dispose();
+    }
   }
 
   Color _warna(String status) => status == 'DISETUJUI'
       ? Colors.green
-      : status == 'DITOLAK'
+      : status.startsWith('DITOLAK')
           ? Colors.red
           : Colors.orange;
+
+  String _riwayat(Map<String, dynamic> r) {
+    final bagian = <String>[];
+    final atasan = '${r['atasanOleh'] ?? ''}'.trim();
+    final hrd = '${r['hrdOleh'] ?? ''}'.trim();
+    if (atasan.isNotEmpty) {
+      bagian.add(
+          'Atasan: $atasan · ${r['tanggalAtasan'] ?? '-'}${'${r['catatanAtasan'] ?? ''}'.trim().isEmpty ? '' : ' · ${r['catatanAtasan']}'}');
+    }
+    if (hrd.isNotEmpty) {
+      bagian.add(
+          'HRD: $hrd · ${r['tanggalHrd'] ?? '-'}${'${r['catatanHrd'] ?? ''}'.trim().isEmpty ? '' : ' · ${r['catatanHrd']}'}');
+    }
+    return bagian.isEmpty
+        ? 'Alur: menunggu keputusan atasan'
+        : bagian.join('\n');
+  }
 
   @override
   Widget build(BuildContext context) => _PanelDaftar(
@@ -756,18 +812,30 @@ class _CutiTabState extends State<_CutiTab> {
             title:
                 Text('${r['pegawai'] ?? '-'} · ${r['jenis'] ?? 'Cuti/Izin'}'),
             subtitle: Text(
-                '${r['mulai'] ?? '-'} s.d. ${r['sampai'] ?? '-'}\n${r['keterangan'] ?? ''}'),
+                '${r['mulai'] ?? '-'} s.d. ${r['sampai'] ?? '-'}\n${r['keterangan'] ?? ''}\n${_riwayat(r)}'),
             isThreeLine: true,
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
               Chip(
                   label: Text(status),
                   labelStyle: TextStyle(color: _warna(status))),
-              if (_bolehKelola && status == 'MENUNGGU')
+              if (r['bolehPutusAtasan'] == true)
                 PopupMenuButton<bool>(
-                    onSelected: (v) => _putusan(r, v),
+                    tooltip: 'Keputusan atasan',
+                    onSelected: (v) => _putusan(r, 'ATASAN', v),
                     itemBuilder: (_) => const [
-                          PopupMenuItem(value: true, child: Text('Setujui')),
-                          PopupMenuItem(value: false, child: Text('Tolak'))
+                          PopupMenuItem(
+                              value: true, child: Text('Atasan: Setujui')),
+                          PopupMenuItem(
+                              value: false, child: Text('Atasan: Tolak'))
+                        ]),
+              if (r['bolehPutusHrd'] == true)
+                PopupMenuButton<bool>(
+                    tooltip: 'Keputusan HRD',
+                    onSelected: (v) => _putusan(r, 'HRD', v),
+                    itemBuilder: (_) => const [
+                          PopupMenuItem(
+                              value: true, child: Text('HRD: Setujui')),
+                          PopupMenuItem(value: false, child: Text('HRD: Tolak'))
                         ]),
             ]),
           ));
