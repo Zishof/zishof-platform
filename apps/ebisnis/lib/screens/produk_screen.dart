@@ -451,6 +451,94 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
     }
   }
 
+  Future<void> _aksiRelasiMassal() async {
+    final pilihan = <int>{};
+    var hapusResep = false;
+    var hapusCustom = false;
+    final keputusan = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, ubah) => AlertDialog(
+          title: const Text('Aksi Massal Resep & Custom Menu'),
+          content: SizedBox(
+            width: 620,
+            height: 480,
+            child: Column(children: [
+              CheckboxListTile(
+                value: pilihan.length == _produkHalamanIni.length &&
+                    _produkHalamanIni.isNotEmpty,
+                title: const Text('Pilih semua produk pada halaman ini'),
+                onChanged: (v) => ubah(() {
+                  pilihan.clear();
+                  if (v == true) {
+                    pilihan.addAll(_produkHalamanIni.map((e) => e.id));
+                  }
+                }),
+              ),
+              const Divider(),
+              Expanded(
+                child: ListView(
+                  children: _produkHalamanIni
+                      .map((p) => CheckboxListTile(
+                            value: pilihan.contains(p.id),
+                            title: Text(p.nama),
+                            subtitle: Text(p.kode),
+                            onChanged: (v) => ubah(() => v == true
+                                ? pilihan.add(p.id)
+                                : pilihan.remove(p.id)),
+                          ))
+                      .toList(),
+                ),
+              ),
+              const Divider(),
+              CheckboxListTile(
+                value: hapusResep,
+                title: const Text('Hapus resep dan ingredient terpilih'),
+                onChanged: (v) => ubah(() => hapusResep = v == true),
+              ),
+              CheckboxListTile(
+                value: hapusCustom,
+                title: const Text('Hapus pilihan custom menu/ekstra'),
+                onChanged: (v) => ubah(() => hapusCustom = v == true),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Batal')),
+            FilledButton.icon(
+              onPressed: pilihan.isEmpty || (!hapusResep && !hapusCustom)
+                  ? null
+                  : () => Navigator.pop(dialogContext, {
+                        'produk_ids': pilihan.toList(),
+                        'hapus_resep': hapusResep,
+                        'hapus_custom_menu': hapusCustom,
+                      }),
+              icon: const Icon(Icons.playlist_remove),
+              label: Text('Terapkan ke ${pilihan.length} produk'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (keputusan == null || !mounted) return;
+    if (Sesi.instance.idTokoTerpilih != null) {
+      keputusan['toko_id'] = Sesi.instance.idTokoTerpilih;
+    }
+    try {
+      await prosesSimpanMaster(context,
+          aksi: 'produk_relasi_massal',
+          body: keputusan,
+          kunci:
+              'produk-relasi-massal:${DateTime.now().microsecondsSinceEpoch}',
+          entitas: 'produk');
+      await _muatSemua();
+    } catch (e) {
+      if (mounted) snackbarGalat(context, e);
+    }
+  }
+
   Future<void> _bukaDetailStatistik(String tipe, String judul) async {
     await showDialog<void>(
       context: context,
@@ -1165,6 +1253,12 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
           label: 'Isi Pemasok',
           onPressed: _isiPemasokDariKulakan,
         ),
+      if (_tabAktif == 0 && _bolehProduk('update'))
+        HeaderActionButton(
+          icon: Icons.playlist_remove,
+          label: 'Aksi Massal',
+          onPressed: _produkHalamanIni.isEmpty ? null : _aksiRelasiMassal,
+        ),
       HeaderActionButton(
         icon: Icons.refresh,
         label: 'Muat Ulang',
@@ -1381,8 +1475,8 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                                               Text('Ekstra')),
                                                       ButtonSegment(
                                                           value: 'PAKET',
-                                                          label:
-                                                              Text('Produk Paket')),
+                                                          label: Text(
+                                                              'Produk Paket')),
                                                     ],
                                                     selected: {
                                                       _filterJenisItem
@@ -2303,11 +2397,12 @@ class _BarisTabelProduk extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.12),
+                                color:
+                                    AppColors.primary.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(4),
                                 border: Border.all(
-                                    color:
-                                        AppColors.primary.withValues(alpha: 0.4)),
+                                    color: AppColors.primary
+                                        .withValues(alpha: 0.4)),
                               ),
                               child: Text(
                                 'PAKET',
@@ -2345,8 +2440,7 @@ class _BarisTabelProduk extends StatelessWidget {
                     style: const TextStyle(fontSize: 12.5))),
             Expanded(
                 flex: 1,
-                child: Text(
-                    produk.satuanNama.isEmpty ? '-' : produk.satuanNama,
+                child: Text(produk.satuanNama.isEmpty ? '-' : produk.satuanNama,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 12.5))),
@@ -2668,6 +2762,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   int? _satuanPackId;
   late final TextEditingController _hargaPack;
   bool _menyimpan = false;
+
   /// Persetujuan sekali-pakai untuk gerbang harga modal >10x harga jual.
   ///
   /// Server menolak simpan dengan kode HARGA_MODAL_TINGGI dan menyuruh
@@ -2791,8 +2886,8 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   double get _totalHpp => _bahanBaku.fold(
       0, (s, b) => s + _angka(b.qty.text) * _angka(b.harga.text));
 
-  double get _totalHargaJualEceranKomponen => _bahanBaku.fold(
-      0, (s, b) => s + _angka(b.qty.text) * b.hargaJual);
+  double get _totalHargaJualEceranKomponen =>
+      _bahanBaku.fold(0, (s, b) => s + _angka(b.qty.text) * b.hargaJual);
 
   String _namaUom(int? id) {
     if (id == null) return '';
@@ -2988,9 +3083,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
         tampilkanHargaJual: true,
         daftar: widget.semuaProduk
             .where((p) =>
-                p.id != widget.produk?.id &&
-                p.aktif &&
-                p.jenisItem != 'PAKET')
+                p.id != widget.produk?.id && p.aktif && p.jenisItem != 'PAKET')
             .toList(),
       ),
     );
@@ -3000,8 +3093,9 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
         produkId: dipilih.id,
         nama: dipilih.nama,
         qtyAwal: '1',
-        hargaAwal: (dipilih.hargaBeli > 0 ? dipilih.hargaBeli : dipilih.hargaJual)
-            .toStringAsFixed(0),
+        hargaAwal:
+            (dipilih.hargaBeli > 0 ? dipilih.hargaBeli : dipilih.hargaJual)
+                .toStringAsFixed(0),
         hargaJual: dipilih.hargaJual,
       ));
       if (_angka(_hargaJual.text) == 0) {
@@ -3365,8 +3459,8 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
     if (widget.produk != null && !widget.produk!.detailTersedia) {
       setStateIfMounted(() => _pesanError =
           'Detail produk pada salinan lama belum lengkap. Hubungkan perangkat, '
-          'muat ulang daftar Produk, lalu buka kembali form agar harga beli '
-          'dan resep yang tersimpan tidak tertimpa nilai kosong.');
+              'muat ulang daftar Produk, lalu buka kembali form agar harga beli '
+              'dan resep yang tersimpan tidak tertimpa nilai kosong.');
       return;
     }
     if (!_formKey.currentState!.validate()) return;
@@ -3458,10 +3552,10 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'rute': _rute,
           'perluQc': _perluQc,
           'hargaBeliManual': _hargaBeliManual,
-                'packAktif': _packAktif,
-                'satuanPackId': _satuanPackId,
-                'satuanPackNama': _namaUom(_satuanPackId),
-                'hargaPack': _packAktif ? _angka(_hargaPack.text) : null,
+          'packAktif': _packAktif,
+          'satuanPackId': _satuanPackId,
+          'satuanPackNama': _namaUom(_satuanPackId),
+          'hargaPack': _packAktif ? _angka(_hargaPack.text) : null,
           'kemasan': _kemasan
               .map((k) => {
                     'nama': k.nama.text.trim(),
@@ -3485,7 +3579,8 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'barcode': _barcode.text.trim(),
           'nama': _nama.text.trim(),
           'pemasokNama': _pemasok.text.trim(),
-          'hargaBeli': _bahanBaku.isNotEmpty ? _totalHpp : _angka(_hargaBeli.text),
+          'hargaBeli':
+              _bahanBaku.isNotEmpty ? _totalHpp : _angka(_hargaBeli.text),
           'keterangan': _keterangan.text.trim(),
           'satuanId': _satuanId,
           'satuanNama': _namaUom(_satuanId),
@@ -3799,7 +3894,8 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     dense: true,
-                    title: const Text('Dapat dijual berupa Pack (Combo) di POS'),
+                    title:
+                        const Text('Dapat dijual berupa Pack (Combo) di POS'),
                     subtitle: const Text(
                         'Kasir mendapat pilihan satuan vs pack; harga pack tetap (mis. Rp 65.000/Dus, bukan isi x harga satuan). Stok tetap turun per satuan dasar.'),
                     value: _packAktif,
@@ -4079,8 +4175,9 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                                                 'Eceran: ${_formatRupiah.format(b.hargaJual)}',
                                                 style: TextStyle(
                                                   fontSize: 11,
-                                                  color: AppColors
-                                                      .textSecondaryOf(context),
+                                                  color:
+                                                      AppColors.textSecondaryOf(
+                                                          context),
                                                 ),
                                               ),
                                           ],
@@ -4145,8 +4242,8 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                                 const Text('Total Nilai Eceran Komponen',
                                     style: TextStyle(fontSize: 12)),
                                 Text(
-                                    _formatRupiah.format(
-                                        _totalHargaJualEceranKomponen),
+                                    _formatRupiah
+                                        .format(_totalHargaJualEceranKomponen),
                                     style: const TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600)),

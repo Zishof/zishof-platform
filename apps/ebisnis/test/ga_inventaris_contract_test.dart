@@ -22,5 +22,8 @@ void main() {
     expect(layar, contains('Setujui GA'));
     expect(layar, contains('Setujui Keuangan'));
     expect(layar, contains('Perpindahan inventaris'));
+    expect(layar, contains('Filter toko/outlet'));
+    expect(layar, contains("'toko_id': _tokoId"));
+    expect(layar, contains("x['toko']"));
   });
 }

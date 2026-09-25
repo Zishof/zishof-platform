@@ -75,7 +75,8 @@ void main() {
     expect(screen, contains('Checklist Surat Jalan'));
     expect(screen, contains("'checklist'"));
     expect(screen, contains("'signatures'"));
-    expect(screen, contains('Laporan 30 Hari'));
+    expect(screen, contains('Laporan Periode'));
+    expect(screen, contains('showDateRangePicker'));
   });
 
   test('seluruh halaman pengiriman mempertahankan shell dan sidebar utama', () {

@@ -141,12 +141,20 @@ class _PengirimanScreenState extends State<PengirimanScreen> {
 
   Future<void> _laporan() async {
     final sekarang = DateTime.now();
-    final mulai = sekarang.subtract(const Duration(days: 30));
+    final rentang = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      initialDateRange: DateTimeRange(
+          start: sekarang.subtract(const Duration(days: 30)), end: sekarang),
+      helpText: 'Pilih periode laporan pengiriman',
+    );
+    if (rentang == null || !mounted) return;
     try {
       final hasil = await ApiClient.instance.aksi('distribusi_laporan', {
         'jenis': konfigurasi.kode,
-        'tanggalMulai': DateFormat('yyyy-MM-dd').format(mulai),
-        'tanggalSampai': DateFormat('yyyy-MM-dd').format(sekarang),
+        'tanggalMulai': DateFormat('yyyy-MM-dd').format(rentang.start),
+        'tanggalSampai': DateFormat('yyyy-MM-dd').format(rentang.end),
       });
       if (!mounted) return;
       final data = ((hasil['data'] as List?) ?? const [])
@@ -156,7 +164,9 @@ class _PengirimanScreenState extends State<PengirimanScreen> {
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text('Laporan ${konfigurasi.judul} · 30 Hari'),
+          title: Text('Laporan ${konfigurasi.judul} · '
+              '${DateFormat('dd/MM/yyyy').format(rentang.start)}–'
+              '${DateFormat('dd/MM/yyyy').format(rentang.end)}'),
           content: SizedBox(
             width: 900,
             height: 520,
@@ -264,7 +274,7 @@ class _PengirimanScreenState extends State<PengirimanScreen> {
         OutlinedButton.icon(
           onPressed: _laporan,
           icon: const Icon(Icons.analytics_outlined),
-          label: const Text('Laporan 30 Hari'),
+          label: const Text('Laporan Periode'),
         ),
         if (_hak['create'] == true)
           FilledButton.icon(

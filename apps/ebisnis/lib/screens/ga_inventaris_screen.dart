@@ -17,6 +17,8 @@ class _GaInventarisScreenState extends State<GaInventarisScreen> {
   bool _memuat = true, _bolehKelola = false;
   String? _error;
   List<Map<String, dynamic>> _data = [];
+  List<Map<String, dynamic>> _toko = [];
+  int? _tokoId;
   @override
   void initState() {
     super.initState();
@@ -35,10 +37,14 @@ class _GaInventarisScreenState extends State<GaInventarisScreen> {
       _error = null;
     });
     try {
-      final r = await ApiClient.instance.aksi('ga_inventaris_daftar',
-          {'keyword': _cari.text.trim(), 'page_size': 500});
+      final r = await ApiClient.instance.aksi('ga_inventaris_daftar', {
+        'keyword': _cari.text.trim(),
+        'page_size': 500,
+        if (_tokoId != null) 'toko_id': _tokoId
+      });
       setStateIfMounted(() {
         _data = ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+        _toko = ((r['toko'] as List?) ?? const []).cast<Map<String, dynamic>>();
         _bolehKelola = r['bolehKelola'] == true;
       });
     } catch (e) {
@@ -99,6 +105,25 @@ class _GaInventarisScreenState extends State<GaInventarisScreen> {
                   icon: const Icon(Icons.approval_outlined),
                   label: const Text('Pengajuan'))
             ]),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<int?>(
+              value: _tokoId,
+              decoration: const InputDecoration(
+                  labelText: 'Filter toko/outlet',
+                  prefixIcon: Icon(Icons.store_outlined),
+                  isDense: true),
+              items: <DropdownMenuItem<int?>>[
+                const DropdownMenuItem<int?>(
+                    value: null, child: Text('Semua toko dalam tenant')),
+                ..._toko.map((x) => DropdownMenuItem<int?>(
+                    value: (x['id'] as num?)?.toInt(),
+                    child: Text('${x['nama'] ?? '-'}'))),
+              ],
+              onChanged: (v) {
+                setState(() => _tokoId = v);
+                _muat();
+              },
+            ),
             const SizedBox(height: 12),
             Expanded(
                 child: _memuat
@@ -124,7 +149,7 @@ class _GaInventarisScreenState extends State<GaInventarisScreen> {
                                               Icons.devices_other_outlined),
                                           title: Text('${x['nama'] ?? '-'}'),
                                           subtitle: Text(
-                                              '${x['jenis'] ?? '-'} · ${x['barcode'] ?? '-'}\n${x['status'] ?? '-'} · ${x['lokasi'] ?? '-'}'),
+                                              '${x['jenis'] ?? '-'} · ${x['barcode'] ?? '-'}\n${x['toko'] ?? 'Belum ditentukan'} · ${x['status'] ?? '-'} · ${x['lokasi'] ?? '-'}'),
                                           isThreeLine: true,
                                           trailing: Text(_rupiah.format(
                                               (x['hargaBeli'] as num?) ?? 0))));

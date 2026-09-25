@@ -786,6 +786,11 @@ class _AmbilBarangPrDialogState extends State<_AmbilBarangPrDialog> {
                   ' · sisa ${_fmtQty.format(b.sisa)}'
                   '${'${b.data['satuanInputNama'] ?? ''}'.isEmpty ? '' : ' ${b.data['satuanInputNama']}'}',
                   style: const TextStyle(fontSize: 10, color: Colors.grey)),
+              Text(
+                  'stok saat ini ${_fmtQty.format(b.data['stokSaatIni'] ?? 0)}'
+                  ' · pemakaian 30 hari ${_fmtQty.format(b.data['pemakaian30Hari'] ?? 0)}'
+                  ' · proyeksi setelah PO ${_fmtQty.format(b.data['proyeksiStokSetelahPo'] ?? 0)}',
+                  style: const TextStyle(fontSize: 10, color: Colors.blueGrey)),
             ],
           ),
         ),
