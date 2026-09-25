@@ -76,8 +76,9 @@ void main() {
     test('checkout saldo wajib melewati cabang ACK server sebelum outbox', () {
       final source =
           File('lib/screens/keranjang_screen.dart').readAsStringSync();
-      expect(source,
-          contains('(_saldoAkanDipotong || _pinWajibUntukMetodeTerpilih)'));
+      expect(source, contains('_saldoAkanDipotong ||'));
+      expect(source, contains('_pinWajibUntukMetodeTerpilih ||'));
+      expect(source, contains('_hutangAkanDipakai'));
       final posisiGuard = source.indexOf(
           'if (_verifikasiMemberWajibServer || _memberMemilikiLimitTransaksi)');
       final posisiApi = source.indexOf(
