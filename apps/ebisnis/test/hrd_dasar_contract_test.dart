@@ -22,6 +22,7 @@ void main() {
       'hrd_pengajuan_daftar',
       'hrd_pengajuan_simpan',
       'hrd_pengajuan_putusan',
+      'hrd_karier_putusan',
       'hrd_riwayat_simpan',
       'hrd_riwayat_hapus',
     ]) {
@@ -33,6 +34,7 @@ void main() {
     expect(layar, contains('Ajukan Lembur / Kasbon'));
     expect(layar, contains('Setujui & Kunci'));
     expect(layar, contains('Angsuran:'));
+    expect(layar, contains('Terapkan keputusan'));
     expect(layar, contains("'angsuranPayroll'"));
     expect(layar, contains("'masukSlip'"));
     expect(layar, contains("'diposting'"));

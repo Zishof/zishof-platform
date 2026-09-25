@@ -2268,6 +2268,31 @@ class _RiwayatPegawaiTabState extends State<_RiwayatPegawaiTab> {
     await _muatRiwayat();
   }
 
+  Future<void> _putusanKarier(
+      String jenis, Map<String, dynamic> row, bool setujui) async {
+    final ya = await showDialog<bool>(
+            context: context,
+            builder: (_) => AlertDialog(
+                    title:
+                        Text(setujui ? 'Terapkan keputusan' : 'Tolak usulan'),
+                    content: Text(setujui
+                        ? 'Keputusan $jenis akan langsung memengaruhi profil pegawai dan tidak dapat dibatalkan dari POS.'
+                        : 'Usulan $jenis akan ditandai belum diproses tanpa mengubah profil pegawai.'),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Batal')),
+                      FilledButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: Text(setujui ? 'Terapkan' : 'Tolak'))
+                    ])) ??
+        false;
+    if (!ya) return;
+    await ApiClient.instance.aksi('hrd_karier_putusan',
+        {'jenis': jenis, 'id': row['id'], 'setujui': setujui});
+    await _muatRiwayat();
+  }
+
   Widget _bagian(
       String jenis,
       String judul,
@@ -2283,6 +2308,8 @@ class _RiwayatPegawaiTabState extends State<_RiwayatPegawaiTab> {
           'PELANGGARAN',
           'PENILAIAN'
         }.contains(jenis);
+    final dapatPutus =
+        _bolehKelola && const {'PANGKAT', 'MUTASI', 'PENSIUN'}.contains(jenis);
     return Card(
         clipBehavior: Clip.antiAlias,
         child: ExpansionTile(
@@ -2319,7 +2346,24 @@ class _RiwayatPegawaiTabState extends State<_RiwayatPegawaiTab> {
                                       PopupMenuItem(
                                           value: 'hapus', child: Text('Hapus'))
                                     ])
-                            : null))
+                            : dapatPutus && row['status'] != 'DISETUJUI'
+                                ? Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                        IconButton(
+                                            tooltip: 'Tolak usulan',
+                                            onPressed: () => _putusanKarier(
+                                                jenis, row, false),
+                                            icon: const Icon(Icons.close)),
+                                        FilledButton.icon(
+                                            onPressed: () => _putusanKarier(
+                                                jenis, row, true),
+                                            icon: const Icon(Icons.task_alt),
+                                            label: const Text('Terapkan'))
+                                      ])
+                                : row['status'] == 'DISETUJUI'
+                                    ? const Chip(label: Text('Berlaku'))
+                                    : null))
                     .toList()));
   }
 
