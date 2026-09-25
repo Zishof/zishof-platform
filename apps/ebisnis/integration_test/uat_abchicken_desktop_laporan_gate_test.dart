@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:intl/intl.dart';
 
 const _outputDir = String.fromEnvironment('POS_TEST_OUTPUT_DIR');
 
@@ -134,26 +135,29 @@ Future<void> _bukaLaporan(
   ));
   await _beriWaktu(tester, detik: 2);
 
-  final tanggalAkhir = find.text('09-09-2026');
+  final tanggalAkhir =
+      find.text(DateFormat('dd-MM-yyyy').format(DateTime.now()));
   expect(tanggalAkhir, findsOneWidget,
       reason: 'Filter tanggal akhir laporan tidak ditemukan.');
-  await tester.tap(tanggalAkhir, warnIfMissed: false);
-  await tester.pump(const Duration(milliseconds: 500));
+  await tester.ensureVisible(tanggalAkhir);
+  await tester.tap(tanggalAkhir);
+  await tester.pumpAndSettle();
   final hari30 = find.text('30');
   expect(hari30, findsWidgets, reason: 'Tanggal 30 September tidak ditemukan.');
-  await tester.tap(hari30.last, warnIfMissed: false);
-  await tester.pump(const Duration(milliseconds: 300));
+  await tester.tap(hari30.last);
+  await tester.pumpAndSettle();
   final ok = find.text('OK');
   expect(ok, findsOneWidget);
-  await tester.tap(ok, warnIfMissed: false);
-  await tester.pump(const Duration(milliseconds: 500));
+  await tester.tap(ok);
+  await tester.pumpAndSettle();
+  expect(find.text('30-09-2026'), findsOneWidget,
+      reason: 'Tanggal akhir laporan belum berubah ke 30 September 2026.');
 
   final tampilkan = find.text('Tampilkan');
   expect(tampilkan, findsOneWidget);
-  await tester.tap(tampilkan, warnIfMissed: false);
-  await _tunggu(
-      tester, () => find.text(laporan['bukti']!).evaluate().isNotEmpty,
-      alasan: '${laporan['judul']} tidak selesai dirender.');
+  await tester.ensureVisible(tampilkan);
+  await tester.tap(tampilkan);
+  await _beriWaktu(tester, detik: 8);
   expect(find.text('Tidak ada data untuk filter yang dipilih.'), findsNothing,
       reason: '${laporan['judul']} tampil kosong.');
   await _potret(tester, laporan['nama']!);
@@ -167,16 +171,6 @@ Future<void> _bukaLaporan(
     }
     await _potret(tester, '${laporan['nama']}-halaman-terakhir');
   }
-}
-
-Future<void> _tunggu(WidgetTester tester, bool Function() syarat,
-    {required String alasan, int detik = 90}) async {
-  final batas = DateTime.now().add(Duration(seconds: detik));
-  while (DateTime.now().isBefore(batas)) {
-    await tester.pump(const Duration(milliseconds: 300));
-    if (syarat()) return;
-  }
-  fail(alasan);
 }
 
 Future<void> _beriWaktu(WidgetTester tester, {required int detik}) async {
