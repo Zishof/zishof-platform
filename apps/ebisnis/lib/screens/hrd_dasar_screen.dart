@@ -1995,7 +1995,10 @@ class _RiwayatPegawaiTabState extends State<_RiwayatPegawaiTab> {
     final ok = await showDialog<bool>(
         context: context,
         builder: (_) => _FormRiwayatPegawai(
-            jenis: jenis, pegawaiId: _pegawaiId!, data: row));
+            jenis: jenis,
+            pegawaiId: _pegawaiId!,
+            pegawai: _pegawai,
+            data: row));
     if (ok == true) await _muatRiwayat();
   }
 
@@ -2033,7 +2036,8 @@ class _RiwayatPegawaiTabState extends State<_RiwayatPegawaiTab> {
           'PELATIHAN',
           'KELUARGA',
           'PEKERJAAN',
-          'PELANGGARAN'
+          'PELANGGARAN',
+          'PENILAIAN'
         }.contains(jenis);
     return Card(
         clipBehavior: Clip.antiAlias,
@@ -2165,9 +2169,13 @@ class _RiwayatPegawaiTabState extends State<_RiwayatPegawaiTab> {
 
 class _FormRiwayatPegawai extends StatefulWidget {
   const _FormRiwayatPegawai(
-      {required this.jenis, required this.pegawaiId, this.data});
+      {required this.jenis,
+      required this.pegawaiId,
+      required this.pegawai,
+      this.data});
   final String jenis;
   final int pegawaiId;
+  final List<Map<String, dynamic>> pegawai;
   final Map<String, dynamic>? data;
   @override
   State<_FormRiwayatPegawai> createState() => _FormRiwayatPegawaiState();
@@ -2181,12 +2189,37 @@ class _FormRiwayatPegawaiState extends State<_FormRiwayatPegawai> {
       _nomor,
       _pekerjaan,
       _keterangan;
+  late final Map<String, TextEditingController> _nilai;
   bool _sertifikasi = false, _aktif = true, _simpan = false;
+  int? _penilaiId, _atasanPenilaiId;
+
+  static const _unsurPenilaian = <String, String>{
+    'kesetiaan': 'Kesetiaan',
+    'prestasi_kerja': 'Prestasi Kerja',
+    'tanggung_jawab': 'Tanggung Jawab',
+    'ketaatan': 'Ketaatan',
+    'kejujuran': 'Kejujuran',
+    'kerjasama': 'Kerjasama',
+    'prakarsa': 'Prakarsa',
+    'kepimpinan': 'Kepemimpinan',
+  };
+
+  static const _kunciDataPenilaian = <String, String>{
+    'kesetiaan': 'kesetiaan',
+    'prestasi_kerja': 'prestasiKerja',
+    'tanggung_jawab': 'tanggungJawab',
+    'ketaatan': 'ketaatan',
+    'kejujuran': 'kejujuran',
+    'kerjasama': 'kerjasama',
+    'prakarsa': 'prakarsa',
+    'kepimpinan': 'kepimpinan',
+  };
 
   bool get _tanggal =>
       widget.jenis == 'PELATIHAN' || widget.jenis == 'PELANGGARAN';
   bool get _keluarga => widget.jenis == 'KELUARGA';
   bool get _pelanggaran => widget.jenis == 'PELANGGARAN';
+  bool get _penilaian => widget.jenis == 'PENILAIAN';
 
   @override
   void initState() {
@@ -2207,6 +2240,18 @@ class _FormRiwayatPegawaiState extends State<_FormRiwayatPegawai> {
     _keterangan = TextEditingController(text: '${d['keterangan'] ?? ''}');
     _sertifikasi = d['sertifikasi'] == true;
     _aktif = d['aktif'] != false;
+    final penilaiId = (d['penilaiId'] as num?)?.toInt();
+    final atasanPenilaiId = (d['atasanPenilaiId'] as num?)?.toInt();
+    _penilaiId =
+        widget.pegawai.any((p) => p['id'] == penilaiId) ? penilaiId : null;
+    _atasanPenilaiId = widget.pegawai.any((p) => p['id'] == atasanPenilaiId)
+        ? atasanPenilaiId
+        : null;
+    _nilai = {
+      for (final kunci in _unsurPenilaian.keys)
+        kunci: TextEditingController(
+            text: '${d[_kunciDataPenilaian[kunci]] ?? ''}')
+    };
   }
 
   @override
@@ -2218,7 +2263,8 @@ class _FormRiwayatPegawaiState extends State<_FormRiwayatPegawai> {
       _selesai,
       _nomor,
       _pekerjaan,
-      _keterangan
+      _keterangan,
+      ..._nilai.values,
     ]) {
       c.dispose();
     }
@@ -2241,6 +2287,11 @@ class _FormRiwayatPegawaiState extends State<_FormRiwayatPegawai> {
         'pekerjaan': _pekerjaan.text.trim(),
         'sertifikasi': _sertifikasi,
         'aktif': _aktif,
+        if (_penilaian) 'penilai_id': _penilaiId,
+        if (_penilaian) 'atasan_penilai_id': _atasanPenilaiId,
+        if (_penilaian)
+          for (final item in _nilai.entries)
+            item.key: double.tryParse(item.value.text.replaceAll(',', '.')),
         'keterangan': _keterangan.text.trim(),
       });
       if (mounted) Navigator.pop(context, true);
@@ -2260,7 +2311,8 @@ class _FormRiwayatPegawaiState extends State<_FormRiwayatPegawai> {
         'PELATIHAN': 'Pelatihan / Sertifikasi',
         'KELUARGA': 'Keluarga',
         'PEKERJAAN': 'Riwayat Pekerjaan',
-        'PELANGGARAN': 'Pelanggaran & Hukuman'
+        'PELANGGARAN': 'Pelanggaran & Hukuman',
+        'PENILAIAN': 'Penilaian Pelaksanaan Pekerjaan'
       }[widget.jenis] ??
       widget.jenis;
 
@@ -2274,10 +2326,46 @@ class _FormRiwayatPegawaiState extends State<_FormRiwayatPegawai> {
               TextField(
                   controller: _nama,
                   decoration: InputDecoration(
-                      labelText:
-                          _keluarga ? 'Nama anggota keluarga *' : 'Nama *')),
+                      labelText: _keluarga
+                          ? 'Nama anggota keluarga *'
+                          : _penilaian
+                              ? 'Nama / periode penilaian *'
+                              : 'Nama *')),
               const SizedBox(height: 10),
-              if (!_pelanggaran) ...[
+              if (_penilaian) ...[
+                DropdownButtonFormField<int>(
+                    value: _penilaiId,
+                    isExpanded: true,
+                    decoration:
+                        const InputDecoration(labelText: 'Pejabat penilai *'),
+                    items: widget.pegawai
+                        .map((p) => DropdownMenuItem<int>(
+                            value: (p['id'] as num).toInt(),
+                            child: Text('${p['nama'] ?? '-'}')))
+                        .toList(),
+                    onChanged: (v) => setState(() => _penilaiId = v)),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<int>(
+                    value: _atasanPenilaiId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                        labelText: 'Atasan pejabat penilai *'),
+                    items: widget.pegawai
+                        .map((p) => DropdownMenuItem<int>(
+                            value: (p['id'] as num).toInt(),
+                            child: Text('${p['nama'] ?? '-'}')))
+                        .toList(),
+                    onChanged: (v) => setState(() => _atasanPenilaiId = v)),
+                const SizedBox(height: 10),
+                ..._unsurPenilaian.entries.map((item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: TextField(
+                        controller: _nilai[item.key],
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: InputDecoration(
+                            labelText: '${item.value} (0–100) *')))),
+              ] else if (!_pelanggaran) ...[
                 TextField(
                     controller: _rincian,
                     decoration: InputDecoration(
@@ -2288,30 +2376,31 @@ class _FormRiwayatPegawaiState extends State<_FormRiwayatPegawai> {
                                 : 'Jurusan / bidang')),
                 const SizedBox(height: 10),
               ],
-              Row(children: [
-                Expanded(
-                    child: TextField(
-                        controller: _mulai,
-                        decoration: InputDecoration(
-                            labelText: _keluarga
-                                ? 'Tanggal lahir (yyyy-MM-dd)'
-                                : _pelanggaran
-                                    ? 'Tanggal pelanggaran (yyyy-MM-dd)'
-                                    : _tanggal
-                                        ? 'Tanggal mulai (yyyy-MM-dd)'
-                                        : 'Tahun mulai'))),
-                if (!_keluarga && !_pelanggaran) ...[
-                  const SizedBox(width: 8),
+              if (!_penilaian)
+                Row(children: [
                   Expanded(
                       child: TextField(
-                          controller: _selesai,
+                          controller: _mulai,
                           decoration: InputDecoration(
-                              labelText: _tanggal
-                                  ? 'Tanggal selesai (yyyy-MM-dd)'
-                                  : 'Tahun selesai')))
-                ]
-              ]),
-              if (!_pelanggaran) ...[
+                              labelText: _keluarga
+                                  ? 'Tanggal lahir (yyyy-MM-dd)'
+                                  : _pelanggaran
+                                      ? 'Tanggal pelanggaran (yyyy-MM-dd)'
+                                      : _tanggal
+                                          ? 'Tanggal mulai (yyyy-MM-dd)'
+                                          : 'Tahun mulai'))),
+                  if (!_keluarga && !_pelanggaran) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                        child: TextField(
+                            controller: _selesai,
+                            decoration: InputDecoration(
+                                labelText: _tanggal
+                                    ? 'Tanggal selesai (yyyy-MM-dd)'
+                                    : 'Tahun selesai')))
+                  ]
+                ]),
+              if (!_pelanggaran && !_penilaian) ...[
                 const SizedBox(height: 10),
                 TextField(
                     controller: _nomor,
@@ -2322,19 +2411,19 @@ class _FormRiwayatPegawaiState extends State<_FormRiwayatPegawai> {
                                 ? 'Nama pimpinan'
                                 : 'Nomor ijazah / sertifikat')),
               ],
-              if (_keluarga) ...[
+              if (_keluarga && !_penilaian) ...[
                 const SizedBox(height: 10),
                 TextField(
                     controller: _pekerjaan,
                     decoration: const InputDecoration(labelText: 'Pekerjaan'))
               ],
-              if (widget.jenis == 'PELATIHAN')
+              if (widget.jenis == 'PELATIHAN' && !_penilaian)
                 CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
                     value: _sertifikasi,
                     onChanged: (v) => setState(() => _sertifikasi = v == true),
                     title: const Text('Pelatihan bersertifikat')),
-              if (_pelanggaran)
+              if (_pelanggaran && !_penilaian)
                 CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
                     value: _aktif,

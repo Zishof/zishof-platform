@@ -41,5 +41,8 @@ void main() {
     expect(layar, contains("'KELUARGA'"));
     expect(layar, contains("'PEKERJAAN'"));
     expect(layar, contains("'PELANGGARAN'"));
+    expect(layar, contains("'PENILAIAN'"));
+    expect(layar, contains('Atasan pejabat penilai'));
+    expect(layar, contains("'prestasi_kerja'"));
   });
 }
