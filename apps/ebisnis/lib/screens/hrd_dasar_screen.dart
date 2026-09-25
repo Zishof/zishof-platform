@@ -1933,7 +1933,7 @@ class _RiwayatPegawaiTab extends StatefulWidget {
 }
 
 class _RiwayatPegawaiTabState extends State<_RiwayatPegawaiTab> {
-  bool _memuat = true;
+  bool _memuat = true, _bolehKelola = false;
   String? _error;
   List<Map<String, dynamic>> _pegawai = [];
   int? _pegawaiId;
@@ -1975,8 +1975,10 @@ class _RiwayatPegawaiTabState extends State<_RiwayatPegawaiTab> {
     try {
       await HrdLocalFirst.baca(
           'hrd_riwayat_pegawai', {'pegawai_id': _pegawaiId}, onData: (r) {
-        setStateIfMounted(
-            () => _data = Map<String, dynamic>.from(r['data'] as Map? ?? {}));
+        setStateIfMounted(() {
+          _data = Map<String, dynamic>.from(r['data'] as Map? ?? {});
+          _bolehKelola = r['dariServer'] == true && r['bolehKelola'] == true;
+        });
       });
     } catch (e) {
       setStateIfMounted(() => _error = '$e');
@@ -1988,14 +1990,59 @@ class _RiwayatPegawaiTabState extends State<_RiwayatPegawaiTab> {
   List<Map<String, dynamic>> _rows(String key) =>
       ((_data[key] as List?) ?? const []).cast<Map<String, dynamic>>();
 
-  Widget _bagian(String judul, IconData icon, List<Map<String, dynamic>> rows,
+  Future<void> _form(String jenis, [Map<String, dynamic>? row]) async {
+    if (_pegawaiId == null) return;
+    final ok = await showDialog<bool>(
+        context: context,
+        builder: (_) => _FormRiwayatPegawai(
+            jenis: jenis, pegawaiId: _pegawaiId!, data: row));
+    if (ok == true) await _muatRiwayat();
+  }
+
+  Future<void> _hapus(String jenis, Map<String, dynamic> row) async {
+    final ya = await showDialog<bool>(
+            context: context,
+            builder: (_) => AlertDialog(
+                    title: const Text('Hapus riwayat?'),
+                    content: Text(
+                        '${row['nama'] ?? 'Data'} akan dihapus dari riwayat pegawai.'),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Batal')),
+                      FilledButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Hapus'))
+                    ])) ??
+        false;
+    if (!ya) return;
+    await ApiClient.instance
+        .aksi('hrd_riwayat_hapus', {'jenis': jenis, 'id': row['id']});
+    await _muatRiwayat();
+  }
+
+  Widget _bagian(
+      String jenis,
+      String judul,
+      IconData icon,
+      List<Map<String, dynamic>> rows,
       String Function(Map<String, dynamic>) subtitle) {
+    final dapatUbah = _bolehKelola &&
+        const {'PENDIDIKAN', 'PELATIHAN', 'KELUARGA', 'PEKERJAAN'}
+            .contains(jenis);
     return Card(
         clipBehavior: Clip.antiAlias,
         child: ExpansionTile(
             initiallyExpanded: true,
             leading: Icon(icon),
-            title: Text(judul),
+            title: Row(children: [
+              Expanded(child: Text(judul)),
+              if (dapatUbah)
+                IconButton(
+                    tooltip: 'Tambah $judul',
+                    onPressed: () => _form(jenis),
+                    icon: const Icon(Icons.add_circle_outline))
+            ]),
             subtitle: Text('${rows.length} data'),
             children: rows.isEmpty
                 ? const [
@@ -2007,7 +2054,19 @@ class _RiwayatPegawaiTabState extends State<_RiwayatPegawaiTab> {
                     .map((row) => ListTile(
                         dense: true,
                         title: Text('${row['nama'] ?? '-'}'),
-                        subtitle: Text(subtitle(row))))
+                        subtitle: Text(subtitle(row)),
+                        trailing: dapatUbah
+                            ? PopupMenuButton<String>(
+                                onSelected: (aksi) => aksi == 'edit'
+                                    ? _form(jenis, row)
+                                    : _hapus(jenis, row),
+                                itemBuilder: (_) => const [
+                                      PopupMenuItem(
+                                          value: 'edit', child: Text('Ubah')),
+                                      PopupMenuItem(
+                                          value: 'hapus', child: Text('Hapus'))
+                                    ])
+                            : null))
                     .toList()));
   }
 
@@ -2044,54 +2103,235 @@ class _RiwayatPegawaiTabState extends State<_RiwayatPegawaiTab> {
                         child: Text(_error!,
                             style: const TextStyle(color: Colors.red)))
                     : ListView(children: [
-                        _bagian('Pendidikan', Icons.school_outlined,
-                            _rows('pendidikan'), (r) {
+                        _bagian('PENDIDIKAN', 'Pendidikan',
+                            Icons.school_outlined, _rows('pendidikan'), (r) {
                           final periode =
                               '${r['mulai'] ?? '-'}–${r['selesai'] ?? '-'}';
                           return '$periode · ${r['jurusan'] ?? '-'} · Ijazah ${r['nomor'] ?? '-'}';
                         }),
                         _bagian(
+                            'PELATIHAN',
                             'Pelatihan & Sertifikasi',
                             Icons.workspace_premium_outlined,
                             _rows('pelatihan'), (r) {
                           return '${r['jenis'] ?? '-'} · ${r['mulai'] ?? '-'} s.d. ${r['selesai'] ?? '-'}'
                               '${r['sertifikasi'] == true ? ' · Bersertifikat' : ''}';
                         }),
-                        _bagian('Keluarga', Icons.family_restroom_outlined,
+                        _bagian(
+                            'KELUARGA',
+                            'Keluarga',
+                            Icons.family_restroom_outlined,
                             _rows('keluarga'), (r) {
                           return '${r['hubungan'] ?? '-'} · ${r['tanggalLahir'] ?? '-'} · ${r['pekerjaan'] ?? '-'}';
                         }),
                         _bagian(
+                            'PEKERJAAN',
                             'Riwayat Pekerjaan',
                             Icons.work_history_outlined,
                             _rows('pekerjaan'), (r) {
                           return '${r['jabatan'] ?? '-'} · ${r['mulai'] ?? '-'}–${r['selesai'] ?? '-'} · Pimpinan ${r['pimpinan'] ?? '-'}';
                         }),
                         _bagian(
+                            'PANGKAT',
                             'Kenaikan Pangkat',
                             Icons.military_tech_outlined,
                             _rows('pangkat'), (r) {
                           return 'TMT ${r['tmt'] ?? '-'} · SK ${r['nomor'] ?? '-'} tanggal ${r['tanggalSk'] ?? '-'}';
                         }),
-                        _bagian('Mutasi', Icons.swap_horiz_outlined,
+                        _bagian('MUTASI', 'Mutasi', Icons.swap_horiz_outlined,
                             _rows('mutasi'), (r) {
                           return 'TMT ${r['tmt'] ?? '-'} · ${r['status'] ?? '-'} · Surat ${r['nomor'] ?? '-'}';
                         }),
-                        _bagian(
-                            'Pensiun', Icons.elderly_outlined, _rows('pensiun'),
-                            (r) {
+                        _bagian('PENSIUN', 'Pensiun', Icons.elderly_outlined,
+                            _rows('pensiun'), (r) {
                           return 'TMT ${r['tmt'] ?? '-'} · ${r['status'] ?? '-'} · Surat ${r['nomor'] ?? '-'}';
                         }),
-                        _bagian('Pelanggaran & Hukuman', Icons.gavel_outlined,
-                            _rows('pelanggaran'), (r) {
+                        _bagian('PELANGGARAN', 'Pelanggaran & Hukuman',
+                            Icons.gavel_outlined, _rows('pelanggaran'), (r) {
                           return '${r['tanggal'] ?? '-'} · ${r['aktif'] == true ? 'Aktif' : 'Selesai'} · ${r['keterangan'] ?? ''}';
                         }),
-                        _bagian('Penilaian Pelaksanaan Pekerjaan',
+                        _bagian('PENILAIAN', 'Penilaian Pelaksanaan Pekerjaan',
                             Icons.assessment_outlined, _rows('penilaian'), (r) {
                           return 'Nilai ${r['nilai'] ?? '-'} · ${r['predikat'] ?? '-'} · Penilai ${r['penilai'] ?? '-'}';
                         }),
                       ]))
       ]));
+}
+
+class _FormRiwayatPegawai extends StatefulWidget {
+  const _FormRiwayatPegawai(
+      {required this.jenis, required this.pegawaiId, this.data});
+  final String jenis;
+  final int pegawaiId;
+  final Map<String, dynamic>? data;
+  @override
+  State<_FormRiwayatPegawai> createState() => _FormRiwayatPegawaiState();
+}
+
+class _FormRiwayatPegawaiState extends State<_FormRiwayatPegawai> {
+  late final TextEditingController _nama,
+      _rincian,
+      _mulai,
+      _selesai,
+      _nomor,
+      _pekerjaan,
+      _keterangan;
+  bool _sertifikasi = false, _simpan = false;
+
+  bool get _tanggal => widget.jenis == 'PELATIHAN';
+  bool get _keluarga => widget.jenis == 'KELUARGA';
+
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.data ?? const <String, dynamic>{};
+    _nama = TextEditingController(text: '${d['nama'] ?? ''}');
+    _rincian = TextEditingController(
+        text:
+            '${d[_keluarga ? 'hubungan' : widget.jenis == 'PEKERJAAN' ? 'jabatan' : 'jurusan'] ?? ''}');
+    _mulai = TextEditingController(
+        text: '${d[_keluarga ? 'tanggalLahir' : 'mulai'] ?? ''}');
+    _selesai = TextEditingController(text: '${d['selesai'] ?? ''}');
+    _nomor = TextEditingController(
+        text:
+            '${d[_keluarga ? 'kelamin' : widget.jenis == 'PEKERJAAN' ? 'pimpinan' : 'nomor'] ?? ''}');
+    _pekerjaan = TextEditingController(text: '${d['pekerjaan'] ?? ''}');
+    _keterangan = TextEditingController(text: '${d['keterangan'] ?? ''}');
+    _sertifikasi = d['sertifikasi'] == true;
+  }
+
+  @override
+  void dispose() {
+    for (final c in [
+      _nama,
+      _rincian,
+      _mulai,
+      _selesai,
+      _nomor,
+      _pekerjaan,
+      _keterangan
+    ]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _kirim() async {
+    if (_nama.text.trim().isEmpty) return;
+    setState(() => _simpan = true);
+    try {
+      await ApiClient.instance.aksi('hrd_riwayat_simpan', {
+        if (widget.data?['id'] != null) 'id': widget.data!['id'],
+        'jenis': widget.jenis,
+        'pegawai_id': widget.pegawaiId,
+        'nama': _nama.text.trim(),
+        'rincian': _rincian.text.trim(),
+        'mulai': _mulai.text.trim(),
+        'selesai': _selesai.text.trim(),
+        'nomor': _nomor.text.trim(),
+        'pekerjaan': _pekerjaan.text.trim(),
+        'sertifikasi': _sertifikasi,
+        'keterangan': _keterangan.text.trim(),
+      });
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      setStateIfMounted(() => _simpan = false);
+    }
+  }
+
+  String get _judul =>
+      const {
+        'PENDIDIKAN': 'Pendidikan',
+        'PELATIHAN': 'Pelatihan / Sertifikasi',
+        'KELUARGA': 'Keluarga',
+        'PEKERJAAN': 'Riwayat Pekerjaan'
+      }[widget.jenis] ??
+      widget.jenis;
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text('${widget.data == null ? 'Tambah' : 'Ubah'} $_judul'),
+        content: SizedBox(
+            width: 560,
+            child: SingleChildScrollView(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(
+                  controller: _nama,
+                  decoration: InputDecoration(
+                      labelText:
+                          _keluarga ? 'Nama anggota keluarga *' : 'Nama *')),
+              const SizedBox(height: 10),
+              TextField(
+                  controller: _rincian,
+                  decoration: InputDecoration(
+                      labelText: _keluarga
+                          ? 'Hubungan'
+                          : widget.jenis == 'PEKERJAAN'
+                              ? 'Jabatan'
+                              : 'Jurusan / bidang')),
+              const SizedBox(height: 10),
+              Row(children: [
+                Expanded(
+                    child: TextField(
+                        controller: _mulai,
+                        decoration: InputDecoration(
+                            labelText: _keluarga
+                                ? 'Tanggal lahir (yyyy-MM-dd)'
+                                : _tanggal
+                                    ? 'Tanggal mulai (yyyy-MM-dd)'
+                                    : 'Tahun mulai'))),
+                if (!_keluarga) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: TextField(
+                          controller: _selesai,
+                          decoration: InputDecoration(
+                              labelText: _tanggal
+                                  ? 'Tanggal selesai (yyyy-MM-dd)'
+                                  : 'Tahun selesai')))
+                ]
+              ]),
+              const SizedBox(height: 10),
+              TextField(
+                  controller: _nomor,
+                  decoration: InputDecoration(
+                      labelText: _keluarga
+                          ? 'Jenis kelamin'
+                          : widget.jenis == 'PEKERJAAN'
+                              ? 'Nama pimpinan'
+                              : 'Nomor ijazah / sertifikat')),
+              if (_keluarga) ...[
+                const SizedBox(height: 10),
+                TextField(
+                    controller: _pekerjaan,
+                    decoration: const InputDecoration(labelText: 'Pekerjaan'))
+              ],
+              if (widget.jenis == 'PELATIHAN')
+                CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _sertifikasi,
+                    onChanged: (v) => setState(() => _sertifikasi = v == true),
+                    title: const Text('Pelatihan bersertifikat')),
+              const SizedBox(height: 10),
+              TextField(
+                  controller: _keterangan,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: 'Keterangan')),
+            ]))),
+        actions: [
+          TextButton(
+              onPressed: _simpan ? null : () => Navigator.pop(context),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: _simpan ? null : _kirim,
+              child: Text(_simpan ? 'Menyimpan…' : 'Simpan'))
+        ],
+      );
 }
 
 class _MasterHrdTab extends StatefulWidget {

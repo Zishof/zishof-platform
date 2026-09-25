@@ -22,6 +22,8 @@ void main() {
       'hrd_pengajuan_daftar',
       'hrd_pengajuan_simpan',
       'hrd_pengajuan_putusan',
+      'hrd_riwayat_simpan',
+      'hrd_riwayat_hapus',
     ]) {
       expect(layar, contains("'$aksi'"));
     }
@@ -33,5 +35,10 @@ void main() {
     expect(layar, contains('Fingerprint:'));
     expect(layar, contains('Master HRD'));
     expect(layar, contains('Master organisasi dan jadwal kerja dari modul ZK'));
+    expect(layar, contains("'hrd_riwayat_simpan'"));
+    expect(layar, contains("'PENDIDIKAN'"));
+    expect(layar, contains("'PELATIHAN'"));
+    expect(layar, contains("'KELUARGA'"));
+    expect(layar, contains("'PEKERJAAN'"));
   });
 }
