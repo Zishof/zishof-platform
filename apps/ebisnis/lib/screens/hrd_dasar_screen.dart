@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../api_client.dart';
 import 'anggota/member_biometric_panel.dart';
+import '../services/hrd_local_first.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/safe_state.dart';
 
@@ -121,11 +122,13 @@ class _PegawaiTabState extends State<_PegawaiTab> {
       _error = null;
     });
     try {
-      final r = await ApiClient.instance.aksi('hrd_pegawai_daftar',
-          {'keyword': _cari.text.trim(), 'page_size': 200});
-      setStateIfMounted(() {
-        _data = ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
-        _bolehKelola = r['bolehKelola'] == true;
+      final body = {'keyword': _cari.text.trim(), 'page_size': 200};
+      await HrdLocalFirst.baca('hrd_pegawai_daftar', body, onData: (r) {
+        setStateIfMounted(() {
+          _data =
+              ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+          _bolehKelola = r['dariServer'] == true && r['bolehKelola'] == true;
+        });
       });
     } catch (e) {
       setStateIfMounted(() => _error = '$e');
@@ -402,12 +405,14 @@ class _FormProfilPegawaiState extends State<_FormProfilPegawai> {
 
   Future<void> _muat() async {
     try {
-      final r = await ApiClient.instance
-          .aksi('hrd_pegawai_detail', {'pegawai_id': widget.pegawaiId});
-      final data = Map<String, dynamic>.from(r['data'] as Map? ?? const {});
-      for (final entry in data.entries) {
-        _controller(entry.key).text = '${entry.value ?? ''}';
-      }
+      await HrdLocalFirst.baca(
+          'hrd_pegawai_detail', {'pegawai_id': widget.pegawaiId}, onData: (r) {
+        final data = Map<String, dynamic>.from(r['data'] as Map? ?? const {});
+        for (final entry in data.entries) {
+          _controller(entry.key).text = '${entry.value ?? ''}';
+        }
+        setStateIfMounted(() {});
+      });
     } catch (e) {
       _error = '$e';
     } finally {
@@ -689,11 +694,13 @@ class _CutiTabState extends State<_CutiTab> {
       _error = null;
     });
     try {
-      final r =
-          await ApiClient.instance.aksi('hrd_cuti_daftar', {'page_size': 200});
-      setStateIfMounted(() {
-        _data = ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
-        _bolehKelola = r['bolehKelola'] == true;
+      await HrdLocalFirst.baca('hrd_cuti_daftar', const {'page_size': 200},
+          onData: (r) {
+        setStateIfMounted(() {
+          _data =
+              ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+          _bolehKelola = r['dariServer'] == true && r['bolehKelola'] == true;
+        });
       });
     } catch (e) {
       setStateIfMounted(() => _error = '$e');
@@ -787,10 +794,12 @@ class _FormCutiState extends State<_FormCuti> {
   }
 
   Future<void> _muatJenis() async {
-    final r = await ApiClient.instance.aksi('hrd_jenis_cuti_daftar', {});
-    setStateIfMounted(() {
-      _jenis = ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
-      if (_jenis.isNotEmpty) _jenisId = (_jenis.first['id'] as num).toInt();
+    await HrdLocalFirst.baca('hrd_jenis_cuti_daftar', const {}, onData: (r) {
+      setStateIfMounted(() {
+        _jenis =
+            ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+        if (_jenis.isNotEmpty) _jenisId = (_jenis.first['id'] as num).toInt();
+      });
     });
   }
 
@@ -925,13 +934,15 @@ class _KehadiranTabState extends State<_KehadiranTab> {
     });
     try {
       final f = DateFormat('yyyy-MM-dd');
-      final r = await ApiClient.instance.aksi('hrd_kehadiran_daftar', {
+      final body = {
         'dari': f.format(_dari),
         'sampai': f.format(_sampai),
         'page_size': 500
+      };
+      await HrdLocalFirst.baca('hrd_kehadiran_daftar', body, onData: (r) {
+        setStateIfMounted(() => _data =
+            ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>());
       });
-      setStateIfMounted(() => _data =
-          ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>());
     } catch (e) {
       setStateIfMounted(() => _error = '$e');
     } finally {
@@ -1001,18 +1012,20 @@ class _KedisiplinanTabState extends State<_KedisiplinanTab> {
     });
     try {
       final f = DateFormat('yyyy-MM-dd');
-      final r = await ApiClient.instance.aksi('hrd_kehadiran_ringkasan', {
+      final body = {
         'dari': f.format(_dari),
         'sampai': f.format(_sampai),
         'page_size': 5000
-      });
-      final rows =
-          ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
-      rows.sort((a, b) => ((b['tepatWaktu'] as num?) ?? 0)
-          .compareTo((a['tepatWaktu'] as num?) ?? 0));
-      setStateIfMounted(() {
-        _ringkasan = r;
-        _data = rows;
+      };
+      await HrdLocalFirst.baca('hrd_kehadiran_ringkasan', body, onData: (r) {
+        final rows =
+            ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+        rows.sort((a, b) => ((b['tepatWaktu'] as num?) ?? 0)
+            .compareTo((a['tepatWaktu'] as num?) ?? 0));
+        setStateIfMounted(() {
+          _ringkasan = r;
+          _data = rows;
+        });
       });
     } catch (e) {
       setStateIfMounted(() => _error = '$e');
@@ -1109,17 +1122,19 @@ class _PayrollTabState extends State<_PayrollTab> {
       _error = null;
     });
     try {
-      final hasil = await Future.wait([
-        ApiClient.instance.aksi('hrd_payroll_daftar', {'page_size': 100}),
-        ApiClient.instance.aksi('hrd_pengajuan_daftar', {'page_size': 100}),
+      await Future.wait([
+        HrdLocalFirst.baca('hrd_payroll_daftar', const {'page_size': 100},
+            onData: (r) => setStateIfMounted(() => _slip =
+                ((r['data'] as List?) ?? const [])
+                    .cast<Map<String, dynamic>>())),
+        HrdLocalFirst.baca('hrd_pengajuan_daftar', const {'page_size': 100},
+            onData: (r) => setStateIfMounted(() {
+                  _pengajuan = ((r['data'] as List?) ?? const [])
+                      .cast<Map<String, dynamic>>();
+                  _bolehKelola =
+                      r['dariServer'] == true && r['bolehKelola'] == true;
+                })),
       ]);
-      setStateIfMounted(() {
-        _slip = ((hasil[0]['data'] as List?) ?? const [])
-            .cast<Map<String, dynamic>>();
-        _pengajuan = ((hasil[1]['data'] as List?) ?? const [])
-            .cast<Map<String, dynamic>>();
-        _bolehKelola = hasil[1]['bolehKelola'] == true;
-      });
     } catch (e) {
       setStateIfMounted(() => _error = '$e');
     } finally {
@@ -1128,15 +1143,18 @@ class _PayrollTabState extends State<_PayrollTab> {
   }
 
   Future<void> _bukaSlip(Map<String, dynamic> slip) async {
-    final r =
-        await ApiClient.instance.aksi('hrd_slip_detail', {'id': slip['id']});
+    Map<String, dynamic>? r;
+    await HrdLocalFirst.baca('hrd_slip_detail', {'id': slip['id']},
+        onData: (hasil) => r = hasil);
+    final detail = r;
+    if (detail == null) return;
     if (!mounted) return;
     final item =
-        ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+        ((detail['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
     await showDialog<void>(
         context: context,
         builder: (_) => AlertDialog(
-              title: Text('Slip Gaji · ${r['pegawai'] ?? '-'}'),
+              title: Text('Slip Gaji · ${detail['pegawai'] ?? '-'}'),
               content: SizedBox(
                   width: 560,
                   height: 420,
@@ -1158,7 +1176,7 @@ class _PayrollTabState extends State<_PayrollTab> {
                         title: const Text('Take Home Pay',
                             style: TextStyle(fontWeight: FontWeight.bold)),
                         trailing: Text(
-                            _rupiah.format((r['nilaiFinal'] as num?) ?? 0),
+                            _rupiah.format((detail['nilaiFinal'] as num?) ?? 0),
                             style:
                                 const TextStyle(fontWeight: FontWeight.bold)))
                   ])),
@@ -1328,10 +1346,12 @@ class _FormPengajuanPayrollState extends State<_FormPengajuanPayroll> {
   }
 
   Future<void> _muatJenis() async {
-    final r = await ApiClient.instance.aksi('hrd_pengajuan_jenis', {});
-    setStateIfMounted(() {
-      _jenis = ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
-      if (_jenis.isNotEmpty) _jenisId = (_jenis.first['id'] as num).toInt();
+    await HrdLocalFirst.baca('hrd_pengajuan_jenis', const {}, onData: (r) {
+      setStateIfMounted(() {
+        _jenis =
+            ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+        if (_jenis.isNotEmpty) _jenisId = (_jenis.first['id'] as num).toInt();
+      });
     });
   }
 
@@ -1447,11 +1467,13 @@ class _KarierGajiTabState extends State<_KarierGajiTab> {
       _error = null;
     });
     try {
-      final r = await ApiClient.instance
-          .aksi('hrd_kenaikan_gaji_daftar', {'page_size': 300});
-      setStateIfMounted(() {
-        _data = ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
-        _bolehKelola = r['bolehKelola'] == true;
+      await HrdLocalFirst.baca(
+          'hrd_kenaikan_gaji_daftar', const {'page_size': 300}, onData: (r) {
+        setStateIfMounted(() {
+          _data =
+              ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+          _bolehKelola = r['dariServer'] == true && r['bolehKelola'] == true;
+        });
       });
     } catch (e) {
       setStateIfMounted(() => _error = '$e');
@@ -1570,23 +1592,28 @@ class _FormKenaikanGajiState extends State<_FormKenaikanGaji> {
 
   Future<void> _muatPilihan() async {
     try {
-      final r = await Future.wait([
-        ApiClient.instance.aksi('hrd_pegawai_daftar', {'page_size': 200}),
-        ApiClient.instance.aksi('hrd_gaji_pokok_daftar', {}),
+      await Future.wait([
+        HrdLocalFirst.baca('hrd_pegawai_daftar', const {'page_size': 200},
+            onData: (r) {
+          setStateIfMounted(() {
+            _pegawai =
+                ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+            if (_pegawai.isNotEmpty && _pegawaiId == null) {
+              _pegawaiId = (_pegawai.first['id'] as num).toInt();
+            }
+          });
+        }),
+        HrdLocalFirst.baca('hrd_gaji_pokok_daftar', const {}, onData: (r) {
+          setStateIfMounted(() {
+            _gaji =
+                ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+            if (_gaji.isNotEmpty) {
+              _gajiLamaId ??= (_gaji.first['id'] as num).toInt();
+              _gajiBaruId ??= (_gaji.first['id'] as num).toInt();
+            }
+          });
+        }),
       ]);
-      setStateIfMounted(() {
-        _pegawai =
-            ((r[0]['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
-        _gaji =
-            ((r[1]['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
-        if (_pegawai.isNotEmpty) {
-          _pegawaiId = (_pegawai.first['id'] as num).toInt();
-        }
-        if (_gaji.isNotEmpty) {
-          _gajiLamaId = (_gaji.first['id'] as num).toInt();
-          _gajiBaruId = (_gaji.first['id'] as num).toInt();
-        }
-      });
     } finally {
       setStateIfMounted(() => _memuat = false);
     }
@@ -1778,14 +1805,17 @@ class _KinerjaPegawaiTabState extends State<_KinerjaPegawaiTab> {
       _error = null;
     });
     try {
-      final r = await ApiClient.instance.aksi('hrd_kinerja_daftar', {
+      final body = {
         'tahun': _periode.year,
         'bulan': _periode.month,
         'page_size': 500,
-      });
-      setStateIfMounted(() {
-        _data = ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
-        _bolehKelola = r['bolehKelola'] == true;
+      };
+      await HrdLocalFirst.baca('hrd_kinerja_daftar', body, onData: (r) {
+        setStateIfMounted(() {
+          _data =
+              ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+          _bolehKelola = r['dariServer'] == true && r['bolehKelola'] == true;
+        });
       });
     } catch (e) {
       setStateIfMounted(() => _error = '$e');
@@ -1921,14 +1951,17 @@ class _RiwayatPegawaiTabState extends State<_RiwayatPegawaiTab> {
       _error = null;
     });
     try {
-      final r = await ApiClient.instance
-          .aksi('hrd_pegawai_daftar', {'page_size': 500});
-      _pegawai =
-          ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
-      final saya = (r['pegawaiSayaId'] as num?)?.toInt();
-      _pegawaiId = saya ??
-          (_pegawai.isEmpty ? null : (_pegawai.first['id'] as num).toInt());
-      if (_pegawaiId != null) await _muatRiwayat(aturMemuat: false);
+      await HrdLocalFirst.baca('hrd_pegawai_daftar', const {'page_size': 500},
+          onData: (r) {
+        setStateIfMounted(() {
+          _pegawai =
+              ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+          final saya = (r['pegawaiSayaId'] as num?)?.toInt();
+          _pegawaiId = saya ??
+              (_pegawai.isEmpty ? null : (_pegawai.first['id'] as num).toInt());
+        });
+        if (_pegawaiId != null) _muatRiwayat(aturMemuat: false);
+      });
     } catch (e) {
       _error = '$e';
     } finally {
@@ -1940,10 +1973,11 @@ class _RiwayatPegawaiTabState extends State<_RiwayatPegawaiTab> {
     if (_pegawaiId == null) return;
     if (aturMemuat) setStateIfMounted(() => _memuat = true);
     try {
-      final r = await ApiClient.instance
-          .aksi('hrd_riwayat_pegawai', {'pegawai_id': _pegawaiId});
-      setStateIfMounted(
-          () => _data = Map<String, dynamic>.from(r['data'] as Map? ?? {}));
+      await HrdLocalFirst.baca(
+          'hrd_riwayat_pegawai', {'pegawai_id': _pegawaiId}, onData: (r) {
+        setStateIfMounted(
+            () => _data = Map<String, dynamic>.from(r['data'] as Map? ?? {}));
+      });
     } catch (e) {
       setStateIfMounted(() => _error = '$e');
     } finally {
@@ -2099,16 +2133,17 @@ class _MasterHrdTabState extends State<_MasterHrdTab> {
       _error = null;
     });
     try {
-      final r = await ApiClient.instance.aksi('hrd_master_daftar', {});
-      final data = <String, List<Map<String, dynamic>>>{};
-      for (final key in _judul.keys) {
-        data[key] = ((r[key] as List?) ?? const [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-      }
-      setStateIfMounted(() {
-        _kelompok = data;
-        _cakupan = '${r['cakupan'] ?? ''}';
+      await HrdLocalFirst.baca('hrd_master_daftar', const {}, onData: (r) {
+        final data = <String, List<Map<String, dynamic>>>{};
+        for (final key in _judul.keys) {
+          data[key] = ((r[key] as List?) ?? const [])
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+        }
+        setStateIfMounted(() {
+          _kelompok = data;
+          _cakupan = '${r['cakupan'] ?? ''}';
+        });
       });
     } catch (e) {
       setStateIfMounted(() => _error = '$e');
@@ -2217,15 +2252,17 @@ class _FormRealisasiKinerjaState extends State<_FormRealisasiKinerja> {
 
   Future<void> _muatTugas() async {
     try {
-      final r = await ApiClient.instance.aksi('hrd_tugas_kinerja_daftar', {});
-      setStateIfMounted(() {
-        _tugas =
-            ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
-        if (_tugas.isNotEmpty) {
-          _tugasId = (_tugas.first['id'] as num).toInt();
-          _kuantitas.text = '${_tugas.first['kuantitasDefault'] ?? 1}';
-          _waktu.text = '${_tugas.first['waktuDefault'] ?? 0}';
-        }
+      await HrdLocalFirst.baca('hrd_tugas_kinerja_daftar', const {},
+          onData: (r) {
+        setStateIfMounted(() {
+          _tugas =
+              ((r['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+          if (_tugas.isNotEmpty) {
+            _tugasId = (_tugas.first['id'] as num).toInt();
+            _kuantitas.text = '${_tugas.first['kuantitasDefault'] ?? 1}';
+            _waktu.text = '${_tugas.first['waktuDefault'] ?? 0}';
+          }
+        });
       });
     } finally {
       setStateIfMounted(() => _memuat = false);
