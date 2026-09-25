@@ -35,6 +35,7 @@ void main() {
     final master = await ApiClient.instance.aksi('hrd_master_daftar', const {});
     expect(master['status'], anyOf('00', 'success'),
         reason: 'Master organisasi dan shift ZK tidak dapat dibaca.');
+    final jumlahMaster = <String, int>{};
     for (final key in const [
       'unitKerja',
       'golongan',
@@ -49,7 +50,13 @@ void main() {
       'liburRutin',
     ]) {
       expect(master[key], isA<List>(), reason: 'Master $key tidak valid.');
+      jumlahMaster[key] = (master[key] as List).length;
     }
+    expect(jumlahMaster.values.fold<int>(0, (a, b) => a + b), greaterThan(0),
+        reason: 'Seluruh master HRD ZK masih kosong.');
+    // Dicetak sebagai bukti UAT terukur tanpa menampilkan isi data pegawai.
+    // ignore: avoid_print
+    print('Jumlah master HRD live: $jumlahMaster');
 
     final pegawai = await ApiClient.instance
         .aksi('hrd_pegawai_daftar', const {'page_size': 500});
