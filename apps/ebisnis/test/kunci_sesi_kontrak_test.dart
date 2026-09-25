@@ -97,6 +97,22 @@ void main() {
         reason: 'bukti sandi disimpan SESUDAH token dari server diterima');
   });
 
+  test('konteks pengguna dimuat sebelum layar pertama setelah login', () {
+    final login = File('lib/screens/login_screen.dart').readAsStringSync();
+    final iTenant = login.indexOf('simpanTenantId(');
+    final iKonfigurasi = login.indexOf("aksi('konfigurasi')");
+    final iTerapkan = login.indexOf('Sesi.instance.terapkanKonfig(konfig)');
+    final iNavigasi = login.indexOf('Navigator.of(context).pushReplacement(');
+
+    expect(iTenant, greaterThan(-1));
+    expect(iKonfigurasi, greaterThan(iTenant),
+        reason: 'konfigurasi dibaca setelah tenant aktif terikat');
+    expect(iTerapkan, greaterThan(iKonfigurasi),
+        reason: 'userId/toko/hak akses harus diterapkan ke Sesi');
+    expect(iNavigasi, greaterThan(iTerapkan),
+        reason: 'layar awal tidak boleh dibuka dengan konteks pengguna kosong');
+  });
+
   test('layar kunci: penolakan server tidak boleh dialihkan ke jalur luring',
       () {
     final source =
