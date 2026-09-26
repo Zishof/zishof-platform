@@ -113,6 +113,20 @@ void main() {
         reason: 'layar awal tidak boleh dibuka dengan konteks pengguna kosong');
   });
 
+  test('konteks pengguna dipulihkan saat token lama membuka aplikasi', () {
+    final api = File('lib/api_client.dart').readAsStringSync();
+    final iToken = api.indexOf("_token = sp.getString('token')");
+    final iUsername =
+        api.indexOf('VerifikatorSandiLokal.instance.usernameTersimpan()');
+    final iTerapkan = api.indexOf('Sesi.instance.userId = username.trim()');
+
+    expect(iToken, greaterThan(-1));
+    expect(iUsername, greaterThan(iToken),
+        reason: 'identitas terverifikasi harus dipulihkan bersama token');
+    expect(iTerapkan, greaterThan(iUsername),
+        reason: 'landing tidak boleh menerima userId kosong setelah restart');
+  });
+
   test('layar kunci: penolakan server tidak boleh dialihkan ke jalur luring',
       () {
     final source =
