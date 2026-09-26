@@ -83,7 +83,8 @@ void main() {
     expect('<tr>'.allMatches(rincian).length, 3);
   });
 
-  test('teks dari data di-escape -- nama dan keterangan adalah input pengguna', () {
+  test('teks dari data di-escape -- nama dan keterangan adalah input pengguna',
+      () {
     final html = dokumenWordMutasiVoucher(
       baris: [
         {...baris[1], 'keterangan': '<script>alert(1)</script> & Co'}
@@ -105,7 +106,30 @@ void main() {
     expect(layar, contains('onPressed: _unduhWord'));
     // Kartu dan Word wajib satu sumber angka -- kalau kartu kembali menghitung
     // sendiri, keduanya bisa bercerita berbeda tentang uang yang sama.
-    expect(layar,
-        contains('final ringkas = ringkasMutasiVoucher(_data, _rekapPerAnggota);'));
+    expect(
+        layar,
+        contains(
+            'final ringkas = ringkasMutasiVoucher(_data, _rekapPerAnggota);'));
+  });
+
+  test('aksi koreksi hanya untuk baris deposit topup tabungan', () {
+    expect(
+        idDepositDariBarisMutasi({
+          'barisId': 'D42',
+          'jenisMutasi': 'Topup Tabungan',
+        }),
+        42);
+    expect(
+        mutasiAdalahTopupTabungan({
+          'barisId': 'D42',
+          'jenisMutasi': 'Topup Tabungan',
+        }),
+        isTrue);
+    expect(
+        mutasiAdalahTopupTabungan({
+          'barisId': 'P42',
+          'jenisMutasi': 'Pembelian/Belanja',
+        }),
+        isFalse);
   });
 }

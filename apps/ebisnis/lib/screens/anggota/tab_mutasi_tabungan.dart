@@ -19,6 +19,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
+import '../../widgets/aksi_baris_menu.dart';
 
 final _formatRpMutasiTabungan =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -45,8 +46,8 @@ class RingkasanMutasiVoucher {
 /// (saldoAwal/saldoAkhir) -- rumus persis kartu di layar.
 RingkasanMutasiVoucher ringkasMutasiVoucher(
     List<Map<String, dynamic>> baris, List<Map<String, dynamic>> rekap) {
-  double jumlah(List<Map<String, dynamic>> xs, String kunci) => xs.fold<double>(
-      0, (s, r) => s + ((r[kunci] as num?)?.toDouble() ?? 0));
+  double jumlah(List<Map<String, dynamic>> xs, String kunci) =>
+      xs.fold<double>(0, (s, r) => s + ((r[kunci] as num?)?.toDouble() ?? 0));
   return RingkasanMutasiVoucher(
     totalMasuk: jumlah(baris, 'masuk'),
     totalKeluar: jumlah(baris, 'keluar'),
@@ -64,6 +65,25 @@ String _escHtmlMutasi(Object? nilai) => '${nilai ?? ''}'
 String _rpAtauStrip(Object? nilai) {
   final n = (nilai as num?)?.toDouble() ?? 0;
   return n == 0 ? '-' : _formatRpMutasiTabungan.format(n);
+}
+
+int? idDepositDariBarisMutasi(Map<String, dynamic> r) {
+  final idLangsung = (r['idDeposit'] ?? r['depositId'] ?? r['id_topup']);
+  if (idLangsung is num) return idLangsung.toInt();
+  final teksIdLangsung = '$idLangsung';
+  final idDariKolom = int.tryParse(teksIdLangsung);
+  if (idDariKolom != null && idDariKolom > 0) return idDariKolom;
+
+  final barisId = '${r['barisId'] ?? ''}'.trim().toUpperCase();
+  final match = RegExp(r'^D(\d+)$').firstMatch(barisId);
+  return match == null ? null : int.tryParse(match.group(1)!);
+}
+
+bool mutasiAdalahTopupTabungan(Map<String, dynamic> r) {
+  final jenis = '${r['jenisMutasi'] ?? ''}'.toLowerCase();
+  return idDepositDariBarisMutasi(r) != null &&
+      jenis.contains('topup') &&
+      !jenis.contains('online');
 }
 
 /// Dokumen Word Mutasi Voucher, dirakit sebagai HTML (dibuka Word apa adanya,
@@ -94,7 +114,8 @@ String dokumenWordMutasiVoucher({
         'td.angka{text-align:right;}</style></head><body>')
     ..write('<h2>Mutasi Voucher (Buku Besar)</h2>')
     ..write('<p>Periode ${tgl.format(dari)} s/d ${tgl.format(sampai)}')
-    ..write(namaAnggota == null ? '' : ' &middot; ${_escHtmlMutasi(namaAnggota)}')
+    ..write(
+        namaAnggota == null ? '' : ' &middot; ${_escHtmlMutasi(namaAnggota)}')
     ..write('</p>')
     ..write('<table><tr><th>Total Masuk</th><th>Total Keluar</th>'
         '<th>Saldo Awal</th><th>Sisa Saldo</th></tr><tr>')
@@ -123,12 +144,14 @@ String dokumenWordMutasiVoucher({
     final waktu = DateTime.tryParse('${r['waktu']}');
     b
       ..write('<tr><td>${_escHtmlMutasi(r['namaAnggota'])}</td>')
-      ..write('<td>${waktu == null ? _escHtmlMutasi(r['waktu']) : _formatTglMutasiTabungan.format(waktu)}</td>')
+      ..write(
+          '<td>${waktu == null ? _escHtmlMutasi(r['waktu']) : _formatTglMutasiTabungan.format(waktu)}</td>')
       ..write('<td>${_escHtmlMutasi(r['jenisMutasi'])}</td>')
       ..write('<td>${_escHtmlMutasi(r['keterangan'])}</td>')
       ..write('<td class="angka">${_rpAtauStrip(r['masuk'])}</td>')
       ..write('<td class="angka">${_rpAtauStrip(r['keluar'])}</td>')
-      ..write('<td class="angka">${rp.format(r['saldoPerPenabung'] ?? 0)}</td></tr>');
+      ..write(
+          '<td class="angka">${rp.format(r['saldoPerPenabung'] ?? 0)}</td></tr>');
   }
   b.write('</table></body></html>');
   return b.toString();
@@ -150,7 +173,8 @@ class AnggotaTabMutasiTabungan extends StatefulWidget {
       _AnggotaTabMutasiTabunganState();
 }
 
-class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan> with JejakGalat {
+class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan>
+    with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -249,6 +273,141 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan> wit
       _namaAnggotaFilter = null;
     });
     _muat();
+  }
+
+  void _info(String pesan) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(pesan)));
+  }
+
+  DateTime _waktuMutasi(Map<String, dynamic> r) {
+    final teks = '${r['waktu'] ?? ''}'.replaceFirst(' ', 'T');
+    return DateTime.tryParse(teks) ?? DateTime.now();
+  }
+
+  Future<bool> _periodeSudahTutupBuku(Map<String, dynamic> r) async {
+    final waktu = _waktuMutasi(r);
+    final tanggal = DateFormat('yyyy-MM-dd').format(waktu);
+    try {
+      final hasil = await ApiClient.instance.aksi('tutup_buku_draft', {
+        'mulai': tanggal,
+        'sampai': tanggal,
+      });
+      final alasan = '${hasil['alasan'] ?? hasil['message'] ?? ''}';
+      final status =
+          '${hasil['statusTutupBuku'] ?? hasil['status_tutup_buku'] ?? ''}'
+              .toLowerCase();
+      final terkunci = hasil['sudahDitutup'] == true ||
+          hasil['sudah_ditutup'] == true ||
+          hasil['periodeTerkunci'] == true ||
+          hasil['periode_terkunci'] == true ||
+          status.contains('tutup') ||
+          alasan.toLowerCase().contains('sudah ditutup');
+      if (terkunci) {
+        _info(alasan.isEmpty
+            ? 'Periode transaksi sudah tutup buku. Topup tidak dapat diubah atau dihapus.'
+            : alasan);
+      }
+      return terkunci;
+    } catch (_) {
+      // Pemeriksaan tutup buku bersifat defensif di sisi klien. Server tetap
+      // menjadi pengaman utama pada deposit_ubah/deposit_hapus.
+      return false;
+    }
+  }
+
+  Map<String, dynamic>? _depositDariMutasi(Map<String, dynamic> r) {
+    final id = idDepositDariBarisMutasi(r);
+    if (id == null) return null;
+    return {
+      'id': id,
+      'idMember': r['idAnggota'],
+      'namaMember': r['namaAnggota'],
+      'nominal': r['masuk'],
+      'waktu': r['waktu'],
+      'keterangan': r['keterangan'],
+    };
+  }
+
+  Future<void> _bukaFormKoreksiTopup(Map<String, dynamic> r) async {
+    if (!mutasiAdalahTopupTabungan(r)) return;
+    if (await _periodeSudahTutupBuku(r)) return;
+    if (!mounted) return;
+    final deposit = _depositDariMutasi(r);
+    if (deposit == null) return;
+    final tersimpan = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _FormKoreksiTopupMutasi(deposit: deposit),
+    );
+    if (tersimpan == true) await _muat();
+  }
+
+  Future<void> _hapusTopup(Map<String, dynamic> r) async {
+    if (!mutasiAdalahTopupTabungan(r)) return;
+    if (await _periodeSudahTutupBuku(r)) return;
+    if (!mounted) return;
+    final id = idDepositDariBarisMutasi(r);
+    if (id == null) return;
+    final alasan = TextEditingController();
+    final konfirmasi = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Hapus Topup Tabungan?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Topup ${_formatRpMutasiTabungan.format((r['masuk'] as num?) ?? 0)} untuk "${r['namaAnggota'] ?? '-'}" akan dihapus. Saldo akhir akan dihitung ulang oleh server.',
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Tindakan ini tidak dapat dipulihkan dari aplikasi. Jika server memakai arsip/nonaktif, riwayat audit tetap mengikuti aturan backend.',
+              style: TextStyle(fontSize: 12, color: AppColors.danger),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: alasan,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Alasan penghapusan *',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Batal')),
+          FilledButton(
+            onPressed: () {
+              if (alasan.text.trim().length < 5) return;
+              Navigator.of(dialogContext).pop(true);
+            },
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (konfirmasi != true) return;
+    try {
+      // ONLINE-ONLY: koreksi saldo/topup harus divalidasi server saat itu juga
+      // supaya periode tutup buku dan saldo akhir tidak sukses palsu di lokal.
+      await ApiClient.instance.aksi('deposit_hapus', {
+        'id': id,
+        'alasan': alasan.text.trim(),
+        'keterangan': alasan.text.trim(),
+      });
+      _info('Topup dihapus. Saldo akhir dimuat ulang dari server.');
+      await _muat();
+    } catch (e) {
+      if (mounted) snackbarGalat(context, e);
+    } finally {
+      alasan.dispose();
+    }
   }
 
   int get _totalHalaman => (_data.length / _pageSize).ceil().clamp(1, 999999);
@@ -378,7 +537,7 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan> wit
               pw.SizedBox(height: 8),
             ]),
         build: (_) => [
-          pw.Table.fromTextArray(
+          pw.TableHelper.fromTextArray(
             headers: const [
               'Nama',
               'Tanggal',
@@ -499,6 +658,7 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan> wit
     final totalKeluar = ringkas.totalKeluar;
     final totalSaldoAwal = ringkas.saldoAwal;
     final totalSaldoAkhir = ringkas.saldoAkhir;
+    final bolehEditTopup = Sesi.instance.bolehEntryTopup;
 
     return RefreshIndicator(
       onRefresh: _muat,
@@ -634,18 +794,23 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan> wit
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           AppDataTable(
-            minWidth: 900,
+            minWidth: bolehEditTopup ? 980 : 900,
             emptyText: 'Tidak ada mutasi pada rentang ini.',
-            columns: const [
-              AppTableColumn('Nama', flex: 2),
-              AppTableColumn('Tanggal', flex: 2),
-              AppTableColumn('Jenis', flex: 2),
-              AppTableColumn('Masuk', flex: 1, align: TextAlign.right),
-              AppTableColumn('Keluar', flex: 1, align: TextAlign.right),
-              AppTableColumn('Sisa Saldo', flex: 1, align: TextAlign.right),
+            columns: [
+              const AppTableColumn('Nama', flex: 2),
+              const AppTableColumn('Tanggal', flex: 2),
+              const AppTableColumn('Jenis', flex: 2),
+              const AppTableColumn('Masuk', flex: 1, align: TextAlign.right),
+              const AppTableColumn('Keluar', flex: 1, align: TextAlign.right),
+              const AppTableColumn('Sisa Saldo',
+                  flex: 1, align: TextAlign.right),
+              if (bolehEditTopup)
+                const AppTableColumn('Aksi',
+                    width: 64, align: TextAlign.center),
             ],
             rows: _dataHalaman.map((r) {
               final waktu = DateTime.tryParse('${r['waktu']}');
+              final bolehKoreksiBaris = mutasiAdalahTopupTabungan(r);
               return AppTableRowData(cells: [
                 AppTableCell(
                   flex: 2,
@@ -681,6 +846,26 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan> wit
                     _formatRpMutasiTabungan.format(r['saldoPerPenabung'] ?? 0),
                     flex: 1,
                     align: TextAlign.right),
+                if (bolehEditTopup)
+                  AppTableCell(
+                    width: 64,
+                    align: TextAlign.center,
+                    child: AksiBarisMenu(aksi: [
+                      AksiBaris(
+                        ikon: Icons.edit_outlined,
+                        label: 'Ubah topup',
+                        onTap: bolehKoreksiBaris
+                            ? () => _bukaFormKoreksiTopup(r)
+                            : null,
+                      ),
+                      AksiBaris(
+                        ikon: Icons.delete_outline,
+                        label: 'Hapus topup',
+                        merusak: true,
+                        onTap: bolehKoreksiBaris ? () => _hapusTopup(r) : null,
+                      ),
+                    ]),
+                  ),
               ]);
             }).toList(),
             pagination: AppTablePagination(
@@ -714,9 +899,9 @@ class _KartuTotal extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: warna.withOpacity(0.08),
+        color: warna.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: warna.withOpacity(0.3)),
+        border: Border.all(color: warna.withValues(alpha: 0.3)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(label,
@@ -731,10 +916,225 @@ class _KartuTotal extends StatelessWidget {
   }
 }
 
+class _FormKoreksiTopupMutasi extends StatefulWidget {
+  final Map<String, dynamic> deposit;
+
+  const _FormKoreksiTopupMutasi({required this.deposit});
+
+  @override
+  State<_FormKoreksiTopupMutasi> createState() =>
+      _FormKoreksiTopupMutasiState();
+}
+
+class _FormKoreksiTopupMutasiState extends State<_FormKoreksiTopupMutasi> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nominal;
+  late final TextEditingController _keterangan;
+  bool _menyimpan = false;
+  DateTime _waktu = DateTime.now();
+  String? _pesanError;
+  String? _detailGalat;
+
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.deposit;
+    _nominal = TextEditingController(text: '${d['nominal'] ?? ''}');
+    _keterangan = TextEditingController(text: '${d['keterangan'] ?? ''}');
+    final teksWaktu = '${d['waktu'] ?? ''}'.replaceFirst(' ', 'T');
+    _waktu = DateTime.tryParse(teksWaktu) ?? DateTime.now();
+  }
+
+  @override
+  void dispose() {
+    _nominal.dispose();
+    _keterangan.dispose();
+    super.dispose();
+  }
+
+  double _nominalInput() {
+    final bersih =
+        _nominal.text.replaceAll(RegExp(r'[^0-9,.-]'), '').replaceAll(',', '.');
+    return double.tryParse(bersih) ?? 0;
+  }
+
+  Future<void> _pilihWaktu() async {
+    final tanggal = await showDatePicker(
+        context: context,
+        initialDate: _waktu,
+        firstDate: DateTime(2020),
+        lastDate: DateTime(2100));
+    if (tanggal == null || !mounted) return;
+    final jam = await showTimePicker(
+        context: context, initialTime: TimeOfDay.fromDateTime(_waktu));
+    setStateIfMounted(() => _waktu = DateTime(tanggal.year, tanggal.month,
+        tanggal.day, jam?.hour ?? _waktu.hour, jam?.minute ?? _waktu.minute));
+  }
+
+  Future<bool> _periodeSudahTutupBuku() async {
+    final tanggal = DateFormat('yyyy-MM-dd').format(_waktu);
+    try {
+      final hasil = await ApiClient.instance.aksi('tutup_buku_draft', {
+        'mulai': tanggal,
+        'sampai': tanggal,
+      });
+      final alasan = '${hasil['alasan'] ?? hasil['message'] ?? ''}';
+      final status =
+          '${hasil['statusTutupBuku'] ?? hasil['status_tutup_buku'] ?? ''}'
+              .toLowerCase();
+      final terkunci = hasil['sudahDitutup'] == true ||
+          hasil['sudah_ditutup'] == true ||
+          hasil['periodeTerkunci'] == true ||
+          hasil['periode_terkunci'] == true ||
+          status.contains('tutup') ||
+          alasan.toLowerCase().contains('sudah ditutup');
+      if (terkunci) {
+        setStateIfMounted(() {
+          _pesanError = alasan.isEmpty
+              ? 'Periode transaksi sudah tutup buku. Topup tidak dapat diubah.'
+              : alasan;
+          _detailGalat = null;
+        });
+      }
+      return terkunci;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _simpan() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (await _periodeSudahTutupBuku()) return;
+    setStateIfMounted(() {
+      _menyimpan = true;
+      _pesanError = null;
+      _detailGalat = null;
+    });
+    try {
+      // ONLINE-ONLY: koreksi topup mengubah saldo akhir dan harus ditolak
+      // langsung bila server mengunci periode akuntansi.
+      await ApiClient.instance.aksi('deposit_ubah', {
+        'id': widget.deposit['id'],
+        'nominal': _nominalInput(),
+        'keterangan': _keterangan.text.trim(),
+        'alasan': _keterangan.text.trim(),
+        'waktu': DateFormat('yyyy-MM-dd HH:mm:ss').format(_waktu),
+      });
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      final galat = GalatTampil.dari(e);
+      setStateIfMounted(() {
+        _pesanError = galat.pesan;
+        _detailGalat = galat.detail;
+      });
+    } finally {
+      if (mounted) setStateIfMounted(() => _menyimpan = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.72,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) => Form(
+          key: _formKey,
+          child: AppFormSheet(
+            scrollController: scrollController,
+            title: 'Ubah Topup Tabungan',
+            subtitle:
+                'Saldo akhir akan dihitung ulang setelah perubahan diterima server.',
+            icon: Icons.edit_outlined,
+            errorText: _pesanError,
+            errorDetail: _detailGalat,
+            actions: [
+              OutlinedButton.icon(
+                onPressed:
+                    _menyimpan ? null : () => Navigator.of(context).pop(false),
+                icon: const Icon(Icons.close, size: 18),
+                label: const Text('Batal'),
+              ),
+              ElevatedButton.icon(
+                onPressed: _menyimpan ? null : _simpan,
+                icon: _menyimpan
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.save_outlined, size: 18),
+                label: const Text('Simpan Perubahan'),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white),
+              ),
+            ],
+            children: [
+              AppFormSection(
+                judul: 'Member',
+                children: [
+                  AppReadonlyField(
+                      label: 'Member',
+                      value: '${widget.deposit['namaMember'] ?? '-'}'),
+                ],
+              ),
+              const SizedBox(height: 12),
+              AppFormSection(
+                judul: 'Koreksi Topup',
+                children: [
+                  AppFormTextField(
+                    label: 'Nominal topup *',
+                    controller: _nominal,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    validator: (_) =>
+                        _nominalInput() <= 0 ? 'Nominal harus > 0' : null,
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _menyimpan ? null : _pilihWaktu,
+                          icon: const Icon(Icons.event, size: 16),
+                          label: Text(
+                            'Waktu: ${_formatTglMutasiTabungan.format(_waktu)}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  AppFormTextField(
+                    label: 'Keterangan / alasan perubahan *',
+                    controller: _keterangan,
+                    maxLines: 3,
+                    validator: (v) => (v ?? '').trim().length < 5
+                        ? 'Alasan minimal 5 karakter'
+                        : null,
+                  ),
+                  const Text(
+                    'Koreksi hanya tersedia untuk Topup Tabungan. Jika periode sudah tutup buku, server akan menolak perubahan.',
+                    style:
+                        TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Sheet pencarian anggota (dipakai filter ledger DAN form Bayar Hutang) --
 /// debounce 400ms, mirip pola `_cariAnggota` di `tab_topup.dart`.
 class PilihAnggotaSheet extends StatefulWidget {
-  const PilihAnggotaSheet();
+  const PilihAnggotaSheet({super.key});
 
   @override
   State<PilihAnggotaSheet> createState() => PilihAnggotaSheetState();
