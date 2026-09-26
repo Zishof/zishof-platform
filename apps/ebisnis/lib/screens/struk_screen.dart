@@ -770,52 +770,7 @@ class StrukScreen extends StatelessWidget {
     return tinggi < 130 ? 130 : tinggi;
   }
 
-  /// [konteks] hanya dipakai untuk memberi tahu kasir bila LACI gagal dibuka;
-  /// pencetakan strukmnya sendiri tidak bergantung padanya.
-  Future<void> _cetakStruk([BuildContext? konteks]) async {
-    await _pastikanProfilToko();
-    if (defaultTargetPlatform == TargetPlatform.windows) {
-      await PengaturanLaci.instance.muat();
-      final logo = await _logoEscPos();
-      final bytes = _strukEscPos(logo);
-      await cetakRawKasir(
-        bytes,
-        namaPrinter: PengaturanLaci.instance.namaPrinter,
-        namaDokumen: 'Struk $kode',
-      );
-      // KE-FIX (laporan kasir 21-08-2026: "cetak struk tidak membuka laci,
-      // biasanya otomatis"). Aliran ESC/POS struk TIDAK pernah memuat pulsa
-      // buka laci, sehingga laci hanya terbuka lewat tombol Buka Laci yang
-      // memanggil bukaLaciKasir sendiri. Pulsa itu dikirim di sini, SETELAH
-      // struknya masuk antrean cetak, ke printer yang sama dengan struknya --
-      // laci memang menumpang port RJ11 printer tersebut.
-      //
-      // Cetak ULANG sengaja TIDAK membuka laci: mencetak ulang struk lama
-      // bukan penerimaan uang baru, dan membiarkannya membuka laci berarti
-      // siapa pun bisa membuka laci kapan saja lewat menu riwayat.
-      //
-      // Syarat `!modeCetakUlang` ini BUKAN sekadar kerapian: ia adalah
-      // kontrol kas. Menghapusnya membuat laci dapat dibuka kapan saja oleh
-      // siapa pun cukup dengan membuka riwayat lalu menekan Cetak Ulang,
-      // tanpa ada transaksi maupun uang yang masuk.
-      if (!modeCetakUlang) {
-        try {
-          await bukaLaciKasir(
-            pinAlternatif: PengaturanLaci.instance.pinAlternatif,
-            namaPrinter: PengaturanLaci.instance.namaPrinter,
-          );
-        } catch (e) {
-          // Struknya sudah tercetak; kegagalan laci tidak boleh membatalkan
-          // apa pun. Cukup beri tahu supaya kasir tahu harus membuka manual.
-          if (konteks != null && konteks.mounted) {
-            ScaffoldMessenger.of(konteks).showSnackBar(SnackBar(
-              content: Text('Struk tercetak, tetapi laci gagal dibuka: $e'),
-            ));
-          }
-        }
-      }
-      return;
-    }
+  Future<pw.Document> _buatDokumenStrukPdf() async {
     final logo = await _logoPdf();
     final lebarKertasMm = PengaturanStruk.instance.lebarKertasMm;
     final tinggiIsiMm = _tinggiStrukPdfMm();
@@ -865,7 +820,84 @@ class StrukScreen extends StatelessWidget {
         ),
       );
     }
+    return doc;
+  }
+
+  Future<void> _cetakStrukPdfViaDialogOs() async {
+    final doc = await _buatDokumenStrukPdf();
+    await cetakPdfDenganDialogOs(dokumen: doc, nama: 'struk-$kode.pdf');
+  }
+
+  Future<void> _cetakStrukPdfKePrinterDefault() async {
+    final doc = await _buatDokumenStrukPdf();
     await cetakLangsungKePrinterDefault(dokumen: doc, nama: 'struk-$kode.pdf');
+  }
+
+  /// [konteks] hanya dipakai untuk memberi tahu kasir bila LACI gagal dibuka;
+  /// pencetakan struknya sendiri tidak bergantung padanya.
+  Future<void> _cetakStruk([BuildContext? konteks]) async {
+    await _pastikanProfilToko();
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      await PengaturanLaci.instance.muat();
+      final logo = await _logoEscPos();
+      final bytes = _strukEscPos(logo);
+      try {
+        final printerAktif = await printerKasirAktifTerdeteksi(
+          namaPrinter: PengaturanLaci.instance.namaPrinter,
+        );
+        if (!printerAktif) {
+          throw Exception('Tidak ada printer struk aktif yang terdeteksi.');
+        }
+        await cetakRawKasir(
+          bytes,
+          namaPrinter: PengaturanLaci.instance.namaPrinter,
+          namaDokumen: 'Struk $kode',
+        );
+      } catch (e) {
+        if (konteks != null && konteks.mounted) {
+          ScaffoldMessenger.of(konteks).showSnackBar(SnackBar(
+            content: Text(
+              'Printer struk tidak aktif/tersedia. Membuka ekspor PDF: $e',
+            ),
+          ));
+        }
+        await _cetakStrukPdfViaDialogOs();
+        return;
+      }
+      // KE-FIX (laporan kasir 21-08-2026: "cetak struk tidak membuka laci,
+      // biasanya otomatis"). Aliran ESC/POS struk TIDAK pernah memuat pulsa
+      // buka laci, sehingga laci hanya terbuka lewat tombol Buka Laci yang
+      // memanggil bukaLaciKasir sendiri. Pulsa itu dikirim di sini, SETELAH
+      // struknya masuk antrean cetak, ke printer yang sama dengan struknya --
+      // laci memang menumpang port RJ11 printer tersebut.
+      //
+      // Cetak ULANG sengaja TIDAK membuka laci: mencetak ulang struk lama
+      // bukan penerimaan uang baru, dan membiarkannya membuka laci berarti
+      // siapa pun bisa membuka laci kapan saja lewat menu riwayat.
+      //
+      // Syarat `!modeCetakUlang` ini BUKAN sekadar kerapian: ia adalah
+      // kontrol kas. Menghapusnya membuat laci dapat dibuka kapan saja oleh
+      // siapa pun cukup dengan membuka riwayat lalu menekan Cetak Ulang,
+      // tanpa ada transaksi maupun uang yang masuk.
+      if (!modeCetakUlang) {
+        try {
+          await bukaLaciKasir(
+            pinAlternatif: PengaturanLaci.instance.pinAlternatif,
+            namaPrinter: PengaturanLaci.instance.namaPrinter,
+          );
+        } catch (e) {
+          // Struknya sudah tercetak; kegagalan laci tidak boleh membatalkan
+          // apa pun. Cukup beri tahu supaya kasir tahu harus membuka manual.
+          if (konteks != null && konteks.mounted) {
+            ScaffoldMessenger.of(konteks).showSnackBar(SnackBar(
+              content: Text('Struk tercetak, tetapi laci gagal dibuka: $e'),
+            ));
+          }
+        }
+      }
+      return;
+    }
+    await _cetakStrukPdfKePrinterDefault();
   }
 
   /// Dipakai halaman lain untuk mencetak ulang tanpa membuka preview, dengan
@@ -1396,7 +1428,8 @@ class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
             setState(() {
               _totalServer = t;
               _totalDiskonServer = d;
-              _saldoServer = StrukScreen.saldoDariSumber(Map<String, dynamic>.from(peta));
+              _saldoServer =
+                  StrukScreen.saldoDariSumber(Map<String, dynamic>.from(peta));
               _selesai = true;
             });
             if (catatan.isNotEmpty) {
