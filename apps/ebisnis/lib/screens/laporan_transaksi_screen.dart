@@ -4013,7 +4013,11 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
   DateTime? _mulai;
   DateTime? _sampai;
   String _cariProduk = '';
-  String _cariKasir = '';
+  bool _bolehFilterKasir = false;
+  String _kasir = '';
+  List<String> _daftarKasir = [];
+  String _metode = '';
+  List<String> _daftarMetode = [];
   // Mode rekap merangkum baris rincian yang sama, sehingga angkanya tidak pernah
   // berselisih dengan mode rincian pada filter yang sama.
   bool _modeRekap = true;
@@ -4031,6 +4035,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
     _mulai = DateTime(kini.year, kini.month, kini.day);
     _sampai = _mulai;
     _muat();
+    _muatOpsiMetode();
     _muatRekap();
   }
 
@@ -4038,8 +4043,30 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
         if (_mulai != null) 'tglMulai': _formatTanggalServer.format(_mulai!),
         if (_sampai != null) 'tglSampai': _formatTanggalServer.format(_sampai!),
         if (_cariProduk.trim().isNotEmpty) 'produk': _cariProduk.trim(),
-        if (_cariKasir.trim().isNotEmpty) 'kasir': _cariKasir.trim(),
+        if (_kasir.trim().isNotEmpty) 'kasir': _kasir.trim(),
+        if (_metode.trim().isNotEmpty) 'metode': _metode.trim(),
       };
+
+  Future<void> _muatOpsiMetode() async {
+    if (_mulai == null || _sampai == null) return;
+    try {
+      final hasil = await ApiClient.instance.aksi('laporan_metode_bayar_opsi', {
+        'tglMulai': _formatTanggalServer.format(_mulai!),
+        'tglSampai': _formatTanggalServer.format(_sampai!),
+      });
+      if (!mounted) return;
+      final opsi = ((hasil['data'] as List?) ?? [])
+          .map((e) => '$e'.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      setStateIfMounted(() {
+        _daftarMetode = opsi;
+        if (_metode.isNotEmpty && !opsi.contains(_metode)) _metode = '';
+      });
+    } catch (_) {
+      // Opsi metode bersifat bantuan filter; laporan tetap dapat dibuka.
+    }
+  }
 
   Future<void> _muat() async {
     setStateIfMounted(() {
@@ -4054,6 +4081,18 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
       });
       final listRaw =
           ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      final daftarKasir = ((hasil['daftarKasir'] as List?) ?? [])
+          .map((e) => '$e'.trim())
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList();
+      if (daftarKasir.isEmpty) {
+        daftarKasir.addAll(listRaw
+            .map((row) => '${row['kasir'] ?? ''}'.trim())
+            .where((e) => e.isNotEmpty)
+            .toSet());
+      }
+      final aktif = '${hasil['kasirAktif'] ?? ''}'.trim();
       setStateIfMounted(() {
         _data = listRaw
             .map((row) => {
@@ -4062,6 +4101,14 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
                 })
             .toList();
         _totalTransaksi = (hasil['total'] as num?)?.toInt() ?? 0;
+        _bolehFilterKasir = hasil['bolehFilterKasir'] != false;
+        if (daftarKasir.isNotEmpty) _daftarKasir = daftarKasir;
+        if (!_bolehFilterKasir || (_kasir.isEmpty && aktif.isNotEmpty)) {
+          _kasir = aktif;
+        }
+        if (_kasir.isNotEmpty && !_daftarKasir.contains(_kasir)) {
+          _daftarKasir = [_kasir, ..._daftarKasir];
+        }
       });
     } catch (e) {
       setStateIfMounted(() => _error = terapkanGalat(e));
@@ -4077,6 +4124,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
 
   Future<void> _terapkan() async {
     setStateIfMounted(() => _halaman = 1);
+    await _muatOpsiMetode();
     await _muat();
     if (_modeRekap) await _muatRekap();
   }
@@ -4109,7 +4157,8 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
   String get _subjudulFilter {
     final bagian = <String>[
       if (_cariProduk.trim().isNotEmpty) 'Produk "${_cariProduk.trim()}"',
-      if (_cariKasir.trim().isNotEmpty) 'Kasir "${_cariKasir.trim()}"',
+      if (_kasir.trim().isNotEmpty) 'Kasir "${_kasir.trim()}"',
+      if (_metode.trim().isNotEmpty) 'Metode "${_metode.trim()}"',
     ];
     return bagian.isEmpty ? '' : ' · ${bagian.join(' · ')}';
   }
@@ -4305,18 +4354,55 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: TextField(
+                child: DropdownButtonFormField<String>(
+                  value: _kasir.isEmpty && !_bolehFilterKasir ? null : _kasir,
+                  isExpanded: true,
                   decoration: const InputDecoration(
-                    isDense: true,
-                    labelText: 'Kasir',
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (v) => _cariKasir = v,
-                  onSubmitted: (_) => _terapkan(),
+                      isDense: true,
+                      labelText: 'Kasir',
+                      prefixIcon: Icon(Icons.person_outline),
+                      border: OutlineInputBorder()),
+                  items: [
+                    if (_bolehFilterKasir)
+                      const DropdownMenuItem(
+                          value: '', child: Text('Semua kasir')),
+                    ..._daftarKasir
+                        .map((k) => DropdownMenuItem(value: k, child: Text(k))),
+                  ],
+                  onChanged: _bolehFilterKasir
+                      ? (v) => setStateIfMounted(() => _kasir = v ?? '')
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: _metode.isEmpty ? '' : _metode,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                      isDense: true,
+                      labelText: 'Metode Bayar',
+                      prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+                      border: OutlineInputBorder()),
+                  items: [
+                    const DropdownMenuItem(
+                        value: '', child: Text('Semua metode')),
+                    ..._daftarMetode
+                        .map((m) => DropdownMenuItem(value: m, child: Text(m))),
+                  ],
+                  onChanged: (v) => setStateIfMounted(() => _metode = v ?? ''),
                 ),
               ),
             ]),
           ),
+          if (!_bolehFilterKasir && !_memuat)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Text(
+                'Akun kasir hanya dapat melihat rincian produk miliknya sendiri.',
+                style: TextStyle(fontSize: 12, color: Colors.orange),
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             child: Wrap(spacing: 8, children: [
