@@ -2131,7 +2131,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
             ),
           ),
           actions: [
-            if (payloadLokal is Map && row['statusSinkronLokal'] != 'SYNCED')
+            if (payloadLokal is Map && row['idTransaksi'] == null)
               TextButton.icon(
                 icon: const Icon(Icons.payments_outlined, size: 19),
                 label: const Text('Ubah Metode Pembayaran'),

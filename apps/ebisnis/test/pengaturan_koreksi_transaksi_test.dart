@@ -77,10 +77,23 @@ void main() {
     final source =
         File('lib/screens/riwayat_penjualan_screen.dart').readAsStringSync();
 
-    expect(source, contains("row['statusSinkronLokal'] != 'SYNCED'"));
+    expect(source, contains("row['idTransaksi'] == null"));
     expect(source, contains('Ubah Metode Pembayaran'));
     expect(source, contains('koreksiMetodePembayaran'));
     expect(source, contains('izinkanValidasiServer: true'));
     expect(source, contains('Akan divalidasi saldo/izin oleh server'));
+  });
+
+  test('transaksi selesai lokal tanpa id server tetap dapat dikoreksi', () {
+    final service =
+        File('lib/services/transaksi_outbox_service.dart').readAsStringSync();
+    final core =
+        File('../../packages/core_db/lib/core_db.dart').readAsStringSync();
+
+    expect(service, contains('selesaiLokalBelumCocok'));
+    expect(service, contains("status == 'SYNCED' && !hasilServerAda"));
+    expect(service, contains('asalBackup.isEmpty'));
+    expect(core, contains('izinkanSelesaiLokal'));
+    expect(core, contains("hasil_server_json IS NULL"));
   });
 }

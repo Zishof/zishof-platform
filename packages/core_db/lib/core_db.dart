@@ -1686,10 +1686,13 @@ class CoreDb {
   /// koreksi eksplisit. Identitas, waktu pembuatan, pemilik, toko, dan perangkat
   /// tetap berasal dari baris lama; hanya payload bisnis yang berubah. Status
   /// dikembalikan ke PENDING agar dikirim lagi memakai `kode_unik` yang sama.
-  Future<bool> koreksiPayloadTransaksi(
-      String kodeUnik, String payloadJson) async {
+  Future<bool> koreksiPayloadTransaksi(String kodeUnik, String payloadJson,
+      {bool izinkanSelesaiLokal = false}) async {
     final database = await db;
     final sekarang = DateTime.now().toIso8601String();
+    final whereStatus = izinkanSelesaiLokal
+        ? "(status != 'SYNCED' OR hasil_server_json IS NULL)"
+        : "status != 'SYNCED'";
     final berubah = await database.update(
       'transaksi_pending',
       {
@@ -1701,7 +1704,7 @@ class CoreDb {
         'disinkronkan_pada': null,
         'diperbarui_pada': sekarang,
       },
-      where: "kode_unik = ? AND status != 'SYNCED'",
+      where: "kode_unik = ? AND $whereStatus",
       whereArgs: [kodeUnik],
     );
     if (berubah > 0) await _cadangkanBarisTransaksi(kodeUnik);

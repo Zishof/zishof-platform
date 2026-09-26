@@ -159,16 +159,23 @@ class TransaksiOutboxService {
     if (row == null) {
       throw StateError('Transaksi $kodeUnik tidak ditemukan di perangkat ini.');
     }
-    if ('${row['status']}' == 'SYNCED') {
+    final status = '${row['status']}';
+    final payload = Map<String, dynamic>.from(
+        jsonDecode('${row['payload_json'] ?? '{}'}') as Map);
+    final asalBackup = '${payload['asal_backup'] ?? ''}'.trim().toUpperCase();
+    final hasilServerAda =
+        '${row['hasil_server_json'] ?? ''}'.trim().isNotEmpty;
+    final selesaiLokalBelumCocok =
+        status == 'SYNCED' && !hasilServerAda && asalBackup.isEmpty;
+    if (status == 'SYNCED' && !selesaiLokalBelumCocok) {
       throw StateError(
           'Transaksi sudah diterima server dan tidak boleh diubah dari perangkat.');
     }
-    final payload = Map<String, dynamic>.from(
-        jsonDecode('${row['payload_json'] ?? '{}'}') as Map);
     final koreksi = payloadDenganMetodeTerkoreksi(payload, caraBayar,
         izinkanValidasiServer: izinkanValidasiServer);
-    final berubah = await CoreDb.instance
-        .koreksiPayloadTransaksi(kodeUnik, jsonEncode(koreksi));
+    final berubah = await CoreDb.instance.koreksiPayloadTransaksi(
+        kodeUnik, jsonEncode(koreksi),
+        izinkanSelesaiLokal: selesaiLokalBelumCocok);
     if (!berubah) {
       throw StateError(
           'Transaksi tidak dapat dikoreksi karena statusnya sudah berubah.');
