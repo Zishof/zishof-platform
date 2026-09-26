@@ -602,12 +602,28 @@ class ApiClient {
     }
   }
 
+  static const Set<String> _aksiOpsionalServerBaru = {
+    'so_perubahan_stok',
+    'toko_filter_list',
+  };
+
   bool _kegagalanYangDiharapkan(ApiException gagal) {
     // Instalasi lama boleh belum memakai tenant. PengikatanTenant menangani
     // respons ini sebagai mode legacy/tanpa tenant, sehingga bukan error yang
     // perlu memenuhi Log Error dan endpoint client_error_log.
-    return gagal.aktivitas == 'tenant_context' &&
-        gagal.kode == 'TENANT_ACCESS_DENIED';
+    if (gagal.aktivitas == 'tenant_context' &&
+        gagal.kode == 'TENANT_ACCESS_DENIED') {
+      return true;
+    }
+    // Beberapa tenant produksi bisa berjalan di backend yang belum memuat
+    // action pelengkap terbaru. Action di daftar ini bersifat pembacaan/polling
+    // opsional; kegagalannya ditangani pemanggil dengan fallback lokal atau
+    // cache, jadi jangan memenuhi Log Error tiap 15 detik.
+    if (_aksiOpsionalServerBaru.contains(gagal.aktivitas) &&
+        gagal.pesan.toLowerCase().contains('aksi tidak dikenal')) {
+      return true;
+    }
+    return false;
   }
 
   /// Dipakai penangkap error global dan operasi lokal/non-HTTP agar seluruh

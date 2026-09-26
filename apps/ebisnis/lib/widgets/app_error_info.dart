@@ -18,6 +18,17 @@ PanduanResolusiGalat panduanResolusiGalat(String pesan,
     {String? aktivitas, String? kode}) {
   final lower = pesan.toLowerCase();
 
+  if (lower.contains('aksi tidak dikenal')) {
+    return const PanduanResolusiGalat(
+      judul: 'Fitur belum tersedia di server',
+      solusi: [
+        'Jangan mengulang tombol atau sinkronisasi berulang; aplikasi belum menerima dukungan fitur ini dari server yang sedang dipakai.',
+        'Pastikan alamat server sudah benar dan server sudah memakai versi backend yang mendukung fitur tersebut.',
+        'Jika tetap terjadi, kirim kode referensi dan Informasi Teknis kepada admin/developer untuk pemeriksaan versi backend.',
+      ],
+    );
+  }
+
   if (lower.contains('metode pembayaran') &&
       lower.contains('tidak diizinkan') &&
       (lower.contains('jenis member') || lower.contains('tipe member'))) {
