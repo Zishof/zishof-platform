@@ -73,6 +73,48 @@ void main() {
       expect(hasil['pengiriman_pending'], isTrue);
     });
 
+    test('koreksi lokal voucher member tetap menunggu validasi server', () {
+      final sumber = <String, dynamic>{
+        'kodeUnik': 'EB260921122101245V',
+        'clientTrxId': 'EB260921122101245V',
+        'waktu': '21-09-2026 12:21:00',
+        'kasir': 'mutia',
+        'tokoId': 5,
+        'id_member': 1001,
+        'nama_member': 'Santri UAT',
+        'total': 3500,
+        'caraBayar': 1,
+        'caraBayarNama': 'Tunai',
+        'transaksi': [
+          {'kode': 'P001', 'jumlah': 1, 'harga': 3500}
+        ],
+      };
+      final voucher = CaraBayar(
+        id: 7,
+        nama: 'Voucher Santri',
+        manual: false,
+        wajibPilihMember: true,
+      );
+
+      expect(
+        () => TransaksiOutboxService.payloadDenganMetodeTerkoreksi(
+            sumber, voucher),
+        throwsArgumentError,
+      );
+
+      final hasil = TransaksiOutboxService.payloadDenganMetodeTerkoreksi(
+        sumber,
+        voucher,
+        izinkanValidasiServer: true,
+      );
+      expect(hasil['kodeUnik'], 'EB260921122101245V');
+      expect(hasil['waktu'], '21-09-2026 12:21:00');
+      expect(hasil['id_member'], 1001);
+      expect(hasil['caraBayar'], 7);
+      expect(hasil['caraBayarNama'], 'Voucher Santri');
+      expect(hasil['pengiriman_pending'], isTrue);
+    });
+
     test('checkout saldo wajib melewati cabang ACK server sebelum outbox', () {
       final source =
           File('lib/screens/keranjang_screen.dart').readAsStringSync();

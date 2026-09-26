@@ -97,9 +97,40 @@ class TransaksiOutboxService {
   /// idempotensi transaksi tetap utuh.
   static Map<String, dynamic> payloadDenganMetodePengganti(
       Map<String, dynamic> sumber, CaraBayar caraBayar) {
+    return payloadDenganMetodeTerkoreksi(sumber, caraBayar);
+  }
+
+  /// Mengganti metode bayar pada transaksi lokal yang belum diterima server.
+  ///
+  /// Untuk metode manual aman, payload dapat dikoreksi sepenuhnya di perangkat.
+  /// Untuk voucher/saldo, pemanggil wajib memilih [izinkanValidasiServer] agar
+  /// status dikembalikan ke PENDING dan server tetap menjadi penentu saldo,
+  /// izin member, serta penolakan bisnisnya.
+  static Map<String, dynamic> payloadDenganMetodeTerkoreksi(
+      Map<String, dynamic> sumber, CaraBayar caraBayar,
+      {bool izinkanValidasiServer = false}) {
     if (!metodeAmanUntukKoreksiOffline(caraBayar)) {
-      throw ArgumentError(
-          'Metode pengganti harus manual dan tidak memotong saldo/piutang.');
+      if (!izinkanValidasiServer) {
+        throw ArgumentError(
+            'Metode pengganti harus manual dan tidak memotong saldo/piutang.');
+      }
+      if (caraBayar.masukSebagaiHutang) {
+        throw ArgumentError(
+            'Metode piutang/kasbon harus dikoreksi melalui server/supervisor.');
+      }
+      if (caraBayar.wajibPin) {
+        throw ArgumentError(
+            'Metode ini memerlukan PIN dan belum dapat dikoreksi dari antrean lokal.');
+      }
+      final memberId = sumber['id_member'] ?? sumber['memberId'];
+      final memberAngka = memberId is num
+          ? memberId.toInt()
+          : int.tryParse('${memberId ?? ''}');
+      final memberValid = memberAngka != null && memberAngka > 0;
+      if (caraBayar.wajibPilihMember && !memberValid) {
+        throw ArgumentError(
+            'Pilih transaksi yang sudah memiliki member sebelum memakai voucher/saldo.');
+      }
     }
     final hasil = Map<String, dynamic>.from(sumber)
       ..['caraBayar'] = caraBayar.id
@@ -122,8 +153,8 @@ class TransaksiOutboxService {
     return hasil;
   }
 
-  Future<void> koreksiMetodePembayaran(
-      String kodeUnik, CaraBayar caraBayar) async {
+  Future<void> koreksiMetodePembayaran(String kodeUnik, CaraBayar caraBayar,
+      {bool izinkanValidasiServer = false}) async {
     final row = await CoreDb.instance.transaksiLokalDenganKode(kodeUnik);
     if (row == null) {
       throw StateError('Transaksi $kodeUnik tidak ditemukan di perangkat ini.');
@@ -134,7 +165,8 @@ class TransaksiOutboxService {
     }
     final payload = Map<String, dynamic>.from(
         jsonDecode('${row['payload_json'] ?? '{}'}') as Map);
-    final koreksi = payloadDenganMetodePengganti(payload, caraBayar);
+    final koreksi = payloadDenganMetodeTerkoreksi(payload, caraBayar,
+        izinkanValidasiServer: izinkanValidasiServer);
     final berubah = await CoreDb.instance
         .koreksiPayloadTransaksi(kodeUnik, jsonEncode(koreksi));
     if (!berubah) {

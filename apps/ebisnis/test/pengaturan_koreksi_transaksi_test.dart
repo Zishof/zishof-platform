@@ -72,4 +72,15 @@ void main() {
     expect(source, contains("if (hasilEdit.containsKey('pembayaran'))"));
     expect(source, contains("'nominal': slot.nominal"));
   });
+
+  test('transaksi lokal tertunda dapat membuka koreksi metode pembayaran', () {
+    final source =
+        File('lib/screens/riwayat_penjualan_screen.dart').readAsStringSync();
+
+    expect(source, contains("row['statusSinkronLokal'] != 'SYNCED'"));
+    expect(source, contains('Ubah Metode Pembayaran'));
+    expect(source, contains('koreksiMetodePembayaran'));
+    expect(source, contains('izinkanValidasiServer: true'));
+    expect(source, contains('Akan divalidasi saldo/izin oleh server'));
+  });
 }

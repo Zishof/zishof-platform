@@ -1876,6 +1876,95 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
     );
   }
 
+  int? _idMemberDariPayload(Map<String, dynamic> payload) {
+    final nilai = payload['id_member'] ?? payload['memberId'];
+    if (nilai is num) return nilai.toInt() > 0 ? nilai.toInt() : null;
+    final angka = int.tryParse('${nilai ?? ''}');
+    return angka != null && angka > 0 ? angka : null;
+  }
+
+  Future<List<CaraBayar>> _metodeKoreksiLokal(
+      Map<String, dynamic> payload) async {
+    final idMember = _idMemberDariPayload(payload);
+    if (idMember == null) return Sesi.instance.caraBayar;
+    final hasil = await ApiClient.instance.aksi('cara_bayar_list', {
+      'id_member': idMember,
+      'id_toko': Sesi.instance.idTokoTerpilih,
+    });
+    final metode = metodePemulihanMember(hasil);
+    if (metode.isEmpty) {
+      throw StateError(
+          'Tidak ada metode pembayaran yang diizinkan untuk member transaksi ini.');
+    }
+    return metode;
+  }
+
+  Future<CaraBayar?> _pilihMetodeKoreksiLokal(
+      Map<String, dynamic> payload) async {
+    final daftar = await _metodeKoreksiLokal(payload);
+    if (!mounted) return null;
+    final idSaatIni = payload['caraBayar'] ?? payload['caraBayarId'];
+    return showDialog<CaraBayar>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Ubah Metode Pembayaran'),
+        content: SizedBox(
+          width: 360,
+          child: ListView(
+            shrinkWrap: true,
+            children: daftar.map((cara) {
+              final terpilih = '${cara.id}' == '$idSaatIni';
+              return ListTile(
+                leading: Icon(terpilih
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked),
+                title: Text(cara.nama),
+                subtitle: cara.memotongDepositEfektif
+                    ? const Text('Akan divalidasi saldo/izin oleh server')
+                    : null,
+                onTap: () => Navigator.of(dialogContext).pop(cara),
+              );
+            }).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Batal'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _koreksiMetodePembayaranLokal(
+      Map<String, dynamic> row, Map<String, dynamic> payload) async {
+    try {
+      final metode = await _pilihMetodeKoreksiLokal(payload);
+      if (metode == null || !mounted) return;
+      final kode = '${payload['kodeUnik'] ?? row['nomorNota'] ?? ''}'.trim();
+      if (kode.isEmpty) {
+        throw StateError('Kode transaksi lokal tidak dikenali.');
+      }
+      await TransaksiOutboxService.instance.koreksiMetodePembayaran(
+        kode,
+        metode,
+        izinkanValidasiServer: true,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+            'Metode pembayaran transaksi $kode diperbarui dan antrean akan dikirim ulang.'),
+      ));
+      await _muat();
+    } catch (e) {
+      if (mounted) {
+        await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+            aktivitas: 'mengoreksi metode pembayaran transaksi lokal');
+      }
+    }
+  }
+
   Future<void> _lihatDetail(Map<String, dynamic> row) async {
     try {
       final payloadLokal = row['payloadLokal'];
@@ -2042,6 +2131,18 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
             ),
           ),
           actions: [
+            if (payloadLokal is Map && row['statusSinkronLokal'] != 'SYNCED')
+              TextButton.icon(
+                icon: const Icon(Icons.payments_outlined, size: 19),
+                label: const Text('Ubah Metode Pembayaran'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _koreksiMetodePembayaranLokal(
+                    row,
+                    Map<String, dynamic>.from(payloadLokal),
+                  );
+                },
+              ),
             if (hasil['bolehEditTransaksi'] == true)
               TextButton.icon(
                 icon: const Icon(Icons.edit_note_outlined, size: 19),
