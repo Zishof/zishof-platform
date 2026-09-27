@@ -1905,13 +1905,13 @@ class _KasirScreenState extends State<KasirScreen> {
   IconData _ikonStatusJaringan() {
     switch (_statusJaringan.status) {
       case StatusJaringanPos.online:
-        return Icons.cloud_done_outlined;
+        return Icons.wifi;
       case StatusJaringanPos.offline:
-        return Icons.cloud_off_outlined;
+        return Icons.wifi_off;
       case StatusJaringanPos.tidakStabil:
-        return Icons.cloud_sync_outlined;
+        return Icons.wifi;
       case StatusJaringanPos.memeriksa:
-        return Icons.cloud_queue_outlined;
+        return Icons.wifi;
     }
   }
 

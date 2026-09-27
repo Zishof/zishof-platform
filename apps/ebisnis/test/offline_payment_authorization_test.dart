@@ -160,6 +160,8 @@ void main() {
       expect(rapat, contains('Timer.periodic(constDuration(seconds:15)'));
       expect(source, contains('StatusJaringan.instance.periksaSekarang()'));
       expect(source, contains('Status jaringan POS'));
+      expect(source, contains('Icons.wifi'));
+      expect(source, contains('Icons.wifi_off'));
       expect(source, contains('Online'));
       expect(source, contains('Offline'));
       expect(source, contains('Tidak Stabil'));
