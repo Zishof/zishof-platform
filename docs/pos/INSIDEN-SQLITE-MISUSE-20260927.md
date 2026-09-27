@@ -39,3 +39,36 @@ server dalam perubahan ini. Penerapan produksi belum dijadwalkan.
 Validasi: 10 tes aplikasi dan 2 tes CoreDb lulus. Analisis dua file aplikasi tanpa temuan; analisis CoreDb mencatat empat info lint pada baris lama di luar patch. Build Windows debug varian albahjah berhasil (exit 0). Error MISUSE asli belum direproduksi.
 
 Pull folder utama CodeBaseDesktopDanMobile tertahan oleh tujuh perubahan tracked dan satu file tes untracked. Tidak dilakukan stash/reset. Worktree kasus sudah pada origin/main 976c6dd sebelum patch.
+
+## Perbaikan lanjutan: koneksi bersama dan keranjang (baseline 986be5f)
+
+Ditemukan risiko konkret dalam jumlahTransaksiPending: saat SQLite 21 terjadi,
+fungsi penghitung menutup koneksi bersama dan membukanya ulang. Checkout/outbox
+lain dapat sedang memakai koneksi itu. Jalur close/retry tersembunyi dihapus;
+error tetap diteruskan, data tidak dihapus dan jumlah antrean tidak dipalsukan.
+Tes injeksi kegagalan menjalankan pembacaan sesi kas bersamaan dengan penghitung
+error: sesi tetap selesai, koneksi tidak ditutup, pembacaan selanjutnya berhasil.
+Tes ini membuktikan kontrak konkurensi, bukan reproduksi driver perangkat pelapor.
+Pemicu pertama SQLITE_MISUSE di perangkat tetap belum dikonfirmasi.
+
+Kasir kini memiliki pengaman navigasi untuk keranjang berisi: pindah menu,
+pindah toko, penggantian halaman global, tombol kembali, dan keluar akun meminta
+kasir kembali ke keranjang serta berhasil Tahan/Bayar terlebih dahulu. Pengaman
+memeriksa isi aktual, bukan status pembayaran buatan. Tidak ada penyimpanan saldo,
+pemulihan otomatis setelah listrik padam, atau pengiriman pembayaran tambahan.
+Tombol Transaksi Baru masih memerlukan konfirmasi pengosongan yang sudah ada.
+
+Validasi lanjutan: 3 tes CoreDb (termasuk SQLite nyata/pemulihan outbox), 10 tes
+aplikasi (klasifikasi galat, kebijakan member, penjaga navigasi) lulus. Analyzer
+lima file aplikasi yang berubah tanpa temuan. Build Windows debug Al-Bahjah lulus.
+Media: tiga screenshot WhatsApp terbaru diperiksa; keluhan kembali menyebabkan
+barang harus dipindai ulang sesuai dengan risiko navigasi dari form belum disimpan.
+Tidak ada akses database produksi atau reproduksi pada komputer kasir.
+
+Tidak ada perubahan server, skema, saldo, atau data transaksi lama. Paket klien
+harus dipasang untuk menerapkan patch. Publikasi source/paket tidak memasang ke
+perangkat secara otomatis. Rencana pemasangan tengah malam WIB belum memiliki
+jadwal terkonfirmasi. Sebelum pemasangan: selesaikan/tahan keranjang, cocokkan
+status transaksi, tutup aplikasi normal dan cadangkan folder data beserta sidecar.
+Rollback memakai installer sebelumnya dan cadangan yang diperiksa admin; jangan
+menimpa data baru dengan backup lama secara otomatis.

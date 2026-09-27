@@ -31,6 +31,7 @@ import '../services/transaksi_outbox_service.dart';
 import '../services/url_media.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/pengaman_keranjang.dart';
 import '../widgets/app_error_info.dart';
 import '../widgets/proses_simpan_master.dart';
 import 'login_screen.dart';
@@ -1725,6 +1726,10 @@ class _KasirScreenState extends State<KasirScreen> {
   }
 
   Future<void> _logout() async {
+    if (_keranjang.isNotEmpty) {
+      PengamanKeranjang.tampilkanPeringatan(context);
+      return;
+    }
     await ApiClient.instance.hapusToken(tutupBasisData: true);
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
@@ -2369,7 +2374,20 @@ class _KasirScreenState extends State<KasirScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => PengamanKeranjang(
+        adaBarang: () => _keranjang.isNotEmpty,
+        child: PopScope(
+          canPop: _keranjang.isEmpty,
+          onPopInvokedWithResult: (didPop, result) {
+            if (!didPop && _keranjang.isNotEmpty) {
+              PengamanKeranjang.tampilkanPeringatan(context);
+            }
+          },
+          child: _buildKasir(context),
+        ),
+      );
+
+  Widget _buildKasir(BuildContext context) {
     return Focus(
       autofocus: true,
       onKeyEvent: _tanganiTombolKasir,

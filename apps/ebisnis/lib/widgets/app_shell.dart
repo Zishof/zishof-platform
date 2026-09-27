@@ -12,6 +12,7 @@ import 'penawaran_sinkronisasi_versi.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'app_drawer.dart';
+import 'pengaman_keranjang.dart';
 import 'app_components.dart';
 import 'app_version_label.dart';
 import '../screens/akun_saya_screen.dart';
@@ -1425,6 +1426,7 @@ void _pindahMenu(BuildContext context, _ItemMenuShell item,
   if (item.kunci == menuSaatIni || item.kunci == _menuAktifNotifier.value) {
     return;
   }
+  if (PengamanKeranjang.cegahKeluar(context)) return;
   AppDrawer.menuAktifNotifier.value = _labelDrawer(item.kunci);
   _menuAktifNotifier.value = item.kunci;
 }
@@ -1479,6 +1481,7 @@ Future<void> muatDaftarTokoFilter() async {
 /// Pemilih toko global untuk semua halaman Desktop/Android. Otorisasi tetap
 /// diverifikasi server oleh `pilih_toko_aktif`; daftar di UI bukan sumber hak.
 Future<bool> _pilihTokoGlobal(BuildContext context) async {
+  if (PengamanKeranjang.cegahKeluar(context)) return false;
   final daftar = Sesi.instance.daftarToko;
   if (!Sesi.instance.multiToko || daftar.length < 2) return false;
   final dipilih = await showDialog<int>(
@@ -1537,6 +1540,7 @@ Future<bool> _pilihTokoGlobal(BuildContext context) async {
 }
 
 void _muatUlangHalamanAktif(BuildContext context) {
+  if (PengamanKeranjang.cegahKeluar(context)) return;
   final item = _itemMenu(_menuAktifNotifier.value);
   if (item?.builder == null) return;
   Navigator.of(context).pushReplacement(
@@ -2635,6 +2639,7 @@ class _AppTopbarState extends State<_AppTopbar> {
   }
 
   Future<void> _logout() async {
+    if (PengamanKeranjang.cegahKeluar(context)) return;
     await ApiClient.instance.hapusToken();
     Sesi.instance.reset();
     if (!mounted) return;

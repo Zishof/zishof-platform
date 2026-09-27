@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'pengaman_keranjang.dart';
 import '../app_variant.dart';
 import '../sesi.dart';
 import '../services/layar_pelanggan_launcher.dart';
@@ -118,6 +119,7 @@ class AppDrawer extends StatelessWidget {
       if (Navigator.of(context).canPop()) Navigator.of(context).pop();
       return;
     }
+    if (PengamanKeranjang.cegahKeluar(context)) return;
     menuAktifNotifier.value = label;
     if (onPilihMenu != null) {
       onPilihMenu!(label);

@@ -25,6 +25,9 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 ///   benar walau server sedang lambat/offline.
 class CoreDb {
   CoreDb._();
+
+  @visibleForTesting
+  CoreDb.untukPengujian(Database database) : _db = database;
   static final CoreDb instance = CoreDb._();
 
   static String _storageNamespace = 'ebisnis';
@@ -1936,34 +1939,15 @@ class CoreDb {
   }
 
   Future<int> jumlahTransaksiPending() async {
-    Future<int> baca() async {
-      final database = await db;
-      final hasil = await database.query('transaksi_pending',
-          columns: const ['COUNT(*) AS n'],
-          where: 'status = ?',
-          whereArgs: const ['PENDING']);
-      return (hasil.first['n'] as num?)?.toInt() ?? 0;
-    }
-
-    try {
-      return await baca();
-    } catch (e) {
-      // sqlite_error 21/API misuse biasanya berarti handle FFI lama sudah
-      // tidak valid (mis. aplikasi sebelumnya ditutup paksa), bukan data
-      // transaksi rusak. Buka ulang SATU kali tanpa menghapus/mencadangkan DB.
-      final pesan = e.toString().toLowerCase();
-      if (!pesan.contains('code 21') &&
-          !pesan.contains('sqlite_error 21') &&
-          !pesan.contains('api misuse')) {
-        rethrow;
-      }
-      final lama = _db;
-      _db = null;
-      try {
-        if (lama != null && lama.isOpen) await lama.close();
-      } catch (_) {}
-      return baca();
-    }
+    // Penghitung latar berbagi koneksi dengan checkout dan outbox. Kesalahan
+    // baca TIDAK memberi hak untuk menutup koneksi: operasi lain mungkin
+    // sedang menulis transaksi. Propagasikan error tanpa retry/close tersembunyi.
+    final database = await db;
+    final hasil = await database.query('transaksi_pending',
+        columns: const ['COUNT(*) AS n'],
+        where: 'status = ?',
+        whereArgs: const ['PENDING']);
+    return (hasil.first['n'] as num?)?.toInt() ?? 0;
   }
 
   // ============================== CACHE REFERENSI (generik) ==============================
