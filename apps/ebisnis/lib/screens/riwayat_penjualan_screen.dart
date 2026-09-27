@@ -53,6 +53,9 @@ String kunciCacheRiwayatPenjualan(
 @visibleForTesting
 String labelStatusArsipTransaksi(Map<String, dynamic> row) {
   if (row['idTransaksi'] != null) return 'Tercatat pada data server';
+  if (row['statusSinkronLokal'] == 'GAGAL') {
+    return 'Gagal sinkron · perlu diperiksa';
+  }
   if (row['statusSinkronLokal'] == 'SYNCED') {
     return 'Selesai di perangkat · belum dicocokkan server';
   }
@@ -1546,7 +1549,6 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
     );
     final hasil = <Map<String, dynamic>>[];
     for (final source in rows) {
-      if ('${source['status']}' == 'GAGAL') continue;
       Map<String, dynamic> payload;
       try {
         payload = Map<String, dynamic>.from(
@@ -2496,6 +2498,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
     var sudahSama = 0;
     var arsipServerDilewati = 0;
     var payloadTidakLengkap = 0;
+    var gagalBisnis = 0;
     try {
       final server = await _semuaTransaksiServer();
       final serverByKode = <String, Map<String, dynamic>>{};
@@ -2572,10 +2575,19 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
               .tandaiTransaksiSinkron('${entry.value['kode_unik']}');
           keServer++;
         } catch (e) {
+          final kodeUnik = '${entry.value['kode_unik']}';
           if (_transaksiSudahAdaDiServer(e)) {
-            await CoreDb.instance
-                .tandaiTransaksiSinkron('${entry.value['kode_unik']}');
+            await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
             sudahSama++;
+          } else if (e is ApiException &&
+              !e.offline &&
+              ((e.kode != null &&
+                      TransaksiOutboxService.kodePenolakanPermanen
+                          .contains(e.kode!.trim().toUpperCase())) ||
+                  TransaksiOutboxService.pesanAdalahPenolakanPermanen(
+                      e.pesan))) {
+            await CoreDb.instance.tandaiTransaksiDitolak(kodeUnik, e.pesan);
+            gagalBisnis++;
           } else {
             rethrow;
           }
@@ -2587,7 +2599,8 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
           content: Text(
               'Sinkronisasi selesai: $dariServer dari server, $keServer ke server, '
               '$sudahSama sudah sama, $arsipServerDilewati arsip server tidak dikirim ulang, '
-              '$payloadTidakLengkap payload lokal perlu diperiksa.')));
+              '$payloadTidakLengkap payload lokal perlu diperiksa, '
+              '$gagalBisnis transaksi ditandai gagal dan perlu koreksi.')));
     } catch (e) {
       if (mounted) {
         await tampilkanKesalahan(context, e is ApiException ? e.info : e,

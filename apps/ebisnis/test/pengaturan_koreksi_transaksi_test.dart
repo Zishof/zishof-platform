@@ -96,4 +96,17 @@ void main() {
     expect(core, contains('izinkanSelesaiLokal'));
     expect(core, contains("hasil_server_json IS NULL"));
   });
+
+  test('sinkron dua arah menandai penolakan bisnis tanpa menghentikan antrean',
+      () {
+    final source =
+        File('lib/screens/riwayat_penjualan_screen.dart').readAsStringSync();
+
+    expect(source, contains('var gagalBisnis = 0'));
+    expect(source, contains('TransaksiOutboxService.kodePenolakanPermanen'));
+    expect(source,
+        contains('TransaksiOutboxService.pesanAdalahPenolakanPermanen'));
+    expect(source, contains('tandaiTransaksiDitolak(kodeUnik, e.pesan)'));
+    expect(source, contains('gagalBisnis++'));
+  });
 }

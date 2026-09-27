@@ -30,6 +30,8 @@ void main() {
         contains('belum dicocokkan server'));
     expect(labelStatusArsipTransaksi({'statusSinkronLokal': 'PENDING'}),
         contains('menunggu sinkron'));
+    expect(labelStatusArsipTransaksi({'statusSinkronLokal': 'GAGAL'}),
+        contains('Gagal sinkron'));
     expect(
         labelStatusArsipTransaksi(
             {'statusSinkronLokal': 'SYNCED', 'idTransaksi': 1}),
