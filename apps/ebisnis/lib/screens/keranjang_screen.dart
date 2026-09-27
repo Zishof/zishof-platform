@@ -18,6 +18,7 @@ import '../services/master_offline.dart';
 import '../services/pengaturan_nomor_struk.dart';
 import '../services/pengaturan_nomor_antrian.dart';
 import '../services/pengaturan_pembayaran.dart';
+import '../services/status_jaringan.dart';
 import '../services/transaksi_outbox_service.dart';
 import '../services/uom_konversi.dart';
 import '../services/validasi_saldo_pembayaran.dart';
@@ -1177,12 +1178,88 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     return false;
   }
 
+  bool _metodeTunaiManual(CaraBayar caraBayar) {
+    final nama = caraBayar.nama.toLowerCase();
+    return caraBayar.manual &&
+        !caraBayar.memotongDepositEfektif &&
+        !caraBayar.wajibPin &&
+        !caraBayar.wajibPilihMember &&
+        !caraBayar.masukSebagaiHutang &&
+        (nama.contains('tunai') || nama == 'cash' || nama == 'kas');
+  }
+
+  bool _metodeWajibOnline(CaraBayar caraBayar) {
+    if (_metodeTunaiManual(caraBayar)) return false;
+    final nama = caraBayar.nama.toLowerCase();
+    return !caraBayar.manual ||
+        caraBayar.memotongDepositEfektif ||
+        caraBayar.wajibPin ||
+        caraBayar.wajibPilihMember ||
+        caraBayar.masukSebagaiHutang ||
+        nama.contains('voucher') ||
+        nama.contains('saldo') ||
+        nama.contains('deposit') ||
+        nama.contains('tabungan') ||
+        nama.contains('qris') ||
+        nama.contains('transfer') ||
+        nama.contains('debit') ||
+        nama.contains('kredit') ||
+        nama.contains('edc') ||
+        nama.contains('online') ||
+        nama.contains('virtual account') ||
+        nama.contains('va ');
+  }
+
+  bool get _pembayaranWajibOnline {
+    if (_memberMemilikiLimitTransaksi) return true;
+    if (_splitAktif) {
+      return _splitBayar.any(
+          (slot) => slot.nominal > 0 && _metodeWajibOnline(slot.caraBayar));
+    }
+    final cara = _caraBayarTerpilih;
+    return cara != null && _metodeWajibOnline(cara);
+  }
+
   bool get _verifikasiMemberWajibServer {
     final member = _memberTerpilih;
     return member != null &&
         (_saldoAkanDipotong ||
             _pinWajibUntukMetodeTerpilih ||
             _hutangAkanDipakai);
+  }
+
+  Future<bool> _pastikanJaringanOnlineSebelumBayar() async {
+    if (!_pembayaranWajibOnline) return true;
+    final hasil = await StatusJaringan.instance.periksaSekarang();
+    if (hasil.online) return true;
+
+    await CoreDb.instance.catatErrorLog(
+      sumber: 'checkout-jaringan-preflight',
+      tingkat: 'WARN',
+      pesan: 'Pembayaran online/non-tunai dihentikan sebelum transaksi dibuat.',
+      detail: 'status=${hasil.status.name}; pesan=${hasil.pesan ?? ''}; '
+          'metode=${_namaMetodeWajibMember()}',
+    );
+    if (!mounted) return false;
+    await tampilkanKesalahan(
+      context,
+      AppErrorInfo(
+        judul: 'Jaringan belum online',
+        pesan: 'Metode pembayaran ini perlu konfirmasi server sebelum '
+            'transaksi dibuat. Keranjang tetap utuh dan belum masuk antrean '
+            'sinkron.',
+        solusi: const [
+          'Pastikan indikator jaringan POS sudah Online, lalu tekan Bayar satu kali.',
+          'Gunakan metode Tunai hanya jika pembayaran fisik sudah benar-benar diterima.',
+          'Jangan membuat nota pengganti untuk pembayaran saldo, voucher, transfer, atau QRIS yang belum terkonfirmasi server.',
+        ],
+        teknis: 'Status jaringan: ${hasil.status.name}\n'
+            'Pesan: ${hasil.pesan ?? '-'}',
+        kodeReferensi:
+            'NET-${DateTime.now().millisecondsSinceEpoch.toRadixString(36).toUpperCase()}',
+      ),
+    );
+    return false;
   }
 
   Future<int?> _verifikasiBiometrik(PosBiometricCaptureBridge bridge,
@@ -1908,6 +1985,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       // biometrik/PIN, simpanTransaksiPending, dan aksi bayar. Jika saldo tidak
       // cukup atau server tidak dapat dihubungi, keranjang tetap utuh dan tidak
       // ada baris PENDING baru yang harus dibersihkan saat tutup kasir.
+      if (!await _pastikanJaringanOnlineSebelumBayar()) return;
       if (!await _validasiSaldoPusatSebelumBayar()) return;
       kodePercobaan = _kodePengajuanLimitTertunda ?? await _buatKodeUnik();
       final kodeUnik = kodePercobaan;

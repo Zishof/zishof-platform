@@ -52,12 +52,16 @@ void main() {
     expect(selesai, greaterThan(mulai));
     final bayar = source.substring(mulai, selesai);
 
+    final jaringan =
+        bayar.indexOf('await _pastikanJaringanOnlineSebelumBayar()');
     final preflight = bayar.indexOf('await _validasiSaldoPusatSebelumBayar()');
     final kode = bayar.indexOf('await _buatKodeUnik()');
     final kirim = bayar.indexOf("aksi('bayar', payload)");
     final pending =
         bayar.indexOf('await CoreDb.instance.simpanTransaksiPending');
+    expect(jaringan, greaterThanOrEqualTo(0));
     expect(preflight, greaterThanOrEqualTo(0));
+    expect(preflight, greaterThan(jaringan));
     expect(kode, greaterThan(preflight));
     expect(kirim, greaterThan(kode));
     expect(pending, greaterThan(kirim));

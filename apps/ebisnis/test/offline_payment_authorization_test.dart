@@ -131,5 +131,38 @@ void main() {
       expect(posisiApi, greaterThan(posisiGuard));
       expect(posisiSimpan, greaterThan(posisiApi));
     });
+
+    test('checkout non-tunai melakukan preflight jaringan sebelum transaksi',
+        () {
+      final source =
+          File('lib/screens/keranjang_screen.dart').readAsStringSync();
+      expect(source, contains('bool _metodeWajibOnline(CaraBayar caraBayar)'));
+      expect(source, contains("nama.contains('voucher')"));
+      expect(source, contains("nama.contains('qris')"));
+      expect(source, contains("nama.contains('transfer')"));
+      expect(source, contains('StatusJaringan.instance.periksaSekarang()'));
+
+      final mulai = source.indexOf('Future<void> _bayar() async');
+      final selesai = source.indexOf('Future<void> _pilihMetode()', mulai);
+      final bayar = source.substring(mulai, selesai);
+      final jaringan =
+          bayar.indexOf('await _pastikanJaringanOnlineSebelumBayar()');
+      final saldo = bayar.indexOf('await _validasiSaldoPusatSebelumBayar()');
+      final kode = bayar.indexOf('await _buatKodeUnik()');
+      expect(jaringan, greaterThanOrEqualTo(0));
+      expect(saldo, greaterThan(jaringan));
+      expect(kode, greaterThan(saldo));
+    });
+
+    test('kasir menampilkan status jaringan realtime di toolbar POS', () {
+      final source = File('lib/screens/kasir_screen.dart').readAsStringSync();
+      final rapat = source.replaceAll(RegExp(r'\s+'), '');
+      expect(rapat, contains('Timer.periodic(constDuration(seconds:15)'));
+      expect(source, contains('StatusJaringan.instance.periksaSekarang()'));
+      expect(source, contains('Status jaringan POS'));
+      expect(source, contains('Online'));
+      expect(source, contains('Offline'));
+      expect(source, contains('Tidak Stabil'));
+    });
   });
 }

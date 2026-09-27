@@ -25,6 +25,7 @@ import '../services/pesanan_poller.dart';
 import '../services/simpan_gambar_local_first.dart';
 import '../services/sinkron_stok_opname.dart';
 import '../services/sinkronisasi_tabel_service.dart';
+import '../services/status_jaringan.dart';
 import '../services/toko_aktif_lokal.dart';
 import '../services/transaksi_outbox_service.dart';
 import '../services/url_media.dart';
@@ -170,7 +171,9 @@ class _KasirScreenState extends State<KasirScreen> {
   /// transaksi/navigasi, persis spt versi Electron.
   Timer? _timerSinkronSesiKas;
   Timer? _timerShiftOtomatis;
+  Timer? _timerStatusJaringan;
   String? _tanggalDialogTutupOtomatis;
+  HasilStatusJaringan _statusJaringan = StatusJaringan.instance.terakhir;
 
   /// Kas Sekarang -- pil saldo kas berjalan di toolbar (padanan indikator
   /// "Rp 1.900.000" pada referensi Electron). `null` = belum diketahui/tak
@@ -223,6 +226,9 @@ class _KasirScreenState extends State<KasirScreen> {
         const Duration(seconds: 30), (_) => _cobaSinkronBukaKasPending());
     _timerShiftOtomatis = Timer.periodic(
         const Duration(minutes: 1), (_) => _periksaJadwalTutupOtomatis());
+    _perbaruiStatusJaringan();
+    _timerStatusJaringan = Timer.periodic(
+        const Duration(seconds: 15), (_) => _perbaruiStatusJaringan());
     TransaksiOutboxService.instance.mulai();
     MasterOffline.revisiBaris.addListener(_saatStokLokalBerubah);
     SinkronStokOpname.mulai();
@@ -250,9 +256,16 @@ class _KasirScreenState extends State<KasirScreen> {
     _debounceCariProduk?.cancel();
     _timerSinkronSesiKas?.cancel();
     _timerShiftOtomatis?.cancel();
+    _timerStatusJaringan?.cancel();
     _kataKunciController.dispose();
     _fokusKataKunci.dispose();
     super.dispose();
+  }
+
+  Future<void> _perbaruiStatusJaringan() async {
+    final hasil = await StatusJaringan.instance.periksaSekarang();
+    if (!mounted) return;
+    setStateIfMounted(() => _statusJaringan = hasil);
   }
 
   void _saatStokLokalBerubah() {
@@ -1863,6 +1876,83 @@ class _KasirScreenState extends State<KasirScreen> {
 
   bool get _bolehMembukaKas => _kasTerbuka == false && !_sesiKasDiPerangkatLain;
 
+  String get _labelStatusJaringan {
+    switch (_statusJaringan.status) {
+      case StatusJaringanPos.online:
+        return 'Online';
+      case StatusJaringanPos.offline:
+        return 'Offline';
+      case StatusJaringanPos.tidakStabil:
+        return 'Tidak Stabil';
+      case StatusJaringanPos.memeriksa:
+        return 'Memeriksa';
+    }
+  }
+
+  Color _warnaStatusJaringan() {
+    switch (_statusJaringan.status) {
+      case StatusJaringanPos.online:
+        return AppColors.success;
+      case StatusJaringanPos.offline:
+        return AppColors.danger;
+      case StatusJaringanPos.tidakStabil:
+        return AppColors.warning;
+      case StatusJaringanPos.memeriksa:
+        return AppColors.primary;
+    }
+  }
+
+  IconData _ikonStatusJaringan() {
+    switch (_statusJaringan.status) {
+      case StatusJaringanPos.online:
+        return Icons.cloud_done_outlined;
+      case StatusJaringanPos.offline:
+        return Icons.cloud_off_outlined;
+      case StatusJaringanPos.tidakStabil:
+        return Icons.cloud_sync_outlined;
+      case StatusJaringanPos.memeriksa:
+        return Icons.cloud_queue_outlined;
+    }
+  }
+
+  Widget _pilStatusJaringan() {
+    final warna = _warnaStatusJaringan();
+    final durasi = _statusJaringan.durasi;
+    final pesanDurasi = durasi == null ? '' : ' (${durasi.inMilliseconds} ms)';
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: Tooltip(
+        message: 'Status jaringan POS: $_labelStatusJaringan$pesanDurasi',
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: _perbaruiStatusJaringan,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.latarLembut(warna),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(_ikonStatusJaringan(), size: 14, color: warna),
+                const SizedBox(width: 4),
+                Text(
+                  _labelStatusJaringan,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: warna,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   List<Widget> get _tombolAksiMobile => [
         PopupMenuButton<_AksiKasirMobile>(
           key: const Key('menu-aksi-kasir-mobile'),
@@ -2000,6 +2090,7 @@ class _KasirScreenState extends State<KasirScreen> {
                   style: const TextStyle(fontSize: 12)),
             ),
           ),
+          _pilStatusJaringan(),
           if (_kasSaatIni != null)
             Padding(
               padding: const EdgeInsets.only(right: 4),
