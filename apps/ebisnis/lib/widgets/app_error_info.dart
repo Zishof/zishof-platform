@@ -195,6 +195,26 @@ class AppErrorInfo {
     final lower = raw.toLowerCase();
     final kode =
         DateTime.now().millisecondsSinceEpoch.toRadixString(36).toUpperCase();
+    // Nama tabel/kolom dapat memuat sesi, token, atau password. Kesalahan
+    // SQLite harus dikenali sebelum heuristik autentikasi maupun jaringan.
+    if (lower.contains('sqflite') ||
+        lower.contains('sqliteexception') ||
+        lower.contains('databaseexception') ||
+        lower.contains('sqlite_error')) {
+      return AppErrorInfo(
+        judul: 'Penyimpanan lokal belum dapat diakses',
+        pesan:
+            'Aplikasi gagal membaca atau menyimpan data pada perangkat. Ini bukan bukti sesi masuk berakhir.',
+        solusi: const [
+          'Jangan mengulang Bayar atau membuat transaksi pengganti sebelum status transaksi diperiksa.',
+          'Catat rincian keranjang dan hubungi admin untuk mencadangkan data lokal. Jangan hapus data aplikasi atau uninstall.',
+          'Setelah data diamankan, tutup aplikasi secara normal lalu buka kembali satu kali. Jika error berulang, hentikan transaksi pada perangkat ini dan kirim Informasi Teknis kepada admin.',
+          'Periksa Riwayat Penjualan dan Transaksi Pending sebelum melanjutkan pembayaran.',
+        ],
+        teknis: '${aktivitas ?? 'penyimpanan lokal'} | $raw',
+        kodeReferensi: kode,
+      );
+    }
     if (lower.contains('nama pengguna') ||
         lower.contains('username') ||
         lower.contains('kata sandi') ||

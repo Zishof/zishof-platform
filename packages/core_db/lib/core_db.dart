@@ -51,6 +51,16 @@ class CoreDb {
 
   static String get storageNamespace => _storageNamespace;
 
+  /// SQLITE_MISUSE berkaitan dengan penggunaan koneksi/API, bukan bukti
+  /// korupsi berkas. Jangan pindahkan/hapus database akibat kesalahan ini.
+  @visibleForTesting
+  static bool kesalahanPemakaianSqlite(Object error) {
+    final teks = error.toString().toLowerCase();
+    return teks.contains('sqlite_misuse') ||
+        teks.contains('bad parameter or other api misuse') ||
+        RegExp(r'sqliteexception\(21[),:]|sqlite_error:\s*21\b').hasMatch(teks);
+  }
+
   /// Naik setiap status sesi kas lokal berubah. UI seperti topbar memakai ini
   /// untuk refresh chip "Kas Terbuka/Tertutup" tanpa menunggu rebuild layar.
   final ValueNotifier<int> sesiKasVersi = ValueNotifier<int>(0);
@@ -100,6 +110,7 @@ class CoreDb {
     try {
       return await _bukaDanVerifikasi(factory, path);
     } catch (e) {
+      if (kesalahanPemakaianSqlite(e)) rethrow;
       // Gap-closure "app tidak bisa dibuka lagi stlh mati listrik": file DB
       // (atau sidecar -wal/-shm-nya) korup krn proses tulis terputus paksa
       // tidak akan pernah bisa dibuka lagi TANPA campur tangan -- sebelum
