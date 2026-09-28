@@ -73,6 +73,18 @@ void main() {
     expect(source, contains("'nominal': slot.nominal"));
   });
 
+  test('koreksi transaksi server membawa member agar limit terbaru dipakai',
+      () {
+    final source =
+        File('lib/screens/riwayat_penjualan_screen.dart').readAsStringSync();
+
+    expect(source, contains('memberAwal: _anggotaKoreksiDariDetail'));
+    expect(source, contains('Pilih ulang member agar koreksi memakai limit'));
+    expect(source, contains("if (hasilEdit['id_member'] != null)"));
+    expect(source, contains("'id_member': hasilEdit['id_member']"));
+    expect(source, contains("'nama_member': hasilEdit['nama_member']"));
+  });
+
   test('transaksi lokal tertunda dapat membuka koreksi metode pembayaran', () {
     final source =
         File('lib/screens/riwayat_penjualan_screen.dart').readAsStringSync();
