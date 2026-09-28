@@ -1901,6 +1901,30 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
     return metode;
   }
 
+  Future<List<CaraBayar>> _metodeKoreksiUntukMember(Anggota member) async {
+    final konteks = [
+      ApiClient.baseUrl,
+      Sesi.instance.tenantId,
+      Sesi.instance.userId,
+      Sesi.instance.idTokoTerpilih,
+      member.id
+    ];
+    final hasil = await MasterOffline.objekDenganCache(
+      'cara_bayar_list',
+      {
+        'id_member': member.id,
+        'id_toko': Sesi.instance.idTokoTerpilih,
+      },
+      'riwayat:pemulihan-member:metode:${jsonEncode(konteks)}',
+    );
+    final metode = metodePemulihanMember(hasil);
+    if (metode.isEmpty) {
+      throw StateError(
+          'Tidak ada metode pembayaran yang diizinkan untuk member yang dipilih.');
+    }
+    return metode;
+  }
+
   Future<CaraBayar?> _pilihMetodeKoreksiLokal(
       Map<String, dynamic> payload) async {
     final daftar = await _metodeKoreksiLokal(payload);
@@ -1963,6 +1987,35 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
       if (mounted) {
         await tampilkanKesalahan(context, e is ApiException ? e.info : e,
             aktivitas: 'mengoreksi metode pembayaran transaksi lokal');
+      }
+    }
+  }
+
+  Future<void> _koreksiMemberPembeliLokal(
+      Map<String, dynamic> row, Map<String, dynamic> payload) async {
+    try {
+      final member = await pilihMemberPos(context);
+      if (member == null || !mounted) return;
+      final metode = await _metodeKoreksiUntukMember(member);
+      final kode = '${payload['kodeUnik'] ?? row['nomorNota'] ?? ''}'.trim();
+      if (kode.isEmpty) {
+        throw StateError('Kode transaksi lokal tidak dikenali.');
+      }
+      await TransaksiOutboxService.instance.koreksiMemberPembeli(
+        kode,
+        member,
+        metodeDiizinkan: metode,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+            'Member/Pembeli transaksi $kode diperbarui dan antrean akan dikirim ulang.'),
+      ));
+      await _muat();
+    } catch (e) {
+      if (mounted) {
+        await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+            aktivitas: 'mengoreksi member/pembeli transaksi lokal');
       }
     }
   }
@@ -2133,6 +2186,18 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
             ),
           ),
           actions: [
+            if (payloadLokal is Map && row['idTransaksi'] == null)
+              TextButton.icon(
+                icon: const Icon(Icons.person_search_outlined, size: 19),
+                label: const Text('Edit Member/Pembeli'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _koreksiMemberPembeliLokal(
+                    row,
+                    Map<String, dynamic>.from(payloadLokal),
+                  );
+                },
+              ),
             if (payloadLokal is Map && row['idTransaksi'] == null)
               TextButton.icon(
                 icon: const Icon(Icons.payments_outlined, size: 19),

@@ -153,6 +153,46 @@ class TransaksiOutboxService {
     return hasil;
   }
 
+  static int? _idCaraBayarDariPayload(Map<String, dynamic> payload) {
+    for (final key in const ['caraBayar', 'caraBayarId', 'idCaraBayar']) {
+      final nilai = payload[key];
+      final angka = nilai is num ? nilai.toInt() : int.tryParse('$nilai');
+      if (angka != null && angka > 0) return angka;
+    }
+    return null;
+  }
+
+  static Map<String, dynamic> payloadDenganMemberTerkoreksi(
+    Map<String, dynamic> sumber,
+    Anggota member, {
+    List<CaraBayar>? metodeDiizinkan,
+  }) {
+    final memberId = member.id;
+    if (memberId <= 0) {
+      throw ArgumentError('Member/Pembeli yang dipilih belum memiliki ID sah.');
+    }
+    final caraBayarId = _idCaraBayarDariPayload(sumber);
+    if (metodeDiizinkan != null && caraBayarId != null) {
+      final cocok = metodeDiizinkan.where((m) => m.id == caraBayarId);
+      if (cocok.isEmpty) {
+        throw ArgumentError(
+            'Metode pembayaran transaksi tidak diizinkan untuk member yang dipilih.');
+      }
+      if (cocok.first.wajibPin) {
+        throw ArgumentError(
+            'Metode pembayaran ini memerlukan PIN dan belum dapat dikoreksi dari antrean lokal.');
+      }
+    }
+    return Map<String, dynamic>.from(sumber)
+      ..['id_member'] = memberId
+      ..['memberId'] = memberId
+      ..['nama_member'] = member.nama
+      ..['namaMember'] = member.nama
+      ..['namaPembeli'] = member.nama
+      ..['pembeli'] = member.nama
+      ..['pengiriman_pending'] = true;
+  }
+
   Future<void> koreksiMetodePembayaran(String kodeUnik, CaraBayar caraBayar,
       {bool izinkanValidasiServer = false}) async {
     final row = await CoreDb.instance.transaksiLokalDenganKode(kodeUnik);
@@ -173,6 +213,42 @@ class TransaksiOutboxService {
     }
     final koreksi = payloadDenganMetodeTerkoreksi(payload, caraBayar,
         izinkanValidasiServer: izinkanValidasiServer);
+    final berubah = await CoreDb.instance.koreksiPayloadTransaksi(
+        kodeUnik, jsonEncode(koreksi),
+        izinkanSelesaiLokal: selesaiLokalBelumCocok);
+    if (!berubah) {
+      throw StateError(
+          'Transaksi tidak dapat dikoreksi karena statusnya sudah berubah.');
+    }
+    kirimDiBackground();
+  }
+
+  Future<void> koreksiMemberPembeli(
+    String kodeUnik,
+    Anggota member, {
+    List<CaraBayar>? metodeDiizinkan,
+  }) async {
+    final row = await CoreDb.instance.transaksiLokalDenganKode(kodeUnik);
+    if (row == null) {
+      throw StateError('Transaksi $kodeUnik tidak ditemukan di perangkat ini.');
+    }
+    final status = '${row['status']}';
+    final payload = Map<String, dynamic>.from(
+        jsonDecode('${row['payload_json'] ?? '{}'}') as Map);
+    final asalBackup = '${payload['asal_backup'] ?? ''}'.trim().toUpperCase();
+    final hasilServerAda =
+        '${row['hasil_server_json'] ?? ''}'.trim().isNotEmpty;
+    final selesaiLokalBelumCocok =
+        status == 'SYNCED' && !hasilServerAda && asalBackup.isEmpty;
+    if (status == 'SYNCED' && !selesaiLokalBelumCocok) {
+      throw StateError(
+          'Transaksi sudah diterima server dan tidak boleh diubah dari perangkat.');
+    }
+    final koreksi = payloadDenganMemberTerkoreksi(
+      payload,
+      member,
+      metodeDiizinkan: metodeDiizinkan,
+    );
     final berubah = await CoreDb.instance.koreksiPayloadTransaksi(
         kodeUnik, jsonEncode(koreksi),
         izinkanSelesaiLokal: selesaiLokalBelumCocok);

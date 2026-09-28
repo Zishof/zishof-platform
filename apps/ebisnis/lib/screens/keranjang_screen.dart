@@ -1914,6 +1914,30 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     return false;
   }
 
+  bool get _metodeTerpilihWajibMember {
+    if (_caraBayarTerpilih?.wajibPilihMember == true) return true;
+    if (_saldoAkanDipotong) return true;
+    for (final s in _splitBayar) {
+      if (s.nominal <= 0) continue;
+      if (s.caraBayar.wajibPilihMember || _metodeMemotongDeposit(s.caraBayar)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  String? _galatIdentitasMemberSaatBayar() {
+    if (!_metodeTerpilihWajibMember && _jenisKonsumsi == 'NORMAL') return null;
+    final member = _memberTerpilih;
+    if (member == null) {
+      return 'Metode "${_namaMetodeWajibMember()}" wajib memilih Member/Pembeli sebelum Bayar.';
+    }
+    if (member.id <= 0 || member.nama.trim().isEmpty) {
+      return 'Data Member/Pembeli belum lengkap. Pilih ulang member sebelum Bayar.';
+    }
+    return null;
+  }
+
   Future<void> _bayar() async {
     // Pertahanan terhadap pintasan F2/race: member baru memicu pemuatan ulang
     // aturan pembayaran. Jangan pernah mengirim transaksi memakai snapshot
@@ -1976,6 +2000,14 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           content: Text(
               'Manager Meal maksimal Rp20.000. Kurangi item atau gunakan Penjualan Normal.')));
       return;
+    }
+    final galatMember = _galatIdentitasMemberSaatBayar();
+    if (galatMember != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(galatMember)),
+      );
+      await _pilihMember();
+      if (!mounted || _galatIdentitasMemberSaatBayar() != null) return;
     }
 
     String? kodePercobaan;

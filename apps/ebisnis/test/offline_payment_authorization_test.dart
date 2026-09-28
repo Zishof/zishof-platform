@@ -115,6 +115,70 @@ void main() {
       expect(hasil['pengiriman_pending'], isTrue);
     });
 
+    test('koreksi member menambal pembeli tanpa mengubah kode waktu item', () {
+      final sumber = <String, dynamic>{
+        'kodeUnik': 'AB2609281357231ZUV',
+        'clientTrxId': 'AB2609281357231ZUV',
+        'waktu': '28-09-2026 13:57:23',
+        'kasir': 'agung',
+        'tokoId': 11,
+        'total': 62000,
+        'caraBayar': 7,
+        'caraBayarNama': 'eMoney Santri',
+        'id_member': null,
+        'nama_member': null,
+        'transaksi': [
+          {'kode': 'P001', 'jumlah': 1, 'harga': 62000}
+        ],
+      };
+      final emoney = CaraBayar(
+        id: 7,
+        nama: 'eMoney Santri',
+        manual: false,
+        wajibPilihMember: true,
+      );
+      final member = Anggota.fromJson({'id': 262707001, 'nama': 'ACHMAD UJI'});
+
+      final hasil = TransaksiOutboxService.payloadDenganMemberTerkoreksi(
+        sumber,
+        member,
+        metodeDiizinkan: [emoney],
+      );
+
+      expect(hasil['kodeUnik'], 'AB2609281357231ZUV');
+      expect(hasil['clientTrxId'], 'AB2609281357231ZUV');
+      expect(hasil['waktu'], '28-09-2026 13:57:23');
+      expect(hasil['kasir'], 'agung');
+      expect(hasil['total'], 62000);
+      expect(hasil['caraBayar'], 7);
+      expect(hasil['caraBayarNama'], 'eMoney Santri');
+      expect(hasil['id_member'], 262707001);
+      expect(hasil['memberId'], 262707001);
+      expect(hasil['nama_member'], 'ACHMAD UJI');
+      expect(hasil['pembeli'], 'ACHMAD UJI');
+      expect(hasil['transaksi'], sumber['transaksi']);
+      expect(hasil['pengiriman_pending'], isTrue);
+    });
+
+    test('koreksi member menolak metode yang tidak diizinkan untuk member', () {
+      final sumber = <String, dynamic>{
+        'kodeUnik': 'AB2609281353212OA',
+        'caraBayar': 7,
+        'caraBayarNama': 'eMoney Santri',
+      };
+      final tunai = CaraBayar(id: 1, nama: 'Tunai', manual: true);
+      final member = Anggota.fromJson({'id': 99, 'nama': 'Santri UAT'});
+
+      expect(
+        () => TransaksiOutboxService.payloadDenganMemberTerkoreksi(
+          sumber,
+          member,
+          metodeDiizinkan: [tunai],
+        ),
+        throwsArgumentError,
+      );
+    });
+
     test('checkout saldo wajib melewati cabang ACK server sebelum outbox', () {
       final source =
           File('lib/screens/keranjang_screen.dart').readAsStringSync();
