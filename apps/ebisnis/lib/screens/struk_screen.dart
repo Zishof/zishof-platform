@@ -1192,6 +1192,8 @@ class StrukScreen extends StatelessWidget {
   StrukScreen salin({
     double? total,
     double? totalDiskonOverride,
+    double? uangDiterima,
+    double? kembalian,
     double? saldo,
     String? catatanKoreksi,
     bool? koreksiSudahDiterapkan,
@@ -1211,8 +1213,8 @@ class StrukScreen extends StatelessWidget {
       tersinkron: tersinkron ?? this.tersinkron,
       statusLabel: statusLabel,
       pelanggan: pelanggan,
-      uangDiterima: uangDiterima,
-      kembalian: kembalian,
+      uangDiterima: uangDiterima ?? this.uangDiterima,
+      kembalian: kembalian ?? this.kembalian,
       saldo: saldo ?? this.saldo,
       modeCetakUlang: modeCetakUlang,
       jenisDokumen: jenisDokumen,
@@ -1225,6 +1227,38 @@ class StrukScreen extends StatelessWidget {
       koreksiSudahDiterapkan:
           koreksiSudahDiterapkan ?? this.koreksiSudahDiterapkan,
       menungguAngkaServer: menungguAngkaServer ?? this.menungguAngkaServer,
+    );
+  }
+
+  @visibleForTesting
+  static ({double? uangDiterima, double? kembalian})
+      pembayaranTunaiSetelahKoreksiServer({
+    required double totalSebelum,
+    required double totalServer,
+    double? uangDiterima,
+    double? kembalian,
+  }) {
+    if (uangDiterima == null || (totalServer - totalSebelum).abs() < 1) {
+      return (uangDiterima: uangDiterima, kembalian: kembalian);
+    }
+
+    final uangMengikutiTotalLama = (uangDiterima - totalSebelum).abs() < 1;
+    final tanpaKembalian = kembalian == null || kembalian.abs() < 1;
+    if (uangMengikutiTotalLama && tanpaKembalian) {
+      return (
+        uangDiterima: totalServer,
+        kembalian: kembalian == null ? null : 0
+      );
+    }
+
+    if (kembalian == null) {
+      return (uangDiterima: uangDiterima, kembalian: null);
+    }
+
+    return (
+      uangDiterima: uangDiterima,
+      kembalian:
+          (uangDiterima - totalServer).clamp(0, double.infinity).toDouble(),
     );
   }
 
@@ -1488,11 +1522,19 @@ class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
     // server. Struk yang dicetak sejak titik ini tidak boleh lagi berkata
     // "tersimpan offline dan akan disinkronkan otomatis" -- pembeli menerima
     // kertas yang menyebut keadaan yang sudah tidak berlaku.
+    final pembayaranTunai = StrukScreen.pembayaranTunaiSetelahKoreksiServer(
+      totalSebelum: asli.total,
+      totalServer: totalServer,
+      uangDiterima: asli.uangDiterima,
+      kembalian: asli.kembalian,
+    );
     return asli.salin(
       koreksiSudahDiterapkan: true,
       tersinkron: true,
       total: totalServer,
       totalDiskonOverride: _totalDiskonServer,
+      uangDiterima: pembayaranTunai.uangDiterima,
+      kembalian: pembayaranTunai.kembalian,
       saldo: _saldoServer,
       catatanKoreksi: berbeda
           ? 'Total disesuaikan server dari ${_rupiah(asli.total)} menjadi'

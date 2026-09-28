@@ -6,10 +6,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   const struk = StrukScreen(
-    kode: 'TEST-VOUCHER', waktu: '21-09-2026 08:00:00',
-    item: [{'nama': 'Produk Uji', 'qty': 1, 'harga': 15500}],
-    total: 15500, metode: 'Voucher Pejuang',
-    uangDiterima: 15500, kembalian: 0, modeCetakUlang: true,
+    kode: 'TEST-VOUCHER',
+    waktu: '21-09-2026 08:00:00',
+    item: [
+      {'nama': 'Produk Uji', 'qty': 1, 'harga': 15500}
+    ],
+    total: 15500,
+    metode: 'Voucher Pejuang',
+    uangDiterima: 15500,
+    kembalian: 0,
+    modeCetakUlang: true,
   );
 
   test('saldo server nol sah; saldo hilang/rusak tidak menjadi nol', () {
@@ -21,14 +27,40 @@ void main() {
     expect(StrukScreen.saldoDariSumber({'saldo': double.infinity}), isNull);
   });
 
-  test('koreksi total mempertahankan saldo dan saldo server mengganti snapshot', () {
+  test('koreksi total mempertahankan saldo dan saldo server mengganti snapshot',
+      () {
     final bersaldo = struk.salin(saldo: 84500);
     expect(bersaldo.salin(total: 15000).saldo, 84500);
     expect(bersaldo.salin(saldo: 0).saldo, 0);
     expect(struk.salin(total: 15000).saldo, isNull);
   });
 
-  testWidgets('preview voucher menampilkan saldo server tanpa label tunai', (tester) async {
+  test('koreksi total server menyesuaikan pembayaran otomatis', () {
+    final pembayaran = StrukScreen.pembayaranTunaiSetelahKoreksiServer(
+      totalSebelum: 29500,
+      totalServer: 6500,
+      uangDiterima: 29500,
+      kembalian: 0,
+    );
+
+    expect(pembayaran.uangDiterima, 6500);
+    expect(pembayaran.kembalian, 0);
+  });
+
+  test('koreksi total server menghitung ulang kembalian tunai manual', () {
+    final pembayaran = StrukScreen.pembayaranTunaiSetelahKoreksiServer(
+      totalSebelum: 29500,
+      totalServer: 6500,
+      uangDiterima: 30000,
+      kembalian: 500,
+    );
+
+    expect(pembayaran.uangDiterima, 30000);
+    expect(pembayaran.kembalian, 23500);
+  });
+
+  testWidgets('preview voucher menampilkan saldo server tanpa label tunai',
+      (tester) async {
     SharedPreferences.setMockInitialValues({});
     Sesi.instance.tokoAlamat = 'Alamat Uji';
     Sesi.instance.tokoTelp = '000';
