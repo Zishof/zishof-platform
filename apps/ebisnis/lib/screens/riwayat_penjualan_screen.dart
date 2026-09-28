@@ -149,6 +149,32 @@ List<Map<String, dynamic>> saringArsipLokalUntukFilterIntegritas(
   }).toList();
 }
 
+@visibleForTesting
+bool arsipLokalTertahanWajibTampil(dynamic status) {
+  final nilai = '${status ?? ''}'.trim().toUpperCase();
+  return nilai == 'PENDING' || nilai == 'GAGAL';
+}
+
+@visibleForTesting
+bool tanggalArsipLokalMasukRiwayat(
+  DateTime hari, {
+  required dynamic status,
+  DateTime? mulai,
+  DateTime? sampai,
+}) {
+  if (arsipLokalTertahanWajibTampil(status)) return true;
+  final tanggal = DateTime(hari.year, hari.month, hari.day);
+  if (mulai != null &&
+      tanggal.isBefore(DateTime(mulai.year, mulai.month, mulai.day))) {
+    return false;
+  }
+  if (sampai != null &&
+      tanggal.isAfter(DateTime(sampai.year, sampai.month, sampai.day))) {
+    return false;
+  }
+  return true;
+}
+
 class _BarisKoreksiTransaksi {
   _BarisKoreksiTransaksi({
     this.pembelianId,
@@ -1614,6 +1640,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
     final rows = await CoreDb.instance.transaksiArsipLokal(
       akunKunci: Sesi.instance.userId,
       tokoId: Sesi.instance.tokoId,
+      limit: 5000,
     );
     final hasil = <Map<String, dynamic>>[];
     for (final source in rows) {
@@ -1627,13 +1654,12 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
       final waktu = _waktuPayloadLokal(payload['waktu']) ??
           DateTime.tryParse('${source['dibuat_pada']}');
       if (waktu == null) continue;
-      final hari = DateTime(waktu.year, waktu.month, waktu.day);
-      if (_mulai != null &&
-          hari.isBefore(DateTime(_mulai!.year, _mulai!.month, _mulai!.day))) {
-        continue;
-      }
-      if (_sampai != null &&
-          hari.isAfter(DateTime(_sampai!.year, _sampai!.month, _sampai!.day))) {
+      if (!tanggalArsipLokalMasukRiwayat(
+        waktu,
+        status: source['status'],
+        mulai: _mulai,
+        sampai: _sampai,
+      )) {
         continue;
       }
       final transaksi = ((payload['transaksi'] as List?) ?? const [])
@@ -1685,6 +1711,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
         'pajak': payload['pajak'] ?? 0,
         'totalDiskon': payload['diskon_faktur_nilai'] ?? 0,
         'statusSinkronLokal': source['status'],
+        'pesanErrorSinkronLokal': source['pesan_error'],
         'payloadLokal': payload,
         'itemLokal': transaksi,
       }));
@@ -2229,6 +2256,26 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                         'Transaksi tidak valid: total master ${_formatRupiah.format(row['totalMaster'] ?? 0)}, total rincian ${_formatRupiah.format(row['totalDetail'] ?? 0)}, selisih ${_formatRupiah.format(row['selisihTotal'] ?? 0)}.',
                         style: const TextStyle(
                           color: AppColors.danger,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                  if ('${row['pesanErrorSinkronLokal'] ?? ''}'
+                      .trim()
+                      .isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.latarLembut(AppColors.warning),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Kendala sinkron terakhir: ${row['pesanErrorSinkronLokal']}',
+                        style: const TextStyle(
+                          color: AppColors.warning,
                           fontWeight: FontWeight.w600,
                         ),
                       ),

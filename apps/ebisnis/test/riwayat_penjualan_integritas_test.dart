@@ -67,6 +67,45 @@ void main() {
     });
   });
 
+  group('visibilitas arsip lokal tertahan', () {
+    test('transaksi pending dan gagal tetap tampil walau di luar tanggal aktif',
+        () {
+      final hariLama = DateTime(2026, 9, 25, 20, 54, 54);
+      final hariIni = DateTime(2026, 9, 28);
+
+      expect(
+        tanggalArsipLokalMasukRiwayat(
+          hariLama,
+          status: 'GAGAL',
+          mulai: hariIni,
+          sampai: hariIni,
+        ),
+        isTrue,
+      );
+      expect(
+        tanggalArsipLokalMasukRiwayat(
+          hariLama,
+          status: 'PENDING',
+          mulai: hariIni,
+          sampai: hariIni,
+        ),
+        isTrue,
+      );
+    });
+
+    test('transaksi lokal selesai tetap mengikuti filter tanggal', () {
+      expect(
+        tanggalArsipLokalMasukRiwayat(
+          DateTime(2026, 9, 25),
+          status: 'SYNCED',
+          mulai: DateTime(2026, 9, 28),
+          sampai: DateTime(2026, 9, 28),
+        ),
+        isFalse,
+      );
+    });
+  });
+
   group('penggabungan transaksi server dan lokal', () {
     test('menggabungkan kode stabil yang sama dan mempertahankan id server',
         () {
