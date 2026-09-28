@@ -2,27 +2,15 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// Laci kasir tidak boleh terbuka saat CETAK ULANG.
+/// Laci kasir tetap terbuka saat tombol Cetak Struk dipakai dari semua asal
+/// layar, termasuk preview dari riwayat/dashboard.
 ///
-/// Aturan ini adalah kontrol kas, bukan kerapian. `struk_screen.dart` sendiri
-/// menuliskannya:
+/// Laporan lapangan 28-09-2026: setelah fallback PDF printer ditambahkan,
+/// cetak dari preview riwayat/dashboard kembali tidak membuka laci walaupun
+/// printer aktif. Penyebabnya `modeCetakUlang` dipakai ganda: untuk tampilan
+/// preview dan untuk mematikan pulsa laci.
 ///
-///   "Menghapusnya membuat laci dapat dibuka kapan saja oleh siapa pun cukup
-///    dengan membuka riwayat lalu menekan Cetak Ulang, tanpa ada transaksi
-///    maupun uang yang masuk."
-///
-/// Dan `packages/core_hw/lib/src/buka_laci.dart` menuliskan pasangannya:
-///
-///   "JANGAN memindahkan pulsa ini ke dalam `_strukEscPos`. Aliran struk dibaca
-///    juga oleh jalur pratinjau dan cetak ulang; menaruh pulsanya di sana
-///    membuat laci terbuka pada cetak ulang struk lama."
-///
-/// Sampai berkas ini ada, kedua aturan itu dijaga **hanya oleh komentar**.
-/// Tidak ada satu uji pun yang menyebut `modeCetakUlang`, `bukaLaciKasir`,
-/// maupun `PengaturanLaci`. Komentar tidak dijalankan, tidak dikompilasi, dan
-/// tidak menghentikan siapa pun yang merapikan kode enam bulan dari sekarang.
-///
-/// Berbasis sumber, karena jalur cetaknya memanggil winspool.drv lewat FFI dan
+/// Berbasis sumber karena jalur cetaknya memanggil winspool.drv lewat FFI dan
 /// tidak dapat dijalankan di uji. Yang ditegaskan sengaja hal yang dapat PATAH,
 /// bukan sekadar hal yang ada -- pelajaran docs/pos/85, tempat sebuah uji tetap
 /// hijau selama cacatnya hidup karena hanya memeriksa bahwa sebuah nama muncul.
@@ -36,22 +24,32 @@ void main() {
         .readAsStringSync();
   });
 
-  test('pembukaan laci otomatis dijaga syarat !modeCetakUlang', () {
-    expect(struk, contains('if (!modeCetakUlang) {'),
-        reason: 'penjaga cetak-ulang hilang: laci akan terbuka dari menu '
-            'riwayat tanpa ada uang masuk');
+  test('pembukaan laci otomatis tidak dikunci oleh modeCetakUlang', () {
+    expect(struk, contains('final bool bukaLaciSaatCetak;'));
+    expect(struk, contains('this.bukaLaciSaatCetak = true'));
+    expect(struk, contains('if (bukaLaciSaatCetak) {'),
+        reason: 'Cetak Struk dari riwayat/dashboard memakai modeCetakUlang, '
+            'tetapi laci tetap harus dibuka saat printer aktif');
+    expect(struk, isNot(contains('if (!modeCetakUlang) {')),
+        reason: 'modeCetakUlang hanya boleh mengatur tampilan preview, bukan '
+            'mematikan pulsa laci pada tombol Cetak Struk');
 
-    final iPenjaga = struk.indexOf('if (!modeCetakUlang) {');
+    final iPenjaga = struk.indexOf('if (bukaLaciSaatCetak) {');
     final iBuka = struk.indexOf('await bukaLaciKasir(', iPenjaga);
     expect(iBuka, greaterThan(iPenjaga),
         reason: 'pemanggilan bukaLaciKasir pada jalur cetak harus berada DI '
-            'DALAM penjaga, bukan sebelum atau sesudahnya');
+            'DALAM flag eksplisit, bukan dikunci mode preview');
 
     // Jarak dijaga longgar tetapi terbatas: kalau pemanggilannya berpindah
     // keluar blok, jaraknya melonjak dan uji ini merah.
     expect(iBuka - iPenjaga, lessThan(400),
-        reason: 'bukaLaciKasir terlalu jauh dari penjaganya -- kemungkinan '
-            'sudah tidak berada di dalam blok yang sama');
+        reason: 'bukaLaciKasir terlalu jauh dari flag bukaLaciSaatCetak -- '
+            'kemungkinan sudah tidak berada di dalam blok yang sama');
+  });
+
+  test('tiket dapur tidak membuka laci kasir', () {
+    expect(struk, contains('jenisDokumen: \'TIKET DAPUR\''));
+    expect(struk, contains('bukaLaciSaatCetak: false'));
   });
 
   test('pulsa buka laci tidak boleh masuk ke aliran ESC/POS struk', () {
@@ -69,10 +67,8 @@ void main() {
     expect(laci, contains('0x1B, 0x70, 0x01, 0x19, 0xFA'));
   });
 
-  test('alasan kontrol kas tetap tertulis di dekat penjaganya', () {
-    // Kalau alasannya hilang, penjaganya akan tampak seperti kerapian dan
-    // orang berikutnya akan menghapusnya dengan niat baik.
-    expect(struk, contains('kontrol kas'));
+  test('alasan pemisahan pulsa laci tetap tertulis di helper', () {
     expect(laci, contains('JANGAN memindahkan pulsa ini ke dalam'));
+    expect(laci, contains('keputusan apakah laci dibuka berada di'));
   });
 }

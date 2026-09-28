@@ -47,6 +47,7 @@ class StrukScreen extends StatelessWidget {
   final String? nomorAntrian;
   final String? catatanPesanan;
   final String? jenisKonsumsi;
+  final bool bukaLaciSaatCetak;
 
   /// Total diskon OTORITATIF dari server, bila sudah diterima.
   ///
@@ -93,6 +94,7 @@ class StrukScreen extends StatelessWidget {
     this.nomorAntrian,
     this.catatanPesanan,
     this.jenisKonsumsi,
+    this.bukaLaciSaatCetak = true,
     this.totalDiskonOverride,
     this.catatanKoreksi,
     this.koreksiSudahDiterapkan = false,
@@ -871,15 +873,10 @@ class StrukScreen extends StatelessWidget {
       // struknya masuk antrean cetak, ke printer yang sama dengan struknya --
       // laci memang menumpang port RJ11 printer tersebut.
       //
-      // Cetak ULANG sengaja TIDAK membuka laci: mencetak ulang struk lama
-      // bukan penerimaan uang baru, dan membiarkannya membuka laci berarti
-      // siapa pun bisa membuka laci kapan saja lewat menu riwayat.
-      //
-      // Syarat `!modeCetakUlang` ini BUKAN sekadar kerapian: ia adalah
-      // kontrol kas. Menghapusnya membuat laci dapat dibuka kapan saja oleh
-      // siapa pun cukup dengan membuka riwayat lalu menekan Cetak Ulang,
-      // tanpa ada transaksi maupun uang yang masuk.
-      if (!modeCetakUlang) {
+      // Cetak Struk dari semua asal layar tetap mengirim pulsa laci setelah
+      // struk sukses masuk antrean printer. Tiket Dapur mematikan flag ini
+      // karena bukan dokumen kas dan tidak boleh membuka laci.
+      if (bukaLaciSaatCetak) {
         try {
           await bukaLaciKasir(
             pinAlternatif: PengaturanLaci.instance.pinAlternatif,
@@ -921,6 +918,7 @@ class StrukScreen extends StatelessWidget {
         nomorAntrian: nomorAntrian,
         catatanPesanan: catatanPesanan,
         jenisKonsumsi: jenisKonsumsi,
+        bukaLaciSaatCetak: false,
         modeCetakUlang: true,
         jenisDokumen: 'TIKET DAPUR',
       )._cetakStruk(context);
@@ -1221,6 +1219,7 @@ class StrukScreen extends StatelessWidget {
       nomorAntrian: nomorAntrian,
       catatanPesanan: catatanPesanan,
       jenisKonsumsi: jenisKonsumsi,
+      bukaLaciSaatCetak: bukaLaciSaatCetak,
       totalDiskonOverride: totalDiskonOverride ?? this.totalDiskonOverride,
       catatanKoreksi: catatanKoreksi ?? this.catatanKoreksi,
       koreksiSudahDiterapkan:
