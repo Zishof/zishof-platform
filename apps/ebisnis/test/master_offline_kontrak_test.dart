@@ -82,6 +82,7 @@ void main() {
     'lib/screens/anggota/tab_tipe_member.dart': [
       "'master:tipe_anggota'",
       "'master:cara_bayar:pilihan_tipe'",
+      "'maksimal_boleh_utang'",
       "'daftarCaraPembayaranYangBolehDiPilih'",
       "'maksimalTransaksiHarian'",
       "'maksimalTransaksiMingguan'",

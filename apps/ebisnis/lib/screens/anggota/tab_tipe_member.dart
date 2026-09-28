@@ -520,15 +520,20 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
       _pesanError = null;
     });
     try {
+      final maksimalBolehUtang = double.tryParse(
+              _maksimalBolehUtang.text.trim().replaceAll(',', '.')) ??
+          0;
       final body = {
         if (widget.tipe != null) 'id': widget.tipe!['id'],
         'kode': _kode.text.trim(),
         'nama': _nama.text.trim(),
         'keterangan': _keterangan.text.trim(),
         'aktif': _aktif,
-        'maksimalBolehUtang': double.tryParse(
-                _maksimalBolehUtang.text.trim().replaceAll(',', '.')) ??
-            0,
+        'maksimalBolehUtang': maksimalBolehUtang,
+        // Server legacy masih membaca nama kolom/form snake_case untuk batas
+        // piutang. Kirim alias agar perubahan limit tidak hanya tersimpan pada
+        // snapshot lokal, tetapi ikut menjadi nilai efektif saat aksi bayar.
+        'maksimal_boleh_utang': maksimalBolehUtang,
         'wajibHp': _wajibHp,
         'wajibEmail': _wajibEmail,
         'wajibPin': _wajibPin,
