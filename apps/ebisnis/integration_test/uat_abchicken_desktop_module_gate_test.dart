@@ -6,9 +6,22 @@ import 'package:ebisnis/api_client.dart';
 import 'package:ebisnis/screens/draft_jurnal_screen.dart';
 import 'package:ebisnis/screens/ga_inventaris_screen.dart';
 import 'package:ebisnis/screens/hrd_dasar_screen.dart';
+import 'package:ebisnis/screens/inventory_sales/harga_screen.dart';
+import 'package:ebisnis/screens/inventory_sales/hutang_supplier_screen.dart';
+import 'package:ebisnis/screens/inventory_sales/laporan_opname_screen.dart';
+import 'package:ebisnis/screens/inventory_sales/master_supplier_screen.dart';
 import 'package:ebisnis/screens/jurnal_umum_screen.dart';
+import 'package:ebisnis/screens/kulakan_screen.dart';
+import 'package:ebisnis/screens/laporan_transaksi_screen.dart';
 import 'package:ebisnis/screens/pengajuan_anda_screen.dart';
+import 'package:ebisnis/screens/pengiriman_screen.dart';
+import 'package:ebisnis/screens/produksi_screen.dart';
+import 'package:ebisnis/screens/produk_screen.dart';
+import 'package:ebisnis/screens/retur_penjualan_screen.dart';
+import 'package:ebisnis/screens/riwayat_penjualan_analisis_screen.dart';
+import 'package:ebisnis/screens/self_order_screen.dart';
 import 'package:ebisnis/screens/setup_laporan_screen.dart';
+import 'package:ebisnis/screens/shift_otomatis_screen.dart';
 import 'package:ebisnis/services/pengikatan_tenant.dart';
 import 'package:ebisnis/services/server_config.dart';
 import 'package:ebisnis/sesi.dart';
@@ -93,11 +106,135 @@ void main() {
       await tester.tap(tombol.last, warnIfMissed: false);
       await _tungguSelesai(tester, 'Tab HRD $tab');
       await _pastikanTanpaAksiTidakDikenal(tester, 'Tab HRD $tab');
+      await _potret(tester, '34-hrd-${_slug(tab)}');
     }
     await _potret(tester, '34-sdm-hrd-semua-tab-lulus');
 
     await _buka(tester, '35', 'Inventaris General Affair',
         const GaInventarisScreen(), hasil);
+    final pengajuanGa = find.text('Pengajuan');
+    if (pengajuanGa.evaluate().isNotEmpty) {
+      await tester.tap(pengajuanGa.last, warnIfMissed: false);
+      await _tungguSelesai(tester, 'Pengajuan Inventaris Outlet');
+      await _potret(tester, '35-ga-pengajuan');
+      final ajukan = find.text('Ajukan');
+      if (ajukan.evaluate().isNotEmpty) {
+        await tester.tap(ajukan.last, warnIfMissed: false);
+        await tester.pump(const Duration(milliseconds: 500));
+        await _potret(tester, '35-ga-form-permintaan');
+        final jenis = find.byType(DropdownButtonFormField<String>);
+        if (jenis.evaluate().isNotEmpty) {
+          await tester.tap(jenis.first, warnIfMissed: false);
+          await tester.pump(const Duration(milliseconds: 300));
+          final retur = find.text('Retur inventaris');
+          if (retur.evaluate().isNotEmpty) {
+            await tester.tap(retur.last, warnIfMissed: false);
+            await tester.pump(const Duration(milliseconds: 300));
+            await _potret(tester, '35-ga-form-retur');
+          }
+          await tester.tap(jenis.first, warnIfMissed: false);
+          await tester.pump(const Duration(milliseconds: 300));
+          final pindah = find.text('Perpindahan inventaris');
+          if (pindah.evaluate().isNotEmpty) {
+            await tester.tap(pindah.last, warnIfMissed: false);
+            await tester.pump(const Duration(milliseconds: 300));
+            await _potret(tester, '35-ga-form-perpindahan');
+          }
+        }
+        final batal = find.text('Batal');
+        if (batal.evaluate().isNotEmpty) {
+          await tester.tap(batal.last, warnIfMissed: false);
+          await tester.pump(const Duration(milliseconds: 300));
+        }
+      }
+      if (find.text('Pengajuan Inventaris Outlet').evaluate().isNotEmpty) {
+        Navigator.of(tester.element(find.text('Pengajuan Inventaris Outlet')))
+            .pop();
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+    }
+
+    await _buka(tester, '36', 'Self Order QR', const SelfOrderScreen(), hasil);
+    await _buka(tester, '37', 'Otomasi Shift Kasir',
+        const ShiftOtomatisScreen(), hasil);
+    await _buka(tester, '38', 'Master Produk', const ProdukScreen(), hasil);
+    final aksiMassal = find.byTooltip('Aksi Massal').evaluate().isNotEmpty
+        ? find.byTooltip('Aksi Massal')
+        : find.textContaining('Aksi Massal');
+    if (aksiMassal.evaluate().isNotEmpty) {
+      await tester.tap(aksiMassal.first, warnIfMissed: false);
+      await tester.pump(const Duration(milliseconds: 500));
+      await _potret(tester, '38-produk-aksi-massal');
+      final hapusResep = find.text('Hapus resep dan ingredient terpilih');
+      if (hapusResep.evaluate().isNotEmpty) {
+        await tester.tap(hapusResep.last, warnIfMissed: false);
+        await tester.pump(const Duration(milliseconds: 250));
+        await _potret(tester, '38-produk-hapus-resep-ingredient');
+      }
+      final hapusCustom = find.text('Hapus pilihan custom menu/ekstra');
+      if (hapusCustom.evaluate().isNotEmpty) {
+        await tester.tap(hapusCustom.last, warnIfMissed: false);
+        await tester.pump(const Duration(milliseconds: 250));
+        await _potret(tester, '38-produk-hapus-custom-menu');
+      }
+      final batal = find.text('Batal');
+      if (batal.evaluate().isNotEmpty) {
+        await tester.tap(batal.last, warnIfMissed: false);
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+    }
+    await _buka(tester, '39', 'Master Harga', const HargaScreen(), hasil);
+    final hargaKanal = find.text('Harga per Kanal');
+    if (hargaKanal.evaluate().isNotEmpty) {
+      await tester.tap(hargaKanal.last, warnIfMissed: false);
+      await _tungguSelesai(tester, 'Harga per Kanal');
+      await _potret(tester, '39-harga-per-kanal');
+    }
+    await _buka(tester, '40', 'Analisis Penjualan',
+        const RiwayatPenjualanAnalisisScreen(), hasil);
+    await _buka(tester, '41', 'Laporan Transaksi',
+        const LaporanTransaksiScreen(), hasil);
+    for (final tab in const [
+      'Report Order',
+      'Report Sesi',
+      'Transaksi Per Kasir',
+      'Report Payment',
+      'Penjualan per Kasir',
+      'Penerimaan per Kasir',
+      'Rincian Produk',
+    ]) {
+      final tombol = find.text(tab);
+      if (tombol.evaluate().isEmpty) continue;
+      await tester.tap(tombol.last, warnIfMissed: false);
+      await _tungguSelesai(tester, 'Laporan Transaksi $tab');
+      await _potret(tester, '41-laporan-${_slug(tab)}');
+    }
+    await _buka(tester, '42', 'Waste Produksi',
+        const ProduksiScreen(bagian: BagianProduksi.productionWaste), hasil);
+    await _buka(tester, '43', 'Kulakan', const KulakanScreen(), hasil);
+    final returPembelian = find.text('Retur Pembelian');
+    if (returPembelian.evaluate().isNotEmpty) {
+      await tester.tap(returPembelian.last, warnIfMissed: false);
+      await _tungguSelesai(tester, 'Retur Pembelian');
+      await _potret(tester, '43-retur-pembelian');
+    }
+    await _buka(
+        tester, '44', 'Hutang Supplier', const HutangSupplierScreen(), hasil);
+    for (final tab in const ['Aging', 'Laporan Pembelian']) {
+      final tombol = find.text(tab);
+      if (tombol.evaluate().isEmpty) continue;
+      await tester.tap(tombol.last, warnIfMissed: false);
+      await _tungguSelesai(tester, 'Hutang Supplier $tab');
+      await _potret(tester, '44-hutang-${_slug(tab)}');
+    }
+    await _buka(
+        tester, '45', 'Master Supplier', const MasterSupplierScreen(), hasil);
+    await _buka(
+        tester, '46', 'Retur Penjualan', const ReturPenjualanScreen(), hasil);
+    await _buka(tester, '47', 'Pengiriman',
+        const PengirimanScreen(bagian: BagianPengiriman.deliveryOrder), hasil);
+    await _buka(
+        tester, '48', 'Rekonsiliasi Stok', const LaporanOpnameScreen(), hasil);
 
     final dir = Directory(_outputDir);
     await dir.create(recursive: true);
