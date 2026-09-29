@@ -2976,6 +2976,77 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
     return hasil;
   }
 
+  Future<void> _pilihPemasokUtama() async {
+    final dipilih = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const _SheetPilihPemasokProduk(),
+    );
+    if (dipilih == null) return;
+    final nama = '${dipilih['nama'] ?? ''}'.trim();
+    if (nama.isEmpty) return;
+    setStateIfMounted(() => _pemasok.text = nama);
+  }
+
+  Widget _pemilihPemasokUtama() {
+    final teks = _pemasok.text.trim();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Nama Pemasok Utama',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimaryOf(context),
+            ),
+          ),
+          const SizedBox(height: 8),
+          InkWell(
+            onTap: _menyimpan ? null : _pilihPemasokUtama,
+            borderRadius: BorderRadius.circular(8),
+            child: InputDecorator(
+              decoration: AppFormStyle.fieldDecoration(
+                context,
+                labelText: 'Nama Pemasok Utama',
+                showLabel: false,
+                prefixIcon: const Icon(Icons.local_shipping_outlined),
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (teks.isNotEmpty)
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        tooltip: 'Kosongkan pemasok',
+                        icon: const Icon(Icons.clear),
+                        onPressed: _menyimpan
+                            ? null
+                            : () => setStateIfMounted(() => _pemasok.clear()),
+                      ),
+                    const Icon(Icons.arrow_drop_down),
+                    const SizedBox(width: 8),
+                  ],
+                ),
+              ),
+              child: Text(
+                teks.isEmpty ? '-- Pilih Pemasok --' : teks,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: teks.isEmpty
+                      ? AppColors.textSecondaryOf(context)
+                      : AppColors.textPrimaryOf(context),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _pemilihUom({bool pembelian = false}) {
     final idTerpilih = pembelian ? _satuanPembelianId : _satuanId;
     final namaAwal = pembelian ? _satuanPembelianNamaAwal : _satuanNamaAwal;
@@ -3790,11 +3861,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                   Row(
                     children: [
                       Expanded(
-                        child: AppFormTextField(
-                          label: 'Nama Pemasok Utama',
-                          controller: _pemasok,
-                          hintText: 'mis. AB Grosir',
-                        ),
+                        child: _pemilihPemasokUtama(),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -4487,6 +4554,106 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetPilihPemasokProduk extends StatefulWidget {
+  const _SheetPilihPemasokProduk();
+
+  @override
+  State<_SheetPilihPemasokProduk> createState() =>
+      _SheetPilihPemasokProdukState();
+}
+
+class _SheetPilihPemasokProdukState extends State<_SheetPilihPemasokProduk> {
+  final _cariController = TextEditingController();
+  bool _memuat = true;
+  List<Map<String, dynamic>> _daftar = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _cari('');
+  }
+
+  @override
+  void dispose() {
+    _cariController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _cari(String keyword) async {
+    setStateIfMounted(() => _memuat = true);
+    try {
+      final hasil = keyword.trim().isEmpty
+          ? await MasterOffline.daftarDenganCache(
+              'penyedia_list', {'keyword': ''}, 'master:penyedia:awal')
+          : await ApiClient.instance
+              .aksi('penyedia_list', {'keyword': keyword.trim()});
+      setStateIfMounted(() {
+        _daftar = ((hasil['data'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      });
+    } catch (_) {
+      setStateIfMounted(() => _daftar = const []);
+    } finally {
+      if (mounted) setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.4,
+      maxChildSize: 0.9,
+      expand: false,
+      builder: (context, scrollController) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('Pilih Pemasok Utama',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 12),
+            AppSearchField(
+              controller: _cariController,
+              labelText: 'Cari nama pemasok...',
+              gayaForm: true,
+              onChanged: _cari,
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: _memuat
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView(
+                      controller: scrollController,
+                      children: [
+                        ..._daftar.map((pemasok) => ListTile(
+                              leading:
+                                  const Icon(Icons.local_shipping_outlined),
+                              title: Text('${pemasok['nama'] ?? '-'}'),
+                              subtitle:
+                                  (pemasok['telp'] as String?)?.isNotEmpty ==
+                                          true
+                                      ? Text('${pemasok['telp']}')
+                                      : null,
+                              onTap: () => Navigator.of(context).pop(pemasok),
+                            )),
+                        if (_daftar.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.all(20),
+                            child: Text('Tidak ada pemasok ditemukan.'),
+                          ),
+                      ],
+                    ),
+            ),
+          ],
         ),
       ),
     );
