@@ -1,0 +1,194 @@
+[
+  {
+    "file": "Fitur DKB SmartPOS.xlsx",
+    "sheets": [
+      {
+        "sheet": "Sheet1",
+        "nonemptyRows": 60
+      }
+    ],
+    "totalNonemptyRows": 60
+  },
+  {
+    "file": "DATA MASTER.xlsx",
+    "sheets": [
+      {
+        "sheet": "DATA CABANG",
+        "nonemptyRows": 92
+      },
+      {
+        "sheet": "KODE",
+        "nonemptyRows": 11
+      },
+      {
+        "sheet": "PACKING",
+        "nonemptyRows": 67
+      },
+      {
+        "sheet": "KODE SUPPLIER PACKING",
+        "nonemptyRows": 71
+      },
+      {
+        "sheet": "GUDANG PUSAT",
+        "nonemptyRows": 180
+      },
+      {
+        "sheet": "KODE SUPPLIER GUDANG",
+        "nonemptyRows": 212
+      },
+      {
+        "sheet": "KONVERSI SATUAN TOKO",
+        "nonemptyRows": 182
+      }
+    ],
+    "totalNonemptyRows": 815
+  },
+  {
+    "file": "MASTER MENU 2026.xlsx",
+    "sheets": [
+      {
+        "sheet": "DRABHAS",
+        "nonemptyRows": 205
+      },
+      {
+        "sheet": "PIM2 DAN PIM 3",
+        "nonemptyRows": 89
+      },
+      {
+        "sheet": "GEPREK DAN SUSU",
+        "nonemptyRows": 152
+      }
+    ],
+    "totalNonemptyRows": 446
+  },
+  {
+    "file": "Laporan Harian DR Cibanteng Agustus 2026.xlsx",
+    "sheets": [
+      {
+        "sheet": "01 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "02 Agustus 2026",
+        "nonemptyRows": 135
+      },
+      {
+        "sheet": "03 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "04 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "05 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "06 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "07 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "08 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "09 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "10 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "11 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "12 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "13 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "14 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "15 Agustus 2026",
+        "nonemptyRows": 136
+      },
+      {
+        "sheet": "16 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "17 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "18 Agustus 2026",
+        "nonemptyRows": 135
+      },
+      {
+        "sheet": "19 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "20 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "21 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "22 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "23 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "24 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "25 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "26 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "27 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "28 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "29 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "30 Agustus 2026",
+        "nonemptyRows": 134
+      },
+      {
+        "sheet": "31 Agustus  2026",
+        "nonemptyRows": 136
+      }
+    ],
+    "totalNonemptyRows": 4160
+  }
+]
