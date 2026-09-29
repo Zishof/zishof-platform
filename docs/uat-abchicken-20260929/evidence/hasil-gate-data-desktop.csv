@@ -1,0 +1,14 @@
+kode,judul,total,status_gagal,berkas
+ringkasan,Ringkasan Data Settle,19,0,C:\opt\UAT-ABChicken-20260929\evidence-live\00-ringkasan-data-settle.png
+outlet_order,Pesanan Outlet,170,0,C:\opt\UAT-ABChicken-20260929\evidence-live\01-outlet_order-50-record.png
+bom,Resep dan BOM,60,0,C:\opt\UAT-ABChicken-20260929\evidence-live\02-bom-50-record.png
+procurement_pr,Permintaan Pembelian,170,0,C:\opt\UAT-ABChicken-20260929\evidence-live\03-procurement_pr-50-record.png
+procurement_po,Pesanan Pembelian,170,0,C:\opt\UAT-ABChicken-20260929\evidence-live\04-procurement_po-50-record.png
+procurement_bast,BAST Gudang Pusat,170,0,C:\opt\UAT-ABChicken-20260929\evidence-live\05-procurement_bast-50-record.png
+procurement_invoice,Terima Tagihan Vendor,170,0,C:\opt\UAT-ABChicken-20260929\evidence-live\06-procurement_invoice-50-record.png
+procurement_payment,Pembayaran Vendor,170,0,C:\opt\UAT-ABChicken-20260929\evidence-live\07-procurement_payment-50-record.png
+production,Produksi dan Packing,170,0,C:\opt\UAT-ABChicken-20260929\evidence-live\08-production-50-record.png
+shipment,Delivery Order dan Pengiriman,270,0,C:\opt\UAT-ABChicken-20260929\evidence-live\09-shipment-50-record.png
+claim,Backorder Retur dan Klaim,120,0,C:\opt\UAT-ABChicken-20260929\evidence-live\10-claim-50-record.png
+pos_sale,Penjualan POS,220,0,C:\opt\UAT-ABChicken-20260929\evidence-live\11-pos_sale-50-record.png
+account,Sumber Akun Posting,3,0,C:\opt\UAT-ABChicken-20260929\evidence-live\12-sumber-akun-posting.png
