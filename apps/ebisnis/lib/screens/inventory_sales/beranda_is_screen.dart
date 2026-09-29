@@ -74,6 +74,7 @@ class _BerandaInventorySalesScreenState
       final konfig = await MasterOffline.objekDenganCache(
           'konfigurasi', const {}, 'konfigurasi');
       Sesi.instance.terapkanKonfig(konfig);
+      await ApiClient.instance.simpanUserIdAktif(Sesi.instance.userId);
       // Konteks aktor terbaru (currentTripId dsb.) -- aksi khusus varian; bila
       // server belum di-deploy dgn dukungan si_, konfigurasi saja sudah cukup.
       try {

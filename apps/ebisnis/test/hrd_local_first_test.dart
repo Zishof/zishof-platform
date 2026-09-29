@@ -81,4 +81,16 @@ void main() {
     expect(source, contains(".aksi('hrd_cuti_putusan'"));
     expect(source, contains("'hrd_pengajuan_putusan'"));
   });
+
+  test('local-first memulihkan identitas instalasi lama dari konfigurasi', () {
+    final source = File('lib/services/hrd_local_first.dart').readAsStringSync();
+    expect(source, contains("aksi('konfigurasi')"));
+    expect(source, contains('simpanUserIdAktif'));
+    expect(source, contains('ApiClient.instance.sudahLogin'));
+
+    final api = File('lib/api_client.dart').readAsStringSync();
+    expect(api, contains("sp.getString('user_id')"));
+    expect(api, contains("sp.setString('user_id', nilai)"));
+    expect(api, contains("sp.remove('user_id')"));
+  });
 }

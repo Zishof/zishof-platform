@@ -53,6 +53,8 @@ void main() {
     final blok =
         source.substring(mulai, (mulai + 1600).clamp(0, source.length));
     expect(blok, contains("sp.remove('token')"));
+    expect(blok, contains("sp.remove('user_id')"),
+        reason: 'identitas cache local-first ikut dibuang bersama token');
     expect(blok, contains('hapusCatatanAktif'));
     expect(blok, contains('VerifikatorSandiLokal.instance.hapus'),
         reason: 'identitas yang dibuang tidak boleh menyisakan jalan luring');

@@ -1520,6 +1520,7 @@ Future<bool> _pilihTokoGlobal(BuildContext context) async {
     await ApiClient.instance.aksi('pilih_toko_aktif', {'id_toko': dipilih});
     final konfig = await ApiClient.instance.aksi('konfigurasi');
     Sesi.instance.terapkanKonfig(konfig);
+    await ApiClient.instance.simpanUserIdAktif(Sesi.instance.userId);
     if (Sesi.instance.userId.isNotEmpty && Sesi.instance.tokoId != null) {
       await TokoAktifLokal.instance
           .simpan(Sesi.instance.userId, Sesi.instance.tokoId!);

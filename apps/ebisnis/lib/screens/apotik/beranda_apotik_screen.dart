@@ -30,7 +30,8 @@ class BerandaApotikScreen extends StatefulWidget {
   State<BerandaApotikScreen> createState() => _BerandaApotikScreenState();
 }
 
-class _BerandaApotikScreenState extends State<BerandaApotikScreen> with JejakGalat {
+class _BerandaApotikScreenState extends State<BerandaApotikScreen>
+    with JejakGalat {
   bool _memuat = true;
   bool _provisionBerjalan = false;
   String? _error;
@@ -75,6 +76,7 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> with JejakGal
       final konfig = await MasterOffline.objekDenganCache(
           'konfigurasi', const {}, 'konfigurasi');
       Sesi.instance.terapkanKonfig(konfig);
+      await ApiClient.instance.simpanUserIdAktif(Sesi.instance.userId);
       try {
         final obat = await ApiClient.instance
             .aksi('apotik_item_cari', {'page_size': 100});

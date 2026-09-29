@@ -495,8 +495,9 @@ class _KasirScreenState extends State<KasirScreen> {
   // Pemetaan konfigurasi->Sesi dipindah ke Sesi.terapkanKonfig (dipakai juga
   // landing varian Inventory & Sales) -- wrapper tipis ini dipertahankan
   // supaya seluruh call-site lama di file ini tidak berubah.
-  void _terapkanKonfig(Map<String, dynamic> konfig) {
+  Future<void> _terapkanKonfig(Map<String, dynamic> konfig) async {
     Sesi.instance.terapkanKonfig(konfig);
+    await ApiClient.instance.simpanUserIdAktif(Sesi.instance.userId);
   }
 
   /// Bungkus [_terapkanKonfig] dengan penjagaan toko-per-perangkat -- lihat
@@ -516,7 +517,7 @@ class _KasirScreenState extends State<KasirScreen> {
   /// APA ADANYA dan langsung dijadikan klaim baru perangkat ini.
   Future<void> _terapkanKonfigDenganGuardToko(Map<String, dynamic> konfig,
       {bool klaimBaru = false}) async {
-    _terapkanKonfig(konfig);
+    await _terapkanKonfig(konfig);
     final userId = Sesi.instance.userId;
     if (userId.isEmpty) return;
     if (!Sesi.instance.multiToko) {
@@ -1132,8 +1133,8 @@ class _KasirScreenState extends State<KasirScreen> {
     if (_sinkronBerjalan) return;
     setStateIfMounted(() => _sinkronBerjalan = true);
     try {
-      final hasil = await TransaksiOutboxService.instance
-          .sinkronkan(sertakanGagal: true);
+      final hasil =
+          await TransaksiOutboxService.instance.sinkronkan(sertakanGagal: true);
       await _perbaruiJumlahPending();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1515,7 +1516,9 @@ class _KasirScreenState extends State<KasirScreen> {
     final kandidat = <String>{v};
     if (v.length == 12 && RegExp(r'^\d{12}$').hasMatch(v)) {
       kandidat.add('0$v');
-    } else if (v.length == 13 && v.startsWith('0') && RegExp(r'^\d{13}$').hasMatch(v)) {
+    } else if (v.length == 13 &&
+        v.startsWith('0') &&
+        RegExp(r'^\d{13}$').hasMatch(v)) {
       kandidat.add(v.substring(1));
     }
 
@@ -1525,13 +1528,15 @@ class _KasirScreenState extends State<KasirScreen> {
       return false;
     }
 
-    var cocok = _semuaProduk.where((p) => cocokBarcode(p.barcode, p.kode)).toList();
+    var cocok =
+        _semuaProduk.where((p) => cocokBarcode(p.barcode, p.kode)).toList();
     Produk? produkKemasan;
     Map<String, dynamic>? kemasanCocok;
     if (cocok.isEmpty) {
       for (final p in _semuaProduk) {
         for (final k in p.kemasan) {
-          if (k['aktif'] != false && cocokBarcode('${k['barcode'] ?? ''}', null)) {
+          if (k['aktif'] != false &&
+              cocokBarcode('${k['barcode'] ?? ''}', null)) {
             produkKemasan = p;
             kemasanCocok = k;
             break;
@@ -1552,7 +1557,8 @@ class _KasirScreenState extends State<KasirScreen> {
         for (final row in semuaCache) {
           final p = _produkDariCache(row);
           for (final k in p.kemasan) {
-            if (k['aktif'] != false && cocokBarcode('${k['barcode'] ?? ''}', null)) {
+            if (k['aktif'] != false &&
+                cocokBarcode('${k['barcode'] ?? ''}', null)) {
               produkKemasan = p;
               kemasanCocok = k;
               break;

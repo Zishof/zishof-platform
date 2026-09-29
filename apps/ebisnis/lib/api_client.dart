@@ -47,6 +47,8 @@ class ApiClient {
   Future<void> muatTokenTersimpan() async {
     final sp = await SharedPreferences.getInstance();
     _token = sp.getString('token');
+    Sesi.instance.userId =
+        _token == null ? '' : (sp.getString('user_id') ?? '');
     final t = sp.getInt('tenant_id');
     _tenantId = (t != null && t > 0) ? t : null;
     if (_tenantId != null) {
@@ -86,6 +88,22 @@ class ApiClient {
     await PengaturanSesiLokal.instance.catatAktifSekarang();
   }
 
+  /// Simpan identitas publik pengguna bersama token perangkat supaya kunci
+  /// cache local-first tetap dapat dibentuk setelah aplikasi dibuka ulang.
+  /// Nilai ini hanya berasal dari aksi server `konfigurasi`, bukan dari input
+  /// klien, dan selalu dibuang bersama token saat keluar akun.
+  Future<void> simpanUserIdAktif(String userId) async {
+    final nilai = userId.trim();
+    final sp = await SharedPreferences.getInstance();
+    if (nilai.isEmpty) {
+      await sp.remove('user_id');
+      Sesi.instance.userId = '';
+      return;
+    }
+    Sesi.instance.userId = nilai;
+    await sp.setString('user_id', nilai);
+  }
+
   /// Buang sesi perangkat SELURUHNYA: token, catatan aktif, dan bukti kata
   /// sandi luring. Ketiganya satu paket -- identitas yang tidak lagi dipakai di
   /// perangkat ini tidak boleh menyisakan jalan masuk luring.
@@ -95,6 +113,8 @@ class ApiClient {
     if (sebelumnyaMasuk) _sesiBerakhirController.add(null);
     final sp = await SharedPreferences.getInstance();
     await sp.remove('token');
+    await sp.remove('user_id');
+    Sesi.instance.userId = '';
     await PengaturanSesiLokal.instance.hapusCatatanAktif();
     await VerifikatorSandiLokal.instance.hapus();
     // Tenant aktif ikut dibuang: identitas yang tidak lagi dipakai di perangkat

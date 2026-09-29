@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../app_variant.dart';
+import '../api_client.dart';
 import '../sesi.dart';
 import 'master_offline.dart';
 
@@ -37,7 +38,21 @@ class HrdLocalFirst {
     String aksi,
     Map<String, dynamic> body, {
     required void Function(Map<String, dynamic> hasil) onData,
-  }) {
+  }) async {
+    // Token dan tenant dipulihkan sebelum layar utama tampil. Pada instalasi
+    // lama userId belum pernah disimpan, atau layar dapat dibuka ketika
+    // konfigurasi awal masih diproses. Pulihkan identitas dari server sekali
+    // sebelum membentuk kunci cache; tetap fail-closed bila konteks sah tidak
+    // dapat diperoleh (misalnya instalasi pertama sedang luring).
+    final sesi = Sesi.instance;
+    if (sesi.tenantId != null &&
+        sesi.tenantId! > 0 &&
+        sesi.userId.trim().isEmpty &&
+        ApiClient.instance.sudahLogin) {
+      final konfig = await ApiClient.instance.aksi('konfigurasi');
+      sesi.terapkanKonfig(konfig);
+      await ApiClient.instance.simpanUserIdAktif(sesi.userId);
+    }
     return MasterOffline.objekCacheDulu(
       aksi,
       body,
