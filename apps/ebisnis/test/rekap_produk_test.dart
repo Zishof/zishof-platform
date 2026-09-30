@@ -9,6 +9,8 @@ void main() {
         {
           'idTransaksi': 1,
           'nomorNota': 'Order 001 - 0000 - 001',
+          'kasir': 'Ziko',
+          'metode': 'QRIS BSI',
           'produkKode': 'A',
           'produkNama': 'Kopi Sachet',
           'satuan': 'Pcs',
@@ -18,6 +20,8 @@ void main() {
         {
           'idTransaksi': 1,
           'nomorNota': 'Order 001 - 0000 - 001',
+          'kasir': 'Ziko',
+          'metode': 'QRIS BSI',
           'produkKode': 'A',
           'produkNama': 'Kopi Sachet',
           'satuan': 'Pcs',
@@ -27,6 +31,8 @@ void main() {
         {
           'idTransaksi': 2,
           'nomorNota': 'Order 001 - 0000 - 002',
+          'kasir': 'Nisa',
+          'metode': 'Tunai',
           'produkKode': 'B',
           'produkNama': 'Roti Manis',
           'satuan': 'Pcs',
@@ -54,6 +60,38 @@ void main() {
     final roti = rekap.firstWhere((r) => r['produkKode'] == 'B');
     expect(roti['qty'], 3);
     expect(roti['jumlahTransaksi'], 1);
+  });
+
+  test('kasir dan metode bayar ikut tampil pada rekap', () {
+    final rekap = rekapProdukDariRincian(baris());
+    final kopi = rekap.firstWhere((r) => r['produkKode'] == 'A');
+    final roti = rekap.firstWhere((r) => r['produkKode'] == 'B');
+
+    expect(kopi['kasirRingkas'], 'Ziko');
+    expect(kopi['metodeRingkas'], 'QRIS BSI');
+    expect(roti['kasirRingkas'], 'Nisa');
+    expect(roti['metodeRingkas'], 'Tunai');
+  });
+
+  test('kasir dan metode bayar berbeda diringkas sebagai beberapa', () {
+    final rekap = rekapProdukDariRincian([
+      ...baris(),
+      {
+        'idTransaksi': 3,
+        'nomorNota': 'Order 001 - 0000 - 003',
+        'kasir': 'Nisa',
+        'metode': 'Tunai',
+        'produkKode': 'A',
+        'produkNama': 'Kopi Sachet',
+        'satuan': 'Pcs',
+        'qty': 1,
+        'total': 2000,
+      },
+    ]);
+    final kopi = rekap.firstWhere((r) => r['produkKode'] == 'A');
+
+    expect(kopi['kasirRingkas'], 'Beberapa');
+    expect(kopi['metodeRingkas'], 'Beberapa');
   });
 
   test('produk yang sama lintas nota digabung memakai id master stabil', () {

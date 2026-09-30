@@ -32,6 +32,11 @@ String _formatWaktu(dynamic raw) {
   }
 }
 
+String _labelMetodeBayarLaporan(Map<String, dynamic> row) {
+  final label = StrukScreen.labelPembayaran(row).trim();
+  return label.isEmpty ? '-' : label;
+}
+
 Future<List<Map<String, dynamic>>> _ambilSemuaBarisLaporan(
     String action, Map<String, dynamic> payload) async {
   final result = <Map<String, dynamic>>[];
@@ -3873,6 +3878,8 @@ List<Map<String, dynamic>> rekapProdukDariRincian(
     List<Map<String, dynamic>> baris) {
   final peta = <String, Map<String, dynamic>>{};
   final nota = <String, Set<String>>{};
+  final kasirPerProduk = <String, Set<String>>{};
+  final metodePerProduk = <String, Set<String>>{};
   for (final b in baris) {
     final produkId = (b['produkId'] as num?)?.toInt();
     final kode =
@@ -3926,13 +3933,29 @@ List<Map<String, dynamic>> rekapProdukDariRincian(
     nota
         .putIfAbsent(kunci, () => <String>{})
         .add('${b['idTransaksi'] ?? b['nomorNota'] ?? ''}');
+    final kasir = '${b['kasir'] ?? ''}'.trim();
+    if (kasir.isNotEmpty) {
+      kasirPerProduk.putIfAbsent(kunci, () => <String>{}).add(kasir);
+    }
+    final metode = _labelMetodeBayarLaporan(b);
+    if (metode != '-') {
+      metodePerProduk.putIfAbsent(kunci, () => <String>{}).add(metode);
+    }
   }
   final hasil = peta.entries.map((e) {
     e.value['jumlahTransaksi'] = nota[e.key]?.length ?? 0;
+    e.value['kasirRingkas'] = _labelSetRingkas(kasirPerProduk[e.key]);
+    e.value['metodeRingkas'] = _labelSetRingkas(metodePerProduk[e.key]);
     return e.value;
   }).toList();
   hasil.sort((a, b) => (b['total'] as double).compareTo(a['total'] as double));
   return hasil;
+}
+
+String _labelSetRingkas(Set<String>? nilai) {
+  if (nilai == null || nilai.isEmpty) return '-';
+  if (nilai.length == 1) return nilai.first;
+  return 'Beberapa';
 }
 
 /// Hasil pengambilan rincian: barisnya, dan apakah pengambilan berhenti karena
@@ -3978,6 +4001,7 @@ Future<HasilBarisRincian> _ambilSemuaBarisRincianProduk(
       hasil.add({
         ...row,
         'total': hitungTotalBarisRincian(row),
+        'metodeTampil': _labelMetodeBayarLaporan(row),
       });
     }
     final totalTransaksi = (respons['total'] as num?)?.toInt() ?? 0;
@@ -4098,6 +4122,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
             .map((row) => {
                   ...row,
                   'total': hitungTotalBarisRincian(row),
+                  'metodeTampil': _labelMetodeBayarLaporan(row),
                 })
             .toList();
         _totalTransaksi = (hasil['total'] as num?)?.toInt() ?? 0;
@@ -4179,6 +4204,8 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
           DynamicReportColumn('produkKode', 'Kode'),
           DynamicReportColumn('produkNama', 'Produk'),
           DynamicReportColumn('kategori', 'Kategori'),
+          DynamicReportColumn('kasirRingkas', 'Kasir'),
+          DynamicReportColumn('metodeRingkas', 'Metode Bayar'),
           DynamicReportColumn('satuan', 'Satuan'),
           DynamicReportColumn('qty', 'Qty Terjual', numeric: true),
           DynamicReportColumn('jumlahTransaksi', 'Jml Transaksi',
@@ -4198,6 +4225,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
         DynamicReportColumn('waktuTampil', 'Waktu'),
         DynamicReportColumn('nomorNota', 'Nota'),
         DynamicReportColumn('kasir', 'Kasir'),
+        DynamicReportColumn('metodeTampil', 'Metode Bayar'),
         DynamicReportColumn('produkKode', 'Kode'),
         DynamicReportColumn('produkNama', 'Produk'),
         DynamicReportColumn('qtyTampil', 'Qty'),
@@ -4210,6 +4238,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
                 ...row,
                 'total': hitungTotalBarisRincian(row),
                 'waktuTampil': _formatWaktu(row['waktu']),
+                'metodeTampil': _labelMetodeBayarLaporan(row),
               })
           .toList(),
     );
@@ -4217,12 +4246,14 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
 
   Widget _tabelRekap() {
     return AppDataTable(
-      minWidth: 860,
+      minWidth: 1060,
       emptyText: 'Belum ada produk terjual pada filter ini.',
       columns: const [
         AppTableColumn('Kode', flex: 2),
         AppTableColumn('Produk', flex: 4),
         AppTableColumn('Kategori', flex: 2),
+        AppTableColumn('Kasir', flex: 2),
+        AppTableColumn('Metode Bayar', flex: 2),
         AppTableColumn('Qty', flex: 2, align: TextAlign.right),
         AppTableColumn('Transaksi', flex: 2, align: TextAlign.right),
         AppTableColumn('Total', flex: 3, align: TextAlign.right),
@@ -4235,6 +4266,8 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
                       flex: 4,
                       style: const TextStyle(fontWeight: FontWeight.w700)),
                   AppTableCell.text('${row['kategori'] ?? '-'}', flex: 2),
+                  AppTableCell.text('${row['kasirRingkas'] ?? '-'}', flex: 2),
+                  AppTableCell.text('${row['metodeRingkas'] ?? '-'}', flex: 2),
                   AppTableCell.text(
                       '${_angkaRingkasRekap(row['qty'])}'
                       '${(row['satuan'] ?? '').toString().isEmpty ? '' : ' ${row['satuan']}'}',
@@ -4261,10 +4294,12 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
 
   Widget _tabel() {
     return AppDataTable(
-      minWidth: 940,
+      minWidth: 1180,
       emptyText: 'Belum ada produk terjual pada rentang ini.',
       columns: const [
         AppTableColumn('Nota', flex: 3),
+        AppTableColumn('Kasir', flex: 2),
+        AppTableColumn('Metode Bayar', flex: 2),
         AppTableColumn('Produk', flex: 4),
         AppTableColumn('Qty', flex: 2),
         AppTableColumn('Harga', flex: 2, align: TextAlign.right),
@@ -4278,6 +4313,8 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
               flex: 3,
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
             ),
+            AppTableCell.text('${row['kasir'] ?? '-'}', flex: 2),
+            AppTableCell.text('${row['metodeTampil'] ?? '-'}', flex: 2),
             AppTableCell.text(
               '${row['produkNama'] ?? '-'}',
               flex: 4,
@@ -4297,6 +4334,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
                     'Nota': '${row['nomorNota'] ?? '-'}',
                     'Waktu': _formatWaktu(row['waktu']),
                     'Kasir': '${row['kasir'] ?? '-'}',
+                    'Metode Bayar': '${row['metodeTampil'] ?? '-'}',
                     'Jumlah': '${row['qtyTampil'] ?? row['qty'] ?? '-'}',
                     'Harga satuan':
                         _formatRupiah.format(row['hargaSatuan'] ?? 0),
