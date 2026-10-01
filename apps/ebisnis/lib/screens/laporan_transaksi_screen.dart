@@ -4044,7 +4044,10 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
         if (_sampai != null) 'tglSampai': _formatTanggalServer.format(_sampai!),
         if (_cariProduk.trim().isNotEmpty) 'produk': _cariProduk.trim(),
         if (_kasir.trim().isNotEmpty) 'kasir': _kasir.trim(),
-        if (_metode.trim().isNotEmpty) 'metode': _metode.trim(),
+        if (_metode.trim().isNotEmpty) ...{
+          'metode': _metode.trim(),
+          'metodeExact': _metode.trim(),
+        },
       };
 
   Future<void> _muatOpsiMetode() async {
@@ -4198,6 +4201,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
         DynamicReportColumn('waktuTampil', 'Waktu'),
         DynamicReportColumn('nomorNota', 'Nota'),
         DynamicReportColumn('kasir', 'Kasir'),
+        DynamicReportColumn('metode', 'Metode'),
         DynamicReportColumn('produkKode', 'Kode'),
         DynamicReportColumn('produkNama', 'Produk'),
         DynamicReportColumn('qtyTampil', 'Qty'),
@@ -4266,6 +4270,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
       columns: const [
         AppTableColumn('Nota', flex: 3),
         AppTableColumn('Produk', flex: 4),
+        AppTableColumn('Metode', flex: 3),
         AppTableColumn('Qty', flex: 2),
         AppTableColumn('Harga', flex: 2, align: TextAlign.right),
         AppTableColumn('Total', flex: 2, align: TextAlign.right),
@@ -4283,6 +4288,11 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
               flex: 4,
               style: const TextStyle(fontSize: 12.5),
             ),
+            AppTableCell.text(
+              '${row['metode'] ?? '-'}',
+              flex: 3,
+              style: const TextStyle(fontSize: 12),
+            ),
             AppTableCell.text('${row['qtyTampil'] ?? row['qty'] ?? '-'}',
                 flex: 2),
             AppTableCell.text(_formatRupiah.format(row['hargaSatuan'] ?? 0),
@@ -4297,6 +4307,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
                     'Nota': '${row['nomorNota'] ?? '-'}',
                     'Waktu': _formatWaktu(row['waktu']),
                     'Kasir': '${row['kasir'] ?? '-'}',
+                    'Metode': '${row['metode'] ?? '-'}',
                     'Jumlah': '${row['qtyTampil'] ?? row['qty'] ?? '-'}',
                     'Harga satuan':
                         _formatRupiah.format(row['hargaSatuan'] ?? 0),
