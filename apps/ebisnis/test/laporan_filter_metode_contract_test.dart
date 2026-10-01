@@ -60,8 +60,10 @@ void main() {
         state, contains("ApiClient.instance.aksi('laporan_metode_bayar_opsi'"));
     expect(state,
         contains("if (_kasir.trim().isNotEmpty) 'kasir': _kasir.trim()"));
-    expect(state,
-        contains("if (_metode.trim().isNotEmpty) 'metode': _metode.trim()"));
+    // Source terbaru meneruskan dua nama filter dalam satu spread map.
+    expect(state, contains("if (_metode.trim().isNotEmpty) ...{"));
+    expect(state, contains("'metode': _metode.trim(),"));
+    expect(state, contains("'metodeExact': _metode.trim(),"));
     expect(state, contains("hasil['bolehFilterKasir'] != false"));
     expect(state, contains("hasil['daftarKasir']"));
 

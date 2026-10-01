@@ -9,6 +9,7 @@ import '../services/master_offline.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/navigasi_laporan_transaksi.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/penanda_data_tersimpan.dart';
 import '../widgets/safe_state.dart';
@@ -289,7 +290,8 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 7, vsync: this);
+    _tab = TabController(
+        length: NavigasiLaporanTransaksi.jenisLaporan.length, vsync: this);
     _tab.addListener(() {
       if (!_tab.indexIsChanging && mounted) setStateIfMounted(() {});
     });
@@ -455,22 +457,7 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TabBar(
-            controller: _tab,
-            isScrollable: true,
-            labelColor: AppColors.primary,
-            unselectedLabelColor: AppColors.textSecondaryOf(context),
-            indicatorColor: AppColors.primary,
-            tabs: const [
-              Tab(text: 'Report Order'),
-              Tab(text: 'Report Sesi'),
-              Tab(text: 'Transaksi Per Kasir'),
-              Tab(text: 'Report Payment'),
-              Tab(text: 'Penjualan per Kasir'),
-              Tab(text: 'Penerimaan per Kasir'),
-              Tab(text: 'Rincian Produk'),
-            ],
-          ),
+          NavigasiLaporanTransaksi(controller: _tab),
           _toolbarLaporanDinamis(),
           // Angka rupiah KPI dari salinan tersimpan wajib dinyatakan terang-
           // terangan (aturan laporan ber-cache).
