@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 
 import '../services/pengaturan_struk.dart';
 import '../services/print_util.dart';
+import '../services/laporan_tutup_kas_pdf.dart';
 
 final _rupiahLaporanKas =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -37,112 +36,10 @@ class LaporanTutupKasDialog extends StatelessWidget {
   Future<void> _cetak(BuildContext context) async {
     try {
       await PengaturanStruk.instance.muat();
-      final lebarMm = PengaturanStruk.instance.lebarKertasMm;
-      final lebar = lebarMm * PdfPageFormat.mm;
-      final tinggi = (200 + _metode.length * 24) * PdfPageFormat.mm;
-      final dokumen = pw.Document();
-
-      // Ruang margin aman untuk printer thermal 58mm & 80mm agar digit kanan tidak terpotong
-      final marginKiriMm = lebarMm <= 58 ? 2.5 : 4.0;
-      final marginKananMm = lebarMm <= 58 ? 5.5 : 7.0;
-      final ukuranFont = lebarMm <= 58 ? 7.0 : 8.0;
-
-      pw.Widget baris(String nama, String nilai, {bool tebal = false}) =>
-          pw.Padding(
-            padding: const pw.EdgeInsets.symmetric(vertical: 1.5),
-            child: pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Expanded(
-                  child: pw.Text(
-                    nama,
-                    style: pw.TextStyle(
-                      fontSize: ukuranFont,
-                      fontWeight: tebal ? pw.FontWeight.bold : null,
-                    ),
-                  ),
-                ),
-                pw.SizedBox(width: 4),
-                pw.Text(
-                  nilai,
-                  textAlign: pw.TextAlign.right,
-                  style: pw.TextStyle(
-                    fontSize: ukuranFont,
-                    fontWeight: tebal ? pw.FontWeight.bold : null,
-                  ),
-                ),
-              ],
-            ),
-          );
-
-      dokumen.addPage(pw.Page(
-        pageFormat: PdfPageFormat(
-          lebar,
-          tinggi,
-          marginLeft: marginKiriMm * PdfPageFormat.mm,
-          marginRight: marginKananMm * PdfPageFormat.mm,
-          marginTop: 3 * PdfPageFormat.mm,
-          marginBottom: 3 * PdfPageFormat.mm,
-        ),
-        build: (_) => pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Center(
-                  child: pw.Text('LAPORAN TUTUP KAS',
-                      style: pw.TextStyle(
-                          fontSize: 11, fontWeight: pw.FontWeight.bold))),
-              pw.Center(
-                  child: pw.Text(_teks('namaToko'),
-                      style: pw.TextStyle(fontSize: ukuranFont + 0.5))),
-              pw.Divider(thickness: 0.5),
-              pw.Text('Kasir : ${_teks('namaKasir')}',
-                  style: pw.TextStyle(fontSize: ukuranFont)),
-              pw.Text('Buka  : ${_teks('waktuBuka')}',
-                  style: pw.TextStyle(fontSize: ukuranFont)),
-              pw.Text('Tutup : ${_teks('waktuTutup')}',
-                  style: pw.TextStyle(fontSize: ukuranFont)),
-              pw.Divider(thickness: 0.5),
-              baris(
-                  'Modal Awal', _rupiahLaporanKas.format(_angka('modalAwal'))),
-              baris('Penjualan Tunai',
-                  _rupiahLaporanKas.format(_angka('penjualanTunai'))),
-              baris('Kas Seharusnya',
-                  _rupiahLaporanKas.format(_angka('kasSeharusnya'))),
-              baris('Jumlah Kas Tunai',
-                  _rupiahLaporanKas.format(_angka('jumlahKasTunai'))),
-              baris('Selisih', _rupiahLaporanKas.format(_angka('selisih')),
-                  tebal: true),
-              pw.Divider(thickness: 0.5),
-              baris('Retur Penjualan',
-                  _rupiahLaporanKas.format(_angka('returPenjualan'))),
-              baris('Biaya (${_angka('jumlahBiaya')}x)',
-                  _rupiahLaporanKas.format(_angka('biaya'))),
-              pw.Divider(thickness: 0.5),
-              baris('Piutang (${_angka('jumlahTransaksiPiutang')}x)',
-                  _rupiahLaporanKas.format(_angka('piutang'))),
-              pw.Divider(thickness: 0.5),
-              ..._metode.expand((m) => [
-                    pw.Text(m['nama']?.toString() ?? '-',
-                        style: pw.TextStyle(
-                            fontSize: ukuranFont,
-                            fontWeight: pw.FontWeight.bold)),
-                    baris('${m['jumlahTransaksi'] ?? 0}x Penerimaan',
-                        _rupiahLaporanKas.format(m['penerimaan'] ?? 0)),
-                    baris('Retur', _rupiahLaporanKas.format(m['retur'] ?? 0)),
-                    baris('Total ${m['nama'] ?? ''}',
-                        _rupiahLaporanKas.format(m['total'] ?? 0),
-                        tebal: true),
-                  ]),
-              pw.Divider(thickness: 0.5),
-              baris('Jumlah Transaksi', _angka('jumlahTransaksi').toString(),
-                  tebal: true),
-              baris('Total Transaksi',
-                  _rupiahLaporanKas.format(_angka('totalTransaksi')),
-                  tebal: true),
-            ]),
-      ));
+      final (dokumen, format) = await buatPdfLaporanTutupKas(laporan,
+          lebarMm: PengaturanStruk.instance.lebarKertasMm);
       await cetakLangsungKePrinterDefault(
-          dokumen: dokumen, nama: 'Laporan Tutup Kas');
+          dokumen: dokumen, nama: 'Laporan Tutup Kas', format: format);
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

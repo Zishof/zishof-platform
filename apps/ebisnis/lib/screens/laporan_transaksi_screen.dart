@@ -3625,7 +3625,7 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
         ],
         rows: _data
             .map((row) => AppTableRowData(
-                  onTap: () => _lihatRincianPenerimaan(context, row),
+                  onTap: () => lihatRincianPenerimaan(context, row),
                   cells: [
                     AppTableCell.text('${row['tanggal'] ?? '-'}', flex: 2),
                     AppTableCell.text('${row['kasir'] ?? '-'}',
@@ -3663,7 +3663,7 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
                           tooltip: 'Lihat transaksi penyusun',
                           icon: const Icon(Icons.visibility_outlined, size: 18),
                           onPressed: () =>
-                              _lihatRincianPenerimaan(context, row)),
+                              lihatRincianPenerimaan(context, row)),
                     ),
                   ],
                 ))
@@ -3716,89 +3716,167 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
       );
 }
 
-Future<void> _lihatRincianPenerimaan(
+@visibleForTesting
+Future<void> lihatRincianPenerimaan(
     BuildContext context, Map<String, dynamic> ringkasan) async {
   try {
     final data = await _ambilSemuaRincianPenerimaan(ringkasan);
     if (!context.mounted) return;
+    final laporan = buatLaporanRincianPenerimaan(ringkasan, data);
+    var mengekspor = false;
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Rincian penerimaan · ${ringkasan['tanggal'] ?? '-'}'),
-        content: SizedBox(
-          width: 650,
-          height: 430,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Kasir: ${ringkasan['kasir'] ?? '-'}'),
-              Text('Metode / bank: ${ringkasan['metode'] ?? '-'}'),
-              Text(
-                  '${ringkasan['jumlahTransaksi'] ?? data.length} transaksi · ${_formatRupiah.format(ringkasan['total'] ?? 0)}'),
-              const Divider(),
-              Expanded(
-                child: data.isEmpty
-                    ? const Center(child: Text('Tidak ada rincian transaksi.'))
-                    : ListView.separated(
-                        itemCount: data.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (_, i) {
-                          final row = data[i];
-                          final ekspor =
-                              barisEksporRincianPenerimaan(ringkasan, row);
-                          final nominalMetode =
-                              (ekspor['penerimaanMetode'] as num?) ??
-                                  (row['totalBiaya'] as num?) ??
-                                  0;
-                          final totalNota = (ekspor['totalNota'] as num?) ??
-                              (row['totalBiaya'] as num?) ??
-                              0;
-                          final adaSplit = totalNota != nominalMetode;
-                          return ListTile(
-                            dense: true,
-                            title: Text('${row['nomorNota'] ?? '-'}'),
-                            subtitle: Text(
-                                '${_formatWaktu(row['waktu'])} · ${row['pembeli'] ?? 'Umum'}${adaSplit && row['metode'] != null ? " · ${row['metode']}" : ""}'),
-                            trailing: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  _formatRupiah.format(nominalMetode),
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w800),
-                                ),
-                                if (adaSplit)
+      builder: (dialogContext) =>
+          StatefulBuilder(builder: (context, setDialogState) {
+        Future<void> ekspor(String format) async {
+          setDialogState(() => mengekspor = true);
+          try {
+            final model = DynamicReportModel.fromData(laporan)
+              ..showAnalysis = false;
+            final nama =
+                'rincian-penerimaan-${ringkasan['tanggal'] ?? 'harian'}';
+            if (format == 'pdf') {
+              await DynamicReportDesigner.exportPdf(
+                  laporan, model, '$nama.pdf');
+            } else {
+              await DynamicReportDesigner.exportExcel(
+                  context, laporan, model, '$nama.xlsx');
+            }
+          } catch (e) {
+            if (context.mounted) snackbarGalat(context, e);
+          } finally {
+            if (context.mounted) setDialogState(() => mengekspor = false);
+          }
+        }
+
+        return AlertDialog(
+          title: Text('Rincian penerimaan · ${ringkasan['tanggal'] ?? '-'}'),
+          content: SizedBox(
+            width: 650,
+            height: 430,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Kasir: ${ringkasan['kasir'] ?? '-'}'),
+                Text('Metode / bank: ${ringkasan['metode'] ?? '-'}'),
+                Text(
+                    '${ringkasan['jumlahTransaksi'] ?? data.length} transaksi · ${_formatRupiah.format(ringkasan['total'] ?? 0)}'),
+                const Divider(),
+                Expanded(
+                  child: data.isEmpty
+                      ? const Center(
+                          child: Text('Tidak ada rincian transaksi.'))
+                      : ListView.separated(
+                          itemCount: data.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (_, i) {
+                            final row = data[i];
+                            final ekspor =
+                                barisEksporRincianPenerimaan(ringkasan, row);
+                            final nominalMetode =
+                                (ekspor['penerimaanMetode'] as num?) ??
+                                    (row['totalBiaya'] as num?) ??
+                                    0;
+                            final totalNota = (ekspor['totalNota'] as num?) ??
+                                (row['totalBiaya'] as num?) ??
+                                0;
+                            final adaSplit = totalNota != nominalMetode;
+                            return ListTile(
+                              dense: true,
+                              title: Text('${row['nomorNota'] ?? '-'}'),
+                              subtitle: Text(
+                                  '${_formatWaktu(row['waktu'])} · ${row['pembeli'] ?? 'Umum'}${adaSplit && row['metode'] != null ? " · ${row['metode']}" : ""}'),
+                              trailing: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
                                   Text(
-                                    'Total nota: ${_formatRupiah.format(totalNota)}',
-                                    style: TextStyle(
-                                      fontSize: 10.5,
-                                      color: AppColors.textSecondaryOf(context),
-                                    ),
+                                    _formatRupiah.format(nominalMetode),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w800),
                                   ),
-                              ],
-                            ),
-                            onTap: () =>
-                                _lihatDetailPenjualanKasir(dialogContext, row),
-                          );
-                        },
-                      ),
-              ),
-            ],
+                                  if (adaSplit)
+                                    Text(
+                                      'Total nota: ${_formatRupiah.format(totalNota)}',
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        color:
+                                            AppColors.textSecondaryOf(context),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              onTap: () => _lihatDetailPenjualanKasir(
+                                  dialogContext, row),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Tutup')),
-        ],
-      ),
+          actions: [
+            OutlinedButton.icon(
+                key: const ValueKey('rincian-penerimaan-pdf'),
+                onPressed:
+                    mengekspor || data.isEmpty ? null : () => ekspor('pdf'),
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                label: const Text('Cetak PDF')),
+            OutlinedButton.icon(
+                key: const ValueKey('rincian-penerimaan-excel'),
+                onPressed:
+                    mengekspor || data.isEmpty ? null : () => ekspor('excel'),
+                icon: const Icon(Icons.table_view_outlined),
+                label: const Text('Excel')),
+            if (mengekspor)
+              const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2)),
+            TextButton(
+                onPressed:
+                    mengekspor ? null : () => Navigator.of(dialogContext).pop(),
+                child: const Text('Tutup')),
+          ],
+        );
+      }),
     );
   } catch (e) {
     if (context.mounted) {
       snackbarGalat(context, e);
     }
   }
+}
+
+/// Ekspor memakai seluruh nota yang sama dengan dialog, termasuk halaman lanjut.
+/// Nominal penerimaan adalah porsi metode terpilih; total nota tetap dipisahkan.
+@visibleForTesting
+DynamicReportData buatLaporanRincianPenerimaan(
+    Map<String, dynamic> ringkasan, List<Map<String, dynamic>> transaksi) {
+  final rows = transaksi
+      .map((row) => barisEksporRincianPenerimaan(ringkasan, row))
+      .toList();
+  final total = rows.fold<num>(
+      0, (sum, row) => sum + ((row['penerimaanMetode'] as num?) ?? 0));
+  return DynamicReportData(
+    title: 'Rincian Penerimaan per Member',
+    subtitle:
+        '${ringkasan['tanggal'] ?? '-'} · Kasir ${ringkasan['kasir'] ?? '-'} · '
+        'Metode ${ringkasan['metode'] ?? '-'} · ${rows.length} transaksi · '
+        '${_formatRupiah.format(total)}. Penerimaan metode adalah porsi pembayaran, bukan total nota split.',
+    columns: const [
+      DynamicReportColumn('waktuTampil', 'Waktu'),
+      DynamicReportColumn('nomorNota', 'Nota'),
+      DynamicReportColumn('kasir', 'Kasir'),
+      DynamicReportColumn('pembeli', 'Member / Pembeli'),
+      DynamicReportColumn('metodeTampil', 'Metode / Bank'),
+      DynamicReportColumn('qty', 'Qty', numeric: true),
+      DynamicReportColumn('totalNota', 'Total Nota', numeric: true),
+      DynamicReportColumn('penerimaanMetode', 'Penerimaan Metode',
+          numeric: true),
+    ],
+    rows: rows,
+  );
 }
 
 /// Jumlah halaman rincian produk untuk sebuah jumlah transaksi.

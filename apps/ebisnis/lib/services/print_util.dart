@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:pdf/widgets.dart' as pw;
+import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 
 Future<bool> printerKasirAktifTerdeteksi({String? namaPrinter}) async {
@@ -50,7 +51,9 @@ Future<void> cetakPdfDenganDialogOs({
 /// kasir tetap bisa cetak manual sekali itu sambil printer default diatur di
 /// Windows.
 Future<void> cetakLangsungKePrinterDefault(
-    {required pw.Document dokumen, required String nama}) async {
+    {required pw.Document dokumen,
+    required String nama,
+    PdfPageFormat? format}) async {
   final printers = await Printing.listPrinters();
   Printer? default_;
   for (final p in printers) {
@@ -60,12 +63,19 @@ Future<void> cetakLangsungKePrinterDefault(
     }
   }
   if (default_ == null) {
-    await Printing.layoutPdf(onLayout: (_) async => dokumen.save(), name: nama);
+    await Printing.layoutPdf(
+        onLayout: (_) async => dokumen.save(),
+        name: nama,
+        format: format ?? PdfPageFormat.standard,
+        dynamicLayout: format == null);
     return;
   }
   final bytes = await dokumen.save();
   await Printing.directPrintPdf(
       printer: default_,
+      // Tanpa format eksplisit spooler memakai A4, walau PDF thermal 58/80 mm.
+      format: format ?? PdfPageFormat.standard,
+      dynamicLayout: format == null,
       onLayout: (_) async => Uint8List.fromList(bytes),
       name: nama);
 }
