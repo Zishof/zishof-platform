@@ -976,6 +976,24 @@ class _TabelLaporanState extends State<_TabelLaporan> {
     return 3;
   }
 
+  double _lebarMinimumTabel(List<Map<String, dynamic>> kolom) {
+    var hasil = 32.0; // padding kiri/kanan tabel.
+    for (var i = 0; i < kolom.length; i++) {
+      final tipe = '${kolom[i]['t'] ?? 'text'}';
+      final label = '${kolom[i]['l'] ?? ''}'.toLowerCase();
+      if (tipe == 'num') {
+        hasil += 160;
+      } else if (tipe == 'tgl' || label.contains('tanggal')) {
+        hasil += 180;
+      } else if (i == 0 || label.contains('toko') || label.contains('nama')) {
+        hasil += 190;
+      } else {
+        hasil += 170;
+      }
+    }
+    return hasil;
+  }
+
   String _fmtNum(num? v, bool hitung) {
     if (v == null) return '';
     final neg = v < 0;
@@ -994,6 +1012,12 @@ class _TabelLaporanState extends State<_TabelLaporan> {
       final parsed = num.tryParse(v.toString());
       if (parsed != null) return _fmtNum(parsed, _isHitungKolom(label));
       return v.toString();
+    }
+    if (tipe == 'tgl') {
+      final teks = v.toString().trim();
+      final tengahMalam =
+          RegExp(r'^(\d{2}-\d{2}-\d{4}) 00:00$').firstMatch(teks);
+      if (tengahMalam != null) return tengahMalam.group(1)!;
     }
     return v.toString();
   }
@@ -1080,7 +1104,7 @@ class _TabelLaporanState extends State<_TabelLaporan> {
             return AppTableCell.text(teksSel,
                 flex: _flexKolom(kolom[i], i),
                 align: isNum ? TextAlign.right : TextAlign.left,
-                maxLines: 2,
+                maxLines: 1,
                 style: gaya);
           }
           return AppTableCell(
@@ -1161,30 +1185,39 @@ class _TabelLaporanState extends State<_TabelLaporan> {
     }
 
     if (grup >= 0 && grup < kolom.length) {
+      void tambahGrup(String key, List<List<dynamic>> anggota) {
+        // Satu baris dalam satu grup sudah merupakan total hari tersebut.
+        // Pita+subtotal hanya menggandakan data dan menghabiskan ruang layar.
+        if (anggota.length == 1) {
+          semuaBaris.add(barisData(anggota.single));
+          return;
+        }
+        tambahBarisPita(_fmtSel(
+            key, '${kolom[grup]['t'] ?? 'text'}', '${kolom[grup]['l'] ?? ''}'));
+        final jumlah = <int, double>{};
+        for (final r in anggota) {
+          for (final i in numIdx) {
+            jumlah[i] = (jumlah[i] ?? 0) + ((r[i] as num?)?.toDouble() ?? 0);
+          }
+          final salinan = List<dynamic>.from(r);
+          salinan[grup] = null;
+          semuaBaris.add(barisData(salinan));
+        }
+        tambahBarisSubtotal(key, jumlah);
+      }
+
       String? kunciSaatIni;
-      final jumlahSaatIni = <int, double>{};
+      var anggotaSaatIni = <List<dynamic>>[];
       for (final r in baris) {
         final kunci = r[grup]?.toString() ?? '';
-        if (kunciSaatIni == null) {
-          tambahBarisPita(kunci);
-          kunciSaatIni = kunci;
-        } else if (kunci != kunciSaatIni) {
-          tambahBarisSubtotal(kunciSaatIni, jumlahSaatIni);
-          jumlahSaatIni.clear();
-          tambahBarisPita(kunci);
-          kunciSaatIni = kunci;
+        if (kunciSaatIni != null && kunci != kunciSaatIni) {
+          tambahGrup(kunciSaatIni, anggotaSaatIni);
+          anggotaSaatIni = <List<dynamic>>[];
         }
-        for (final i in numIdx) {
-          jumlahSaatIni[i] =
-              (jumlahSaatIni[i] ?? 0) + ((r[i] as num?)?.toDouble() ?? 0);
-        }
-        final rSalinan = List<dynamic>.from(r);
-        rSalinan[grup] = null;
-        semuaBaris.add(barisData(rSalinan));
+        kunciSaatIni = kunci;
+        anggotaSaatIni.add(r);
       }
-      if (kunciSaatIni != null) {
-        tambahBarisSubtotal(kunciSaatIni, jumlahSaatIni);
-      }
+      if (kunciSaatIni != null) tambahGrup(kunciSaatIni, anggotaSaatIni);
     } else {
       for (final r in baris) {
         semuaBaris.add(barisData(r));
@@ -1285,7 +1318,8 @@ class _TabelLaporanState extends State<_TabelLaporan> {
             ),
           ),
         AppDataTable(
-          minWidth: 760,
+          minWidth: _lebarMinimumTabel(kolom),
+          horizontalScroll: kolom.length > 8,
           emptyText: 'Tidak ada data untuk halaman ini.',
           columns: kolom
               .asMap()
@@ -1474,7 +1508,7 @@ class _SelAngkaRincian extends StatelessWidget {
               child: Text(
                 teks,
                 textAlign: TextAlign.right,
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: gaya.copyWith(
                   decoration: TextDecoration.underline,
