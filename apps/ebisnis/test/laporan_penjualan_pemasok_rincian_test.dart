@@ -34,7 +34,7 @@ void main() {
     expect(source, contains(".aksi('laporan_jalankan'"));
     expect(source, contains(".aksi('laporan_pdf'"));
     expect(
-        source, contains('final bytes = buildLaporanDetailXlsx(kolom, baris)'));
+        source, contains('final bytes = buildLaporanDetailXlsx(kolom, baris,'));
     expect(source, contains('FilePicker.platform.saveFile'));
   });
 }

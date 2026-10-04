@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import '../api_client.dart';
+import '../app_variant.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
@@ -58,6 +59,24 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
   final _controllerProduk = TextEditingController();
   final _controllerPelanggan = TextEditingController();
   bool _perToko = false;
+  String _modeLaporan = '';
+  final _controllerKop = TextEditingController();
+
+  Map<String, String> get _pilihanMode => switch (widget.item['id']) {
+        'pnj_per_cabang' => {
+            '': 'Ringkasan cabang',
+            'harian': 'Harian: Penjualan, BPP, Laba'
+          },
+        'pnj_per_pemasok' => {
+            '': 'Rincian produk',
+            'global': 'Ringkasan global per pemasok'
+          },
+        'pnj_per_kategori_pelanggan' => {
+            '': 'Ringkasan kategori',
+            'member': 'Rincian setiap member'
+          },
+        _ => {},
+      };
   int? _satkerId;
 
   int _versiPermintaan = 0;
@@ -84,6 +103,8 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
   @override
   void initState() {
     super.initState();
+    _controllerKop.text = AppVariant.isAlBahjah ? 'Ekonomi Syariah' : '';
+    _controllerKop.addListener(_filterBerubah);
     _controllerProduk.addListener(_filterBerubah);
     _controllerPelanggan.addListener(_filterBerubah);
     final sekarang = DateTime.now();
@@ -100,6 +121,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
 
   @override
   void dispose() {
+    _controllerKop.dispose();
     _controllerProduk.dispose();
     _controllerPelanggan.dispose();
     super.dispose();
@@ -108,13 +130,17 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
   Map<String, dynamic> _buatPayload() {
     return {
       'r': widget.item['id'],
+      if (_modeLaporan.isNotEmpty) 'modeLaporan': _modeLaporan,
+      if (_controllerKop.text.trim().isNotEmpty)
+        'kopNama': _controllerKop.text.trim(),
       if (_tglMulai != null) 'tglMulai': _formatTgl.format(_tglMulai!),
       if (_tglSampai != null) 'tglSampai': _formatTgl.format(_tglSampai!),
       if (_adaFilterProduk && _controllerProduk.text.trim().isNotEmpty)
         'qProduk': _controllerProduk.text.trim(),
       if (_adaFilterPelanggan && _controllerPelanggan.text.trim().isNotEmpty)
         'qPelanggan': _controllerPelanggan.text.trim(),
-      if (_adaFilterPerToko && _perToko) 'perToko': 'true',
+      if (_adaFilterPerToko && _modeLaporan.isEmpty && _perToko)
+        'perToko': 'true',
       if (_adaFilterSatker && _satkerId != null) 'satkerId': '$_satkerId',
     };
   }
@@ -124,7 +150,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
   /// periode, cari produk/pelanggan, per toko) -- salah kunci berarti hasil
   /// periode A menimpa periode B.
   String _kunciCache(Map<String, dynamic> payload) =>
-      'laporan:jalankan:v2:${jsonEncode([
+      'laporan:jalankan:v3:${jsonEncode([
             ApiClient.baseUrl,
             Sesi.instance.tenantId,
             Sesi.instance.userId,
@@ -186,6 +212,13 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
     try {
       final hasil = await ApiClient.instance.aksi('laporan_jalankan', payload);
       if (!mounted || versi != _versiPermintaan) return;
+      if ((_modeLaporan.isNotEmpty && hasil['modeLaporan'] != _modeLaporan) ||
+          (_controllerKop.text.trim().isNotEmpty &&
+              hasil['kopKustomDidukung'] != true)) {
+        setStateIfMounted(() => _pesanError =
+            'Server belum mendukung bentuk/kop laporan yang dipilih. Hubungi admin untuk pembaruan server; hasil lama tidak digunakan sebagai laporan baru.');
+        return;
+      }
       setStateIfMounted(() {
         _hasil = hasil;
         // Angka server sudah terpasang -> penanda salinan tersimpan padam.
@@ -235,6 +268,15 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
     try {
       final hasil =
           await ApiClient.instance.aksi('laporan_pdf', _buatPayload());
+      if ((_modeLaporan.isNotEmpty && hasil['modeLaporan'] != _modeLaporan) ||
+          (_controllerKop.text.trim().isNotEmpty &&
+              hasil['kopKustomDidukung'] != true)) {
+        if (mounted) {
+          setStateIfMounted(() => _pesanError =
+              'Server belum mendukung bentuk/kop PDF yang dipilih. Hubungi admin untuk pembaruan server.');
+        }
+        return;
+      }
       final b64 = hasil['pdfBase64'] as String?;
       if (b64 == null || b64.isEmpty) {
         throw Exception('Server tidak mengembalikan berkas PDF.');
@@ -298,7 +340,10 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
     if (kolom.isEmpty) return;
 
     try {
-      final bytes = buildLaporanDetailXlsx(kolom, baris);
+      final bytes = buildLaporanDetailXlsx(kolom, baris,
+          kopNama: '${hasil['kopNama'] ?? ''}',
+          judul: '${hasil['judul'] ?? ''}',
+          periode: '${hasil['periode'] ?? ''}');
       final namaFile =
           '${(widget.item['judul'] as String? ?? widget.item['id']).toString().replaceAll(RegExp(r'[^A-Za-z0-9 _-]'), '')}.xlsx';
       final path = await FilePicker.platform.saveFile(
@@ -377,6 +422,36 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
                               () => _pilihTanggal(mulai: false))),
                     ],
                   ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const ValueKey('kop-nama-laporan'),
+                    controller: _controllerKop,
+                    maxLength: 120,
+                    decoration: const InputDecoration(
+                      labelText: 'Nama usaha pada kop laporan',
+                      helperText:
+                          'Kosongkan untuk memakai kop lembaga bawaan. Nama kustom tidak memakai logo kampus.',
+                      helperMaxLines: 2,
+                    ),
+                  ),
+                  if (_pilihanMode.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      key: const ValueKey('mode-laporan-tambahan'),
+                      value: _modeLaporan,
+                      isExpanded: true,
+                      decoration:
+                          const InputDecoration(labelText: 'Bentuk laporan'),
+                      items: _pilihanMode.entries
+                          .map((e) => DropdownMenuItem(
+                              value: e.key, child: Text(e.value)))
+                          .toList(),
+                      onChanged: (value) => setStateIfMounted(() {
+                        _hapusHasil();
+                        _modeLaporan = value ?? '';
+                      }),
+                    ),
+                  ],
                   if (_adaFilterProduk) ...[
                     const SizedBox(height: 12),
                     AppSearchField(
@@ -417,7 +492,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
                       }),
                     ),
                   ],
-                  if (_adaFilterPerToko)
+                  if (_adaFilterPerToko && _modeLaporan.isEmpty)
                     CheckboxListTile(
                         value: _perToko,
                         onChanged: (v) => setStateIfMounted(() {
@@ -1272,24 +1347,35 @@ String _escapeXml(String s) => s
 /// pengujian tanpa melewati dialog pemilih berkas.
 Uint8List buildLaporanDetailXlsx(
   List<Map<String, dynamic>> kolom,
-  List<List<dynamic>> baris,
-) {
+  List<List<dynamic>> baris, {
+  String kopNama = '',
+  String judul = '',
+  String periode = '',
+}) {
+  final metadata =
+      [kopNama, judul, periode].where((s) => s.trim().isNotEmpty).toList();
+  final headerRow = metadata.length + 1;
   final sheetXml = StringBuffer()
     ..write('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>')
     ..write(
         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">')
-    ..write('<sheetData>')
-    ..write('<row r="1">');
+    ..write('<sheetData>');
+  for (var m = 0; m < metadata.length; m++) {
+    final row = m + 1;
+    sheetXml.write(
+        '<row r="$row"><c r="A$row" t="inlineStr" s="1"><is><t>${_escapeXml(metadata[m])}</t></is></c></row>');
+  }
+  sheetXml.write('<row r="$headerRow">');
   for (var i = 0; i < kolom.length; i++) {
     final label = _escapeXml((kolom[i]['l'] as String?) ?? '');
     sheetXml.write(
-        '<c r="${_kolomExcel(i)}1" t="inlineStr" s="1"><is><t xml:space="preserve">$label</t></is></c>');
+        '<c r="${_kolomExcel(i)}$headerRow" t="inlineStr" s="1"><is><t xml:space="preserve">$label</t></is></c>');
   }
   sheetXml.write('</row>');
 
   for (var r = 0; r < baris.length; r++) {
     final row = baris[r];
-    final excelRow = r + 2;
+    final excelRow = r + headerRow + 1;
     sheetXml.write('<row r="$excelRow">');
     for (var i = 0; i < kolom.length; i++) {
       final v = i < row.length ? row[i] : null;
