@@ -173,6 +173,123 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
     }
   }
 
+  Future<void> _downloadTemplateExcel() async {
+    setStateIfMounted(() => _memprosesBerkas = true);
+    try {
+      final tipeHasil = await ApiClient.instance.aksi('tipe_anggota_list', {});
+      final tipe = ((tipeHasil['data'] as List?) ?? [])
+          .whereType<Map<String, dynamic>>()
+          .toList();
+      if (tipe.isEmpty) {
+        _info('Daftar Tipe Member belum tersedia dari server.');
+        return;
+      }
+      if (!mounted) return;
+      final dipilih = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (dialogContext) {
+          Map<String, dynamic>? nilai;
+          return StatefulBuilder(builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Template Topup Voucher'),
+              content: DropdownButtonFormField<Map<String, dynamic>>(
+                value: nilai,
+                decoration: const InputDecoration(labelText: 'Tipe Member'),
+                items: tipe
+                    .map((e) => DropdownMenuItem(
+                          value: e,
+                          child: Text('${e['nama'] ?? e['tipeNama'] ?? '-'}'),
+                        ))
+                    .toList(),
+                onChanged: (v) => setDialogState(() => nilai = v),
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('Batal')),
+                FilledButton(
+                    onPressed: nilai == null
+                        ? null
+                        : () => Navigator.pop(dialogContext, nilai),
+                    child: const Text('Unduh')),
+              ],
+            );
+          });
+        },
+      );
+      if (dipilih == null) return;
+
+      final semua = <Map<String, dynamic>>[];
+      var halaman = 1;
+      while (true) {
+        final hasil = await ApiClient.instance.aksi('anggota_list', {
+          'page': halaman,
+          'page_size': 100,
+        });
+        final data = ((hasil['data'] as List?) ?? [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
+        semua.addAll(data);
+        final total = (hasil['total'] as num?)?.toInt() ?? semua.length;
+        if (data.isEmpty || semua.length >= total) break;
+        halaman++;
+      }
+      final idTipe = (dipilih['id'] as num?)?.toInt();
+      final anggota = semua.where((m) {
+        final idAnggotaTipe = (m['tipeAnggotaKoperasiId'] as num?)?.toInt();
+        return idTipe != null && idAnggotaTipe == idTipe && m['aktif'] != false;
+      }).toList();
+      if (anggota.isEmpty) {
+        _info('Tidak ada member aktif pada tipe yang dipilih.');
+        return;
+      }
+      final namaTipe = '${dipilih['nama'] ?? dipilih['tipeNama'] ?? 'Member'}';
+      final bytes = buildSimpleXlsx(
+        sheetName: 'Template Topup',
+        headers: const [
+          'ID_MEMBER',
+          'KODE_MEMBER',
+          'NAMA_MEMBER',
+          'NOMINAL',
+          'WAKTU',
+          'TANGGAL_EXPIRED',
+          'METODE_PEMBAYARAN',
+          'KETERANGAN',
+        ],
+        rows: anggota
+            .map((m) => <Object?>[
+                  m['id'] ?? '',
+                  m['kode'] ?? m['kodeIdentitas'] ?? '',
+                  m['nama'] ?? '',
+                  '',
+                  '',
+                  '',
+                  '',
+                  '',
+                ])
+            .toList(),
+      );
+      final lokasi = await FilePicker.platform.saveFile(
+        dialogTitle: 'Simpan Template Topup Voucher',
+        fileName:
+            'Template_Topup_${namaTipe.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_')}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx',
+        type: FileType.custom,
+        allowedExtensions: const ['xlsx'],
+        bytes: bytes,
+      );
+      if (lokasi != null) {
+        await File(lokasi).writeAsBytes(bytes);
+        _info(
+            '${anggota.length} member tipe $namaTipe dimasukkan ke template.');
+      }
+    } catch (e) {
+      _info(
+          'Template Excel belum berhasil dibuat. Silakan coba lagi. Detail: $e');
+    } finally {
+      setStateIfMounted(() => _memprosesBerkas = false);
+    }
+  }
+
   Future<void> _uploadExcel() async {
     final dipilih = await FilePicker.platform.pickFiles(
       dialogTitle: 'Pilih Excel Topup',
@@ -259,13 +376,17 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
             ? ''
             : row[kolomId].trim().replaceFirst(RegExp(r'\.0$'), '');
         int? idMember = int.tryParse(idMemberText);
-        final nominalText = kolomNominal >= row.length
-            ? ''
-            : row[kolomNominal]
-                .replaceAll(RegExp(r'[^0-9,.-]'), '')
-                .replaceAll(',', '.');
+        final nominalInput =
+            kolomNominal >= row.length ? '' : row[kolomNominal].trim();
+        final nominalText = nominalInput
+            .replaceAll(RegExp(r'[^0-9,.-]'), '')
+            .replaceAll(',', '.');
         final nominal = double.tryParse(nominalText) ?? 0;
-        if (kode.isEmpty && idMember == null && nominal == 0) continue;
+        if (kode.isEmpty && idMember == null) continue;
+        // Template berisi seluruh anggota pada tipe terpilih; baris tanpa
+        // nominal sengaja dibiarkan kosong agar hanya member yang diisi yang
+        // diproses saat upload.
+        if (nominalInput.isEmpty) continue;
         if ((kode.isEmpty && idMember == null) || nominal <= 0) {
           gagal++;
           rincian.add('Baris ${i + 1}: kode kosong atau nominal tidak valid.');
@@ -495,6 +616,12 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
                   icon: const Icon(Icons.file_download_outlined, size: 18),
                   label: const Text('Download Excel'),
                 ),
+                if (bolehEdit)
+                  OutlinedButton.icon(
+                    onPressed: _memprosesBerkas ? null : _downloadTemplateExcel,
+                    icon: const Icon(Icons.table_view_outlined, size: 18),
+                    label: const Text('Template Excel'),
+                  ),
                 if (bolehEdit)
                   OutlinedButton.icon(
                     onPressed: _memprosesBerkas ? null : _uploadExcel,
