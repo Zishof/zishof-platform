@@ -6,6 +6,16 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('batas aman pembayaran offline', () {
+    test('koreksi hanya tersedia setelah penolakan final, bukan saat pending',
+        () {
+      expect(TransaksiOutboxService.dapatDikoreksiSetelahPenolakan('PENDING'),
+          isFalse);
+      expect(TransaksiOutboxService.dapatDikoreksiSetelahPenolakan('GAGAL'),
+          isTrue);
+      expect(TransaksiOutboxService.dapatDikoreksiSetelahPenolakan('SYNCED'),
+          isFalse);
+    });
+
     test('metode non-manual mengikuti aturan saldo efektif backend', () {
       final voucher = CaraBayar.fromJson({
         'id': 7,
@@ -33,6 +43,45 @@ void main() {
           TransaksiOutboxService.metodeAmanUntukKoreksiOffline(tunai), isTrue);
       expect(TransaksiOutboxService.metodeAmanUntukKoreksiOffline(kasbon),
           isFalse);
+      expect(TransaksiOutboxService.metodeKasbonUntukKoreksiServer(kasbon),
+          isTrue);
+    });
+
+    test('koreksi Kasbon wajib punya member dan menunggu validasi server', () {
+      final sumber = <String, dynamic>{
+        'kodeUnik': 'AB2605061440460038',
+        'id_member': 123,
+        'waktu': '05-10-2026 14:40:46',
+        'transaksi': [
+          {'kode': 'P001', 'jumlah': 1, 'harga': 1000}
+        ],
+      };
+      final kasbon = CaraBayar(
+        id: 101,
+        nama: 'Kasbon Divisi',
+        manual: true,
+        masukSebagaiHutang: true,
+      );
+
+      final hasil = TransaksiOutboxService.payloadDenganMetodeTerkoreksi(
+        sumber,
+        kasbon,
+        izinkanValidasiServer: true,
+      );
+      expect(hasil['caraBayar'], 101);
+      expect(hasil['id_member'], 123);
+      expect(hasil['pengiriman_pending'], isTrue);
+      expect(TransaksiOutboxService.metodeAmanUntukKoreksiOffline(kasbon),
+          isFalse);
+
+      expect(
+        () => TransaksiOutboxService.payloadDenganMetodeTerkoreksi(
+          {'kodeUnik': 'AB2605061440460038'},
+          kasbon,
+          izinkanValidasiServer: true,
+        ),
+        throwsArgumentError,
+      );
     });
 
     test('koreksi metode menjaga identitas dan meratakan split pembayaran', () {

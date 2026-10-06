@@ -407,21 +407,70 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
 
   Future<void> _gantiMetodePending(Map<String, dynamic> row) async {
     final kode = '${row['kode_unik'] ?? ''}'.trim();
+    final status = '${row['status'] ?? ''}';
+    if (!TransaksiOutboxService.dapatDikoreksiSetelahPenolakan(status)) {
+      await tampilkanKesalahan(
+        context,
+        StateError(
+            'Transaksi masih menunggu kepastian server (status $status). Sinkronkan atau tunggu hasil server sebelum mengubah metode pembayaran.'),
+        aktivitas: 'mengganti metode pembayaran',
+      );
+      return;
+    }
     final payload = _payloadPending(row);
-    final metodeAman = Sesi.instance.caraBayar
+    final idMemberNilai = payload['id_member'] ?? payload['memberId'];
+    final idMember = idMemberNilai is num
+        ? idMemberNilai.toInt()
+        : int.tryParse('${idMemberNilai ?? ''}');
+    var metodeTersedia = Sesi.instance.caraBayar
         .where(TransaksiOutboxService.metodeAmanUntukKoreksiOffline)
+        .toList();
+    if (idMember != null && idMember > 0) {
+      try {
+        final hasil = await ApiClient.instance.aksi('cara_bayar_list', {
+          'id_member': idMember,
+          'id_toko': Sesi.instance.idTokoTerpilih,
+        });
+        final data = (hasil['caraBayar'] ?? hasil['data'] ?? hasil['list']);
+        final daftarJson = data is List ? data : const [];
+        final daftarDiizinkan = daftarJson
+            .whereType<Map>()
+            .map((item) => CaraBayar.fromJson(Map<String, dynamic>.from(item)))
+            .toList();
+        // Kasbon hanya ditambahkan dari daftar yang diizinkan server untuk
+        // member ini. Persetujuan/limit piutang tetap diputuskan server saat
+        // transaksi dikirim ulang.
+        metodeTersedia = [
+          ...metodeTersedia,
+          ...daftarDiizinkan
+              .where(TransaksiOutboxService.metodeKasbonUntukKoreksiServer),
+        ];
+      } catch (e) {
+        if (!mounted) return;
+        await tampilkanKesalahan(context, e,
+            aktivitas: 'memuat metode pembayaran koreksi');
+        return;
+      }
+    }
+    if (!mounted) return;
+    final metodeAman = metodeTersedia
+        .where((cara) =>
+            TransaksiOutboxService.metodeAmanUntukKoreksiOffline(cara) ||
+            (idMember != null &&
+                TransaksiOutboxService.metodeKasbonUntukKoreksiServer(cara)))
         .toList();
     if (metodeAman.isEmpty) {
       await tampilkanKesalahan(
         context,
-        StateError(
-            'Belum ada metode manual lokal yang aman. Aktifkan metode Tunai/manual yang tidak memotong saldo, piutang, atau PIN.'),
+        StateError(idMember == null
+            ? 'Tidak ada metode koreksi yang aman. Kasbon Divisi memerlukan member/PIC pada transaksi dan validasi server.'
+            : 'Tidak ada metode koreksi yang diizinkan untuk member transaksi ini. Periksa konfigurasi metode pembayaran member di server.'),
         aktivitas: 'mengganti metode pembayaran',
       );
       return;
     }
 
-    CaraBayar? pilihan = metodeAman.first;
+    CaraBayar? pilihan;
     var pembayaranDiterima = false;
     final setuju = await showDialog<bool>(
       context: context,
@@ -441,9 +490,9 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                   Text(
                       'Total: ${_formatRupiah.format((payload['total'] as num?)?.toDouble() ?? 0)}'),
                   const SizedBox(height: 12),
-                  const Text(
-                    'Pilih metode manual yang pembayarannya benar-benar sudah diterima. Kode transaksi, waktu, barang, kasir, dan toko tidak berubah.',
-                  ),
+                  Text(pilihan?.masukSebagaiHutang == true
+                      ? 'Kasbon Divisi akan dikirim ulang untuk pemeriksaan izin, limit, dan pencatatan piutang oleh server. Member/PIC dan seluruh identitas transaksi tetap.'
+                      : 'Pilih metode manual yang pembayarannya benar-benar sudah diterima. Kode transaksi, waktu, barang, kasir, dan toko tidak berubah.'),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<CaraBayar>(
                     value: pilihan,
@@ -457,7 +506,10 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                               child: Text(cara.nama),
                             ))
                         .toList(),
-                    onChanged: (nilai) => setDialogState(() => pilihan = nilai),
+                    onChanged: (nilai) => setDialogState(() {
+                      if (pilihan?.id != nilai?.id) pembayaranDiterima = false;
+                      pilihan = nilai;
+                    }),
                   ),
                   const SizedBox(height: 8),
                   CheckboxListTile(
@@ -465,10 +517,12 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                     value: pembayaranDiterima,
                     onChanged: (nilai) => setDialogState(
                         () => pembayaranDiterima = nilai == true),
-                    title: const Text(
-                        'Saya memastikan uang/bukti pembayaran pengganti sudah diterima.'),
-                    subtitle: const Text(
-                        'Jangan centang bila pelanggan belum membayar dengan metode pengganti.'),
+                    title: Text(pilihan?.masukSebagaiHutang == true
+                        ? 'Saya memastikan Kasbon Divisi ini disetujui dan member/PIC sudah benar.'
+                        : 'Saya memastikan uang/bukti pembayaran pengganti sudah diterima.'),
+                    subtitle: Text(pilihan?.masukSebagaiHutang == true
+                        ? 'Server tetap memeriksa izin dan limit. Jangan lanjutkan tanpa persetujuan kasbon.'
+                        : 'Jangan centang bila pelanggan belum membayar dengan metode pengganti.'),
                     controlAffinity: ListTileControlAffinity.leading,
                   ),
                 ],
@@ -491,8 +545,11 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
     );
     if (setuju != true || pilihan == null || !mounted) return;
     try {
-      await TransaksiOutboxService.instance
-          .koreksiMetodePembayaran(kode, pilihan!);
+      await TransaksiOutboxService.instance.koreksiMetodePembayaran(
+        kode,
+        pilihan!,
+        izinkanValidasiServer: pilihan!.masukSebagaiHutang,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
@@ -510,7 +567,10 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
     final payload = _payloadPending(row);
     final items = (payload['transaksi'] as List?) ?? const [];
     final pesanError = '${row['pesan_error'] ?? ''}'.trim();
-    final dapatDikoreksi = row['status'] != 'SYNCED' && pesanError.isNotEmpty;
+    final dapatDikoreksi =
+        TransaksiOutboxService.dapatDikoreksiSetelahPenolakan(
+                '${row['status'] ?? ''}') &&
+            pesanError.isNotEmpty;
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(

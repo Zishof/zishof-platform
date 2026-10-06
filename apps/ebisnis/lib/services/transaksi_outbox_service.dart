@@ -92,6 +92,19 @@ class TransaksiOutboxService {
       !caraBayar.masukSebagaiHutang &&
       !caraBayar.wajibPin;
 
+  /// Kasbon boleh dipilih saat koreksi hanya karena payload akan dikirim ulang
+  /// ke server untuk validasi piutang. Metode ini tidak pernah dianggap aman
+  /// untuk penyelesaian lokal/offline.
+  static bool metodeKasbonUntukKoreksiServer(CaraBayar caraBayar) =>
+      caraBayar.masukSebagaiHutang &&
+      caraBayar.wajibPilihMember &&
+      !caraBayar.wajibPin;
+
+  /// PENDING mencakup timeout/kehilangan respons dan mungkin sudah tersimpan
+  /// di server; hanya penolakan final GAGAL boleh mengubah metode transaksi.
+  static bool dapatDikoreksiSetelahPenolakan(String status) =>
+      status.trim().toUpperCase() == 'GAGAL';
+
   /// Membuat payload non-split yang setara dengan checkout normal. Kode, waktu,
   /// item, nominal, kasir, toko, dan perangkat tidak diubah agar audit serta
   /// idempotensi transaksi tetap utuh.
@@ -114,10 +127,6 @@ class TransaksiOutboxService {
         throw ArgumentError(
             'Metode pengganti harus manual dan tidak memotong saldo/piutang.');
       }
-      if (caraBayar.masukSebagaiHutang) {
-        throw ArgumentError(
-            'Metode piutang/kasbon harus dikoreksi melalui server/supervisor.');
-      }
       if (caraBayar.wajibPin) {
         throw ArgumentError(
             'Metode ini memerlukan PIN dan belum dapat dikoreksi dari antrean lokal.');
@@ -127,6 +136,10 @@ class TransaksiOutboxService {
           ? memberId.toInt()
           : int.tryParse('${memberId ?? ''}');
       final memberValid = memberAngka != null && memberAngka > 0;
+      if (caraBayar.masukSebagaiHutang && !memberValid) {
+        throw ArgumentError(
+            'Kasbon Divisi memerlukan member/PIC yang sah dan validasi server.');
+      }
       if (caraBayar.wajibPilihMember && !memberValid) {
         throw ArgumentError(
             'Pilih transaksi yang sudah memiliki member sebelum memakai voucher/saldo.');
@@ -200,6 +213,10 @@ class TransaksiOutboxService {
       throw StateError('Transaksi $kodeUnik tidak ditemukan di perangkat ini.');
     }
     final status = '${row['status']}';
+    if (!dapatDikoreksiSetelahPenolakan(status)) {
+      throw StateError(
+          'Metode hanya dapat dikoreksi setelah server memberi penolakan final. Status transaksi saat ini: $status.');
+    }
     final payload = Map<String, dynamic>.from(
         jsonDecode('${row['payload_json'] ?? '{}'}') as Map);
     final asalBackup = '${payload['asal_backup'] ?? ''}'.trim().toUpperCase();
