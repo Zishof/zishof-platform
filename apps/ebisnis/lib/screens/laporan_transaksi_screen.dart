@@ -2619,6 +2619,11 @@ class _TabPaymentState extends State<_TabPayment> with JejakGalat {
       columns: const [
         DynamicReportColumn('waktuTampil', 'Waktu'),
         DynamicReportColumn('orderKode', 'Order'),
+        DynamicReportColumn('pembeli', 'Pembeli'),
+        DynamicReportColumn('kodeMember', 'Kode Member'),
+        DynamicReportColumn('identitasMember', 'No. Identitas'),
+        DynamicReportColumn('jenisMember', 'Jenis Member'),
+        DynamicReportColumn('tipeMember', 'Tipe Member'),
         DynamicReportColumn('sesiKode', 'Sesi'),
         DynamicReportColumn('metodeTampil', 'Metode'),
         DynamicReportColumn('bayarTunai', 'Tunai', numeric: true),
@@ -2637,10 +2642,14 @@ class _TabPaymentState extends State<_TabPayment> with JejakGalat {
 
   Widget _tabelPayment() {
     return AppDataTable(
-      minWidth: 860,
+      minWidth: 1380,
       emptyText: 'Belum ada pembayaran pada rentang ini.',
       columns: const [
         AppTableColumn('Order', flex: 3),
+        AppTableColumn('Pembeli', flex: 3),
+        AppTableColumn('Kode Member', flex: 2),
+        AppTableColumn('No. Identitas', flex: 2),
+        AppTableColumn('Jenis / Tipe', flex: 2),
         AppTableColumn('Waktu', flex: 2),
         AppTableColumn('Sesi', flex: 2),
         AppTableColumn('Metode', flex: 2),
@@ -2654,6 +2663,15 @@ class _TabPaymentState extends State<_TabPayment> with JejakGalat {
               flex: 3,
               style:
                   const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+            ),
+            AppTableCell.text('${row['pembeli'] ?? 'Umum'}', flex: 3),
+            AppTableCell.text('${row['kodeMember'] ?? '-'}', flex: 2),
+            AppTableCell.text('${row['identitasMember'] ?? '-'}', flex: 2),
+            AppTableCell.text(
+              [row['jenisMember'], row['tipeMember']]
+                  .where((nilai) => nilai != null && '$nilai'.trim().isNotEmpty)
+                  .join(' / '),
+              flex: 2,
             ),
             AppTableCell.text(_formatWaktu(row['waktu']), flex: 2),
             AppTableCell.text('${row['sesiKode'] ?? '-'}', flex: 2),

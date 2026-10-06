@@ -108,8 +108,13 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
     _controllerProduk.addListener(_filterBerubah);
     _controllerPelanggan.addListener(_filterBerubah);
     final sekarang = DateTime.now();
-    _tglMulai = DateTime(sekarang.year, sekarang.month, 1);
-    _tglSampai = sekarang;
+    _tglMulai = widget.item['tglMulai'] != null
+        ? DateTime.tryParse('${widget.item['tglMulai']}') ??
+            DateTime(sekarang.year, sekarang.month, 1)
+        : DateTime(sekarang.year, sekarang.month, 1);
+    _tglSampai = widget.item['tglSampai'] != null
+        ? DateTime.tryParse('${widget.item['tglSampai']}') ?? sekarang
+        : sekarang;
     // Pra-pilih unit bawaan server bila ada di daftar; kalau tidak, "Semua Unit".
     final adaBawaan = widget.satuanKerja
         .any((e) => (e['id'] as num?)?.toInt() == widget.satuanKerjaDefault);
