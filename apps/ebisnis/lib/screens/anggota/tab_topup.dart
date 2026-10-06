@@ -10,6 +10,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../api_client.dart';
+import '../../models.dart';
 import '../../services/diff_daftar_lokal.dart';
 import '../../services/master_offline.dart';
 import '../../services/simple_xlsx.dart';
@@ -25,6 +26,20 @@ import '../../widgets/aksi_baris_menu.dart';
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _formatTanggal = DateFormat('dd-MM-yyyy');
+
+enum _ModeTemplateTopup { semua, jenis, tipe }
+
+class _FilterTemplateTopup {
+  final _ModeTemplateTopup mode;
+  final int? jenisId;
+  final int? tipeId;
+
+  const _FilterTemplateTopup({
+    required this.mode,
+    this.jenisId,
+    this.tipeId,
+  });
+}
 
 /// Tab "Topup" (padanan `_manajemen_topup.jsp`) -- riwayat pengisian saldo
 /// member + entry baru. Gerbang tulis (tambah/ubah/hapus) memakai
@@ -117,6 +132,235 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
       final total = (hasil['total'] as num?)?.toInt() ?? semua.length;
       if (data.isEmpty || semua.length >= total) return semua;
       page++;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _ambilSemuaMember() async {
+    final semua = <Map<String, dynamic>>[];
+    var page = 1;
+    while (true) {
+      final hasil = await ApiClient.instance.aksi('anggota_list', {
+        'page': page,
+        'page_size': 100,
+      });
+      final data = ((hasil['data'] as List?) ?? [])
+          .whereType<Map<String, dynamic>>()
+          .toList();
+      semua.addAll(data);
+      final total = (hasil['total'] as num?)?.toInt() ?? semua.length;
+      if (data.isEmpty || semua.length >= total) return semua;
+      page++;
+    }
+  }
+
+  Future<List<Kategori>> _ambilPilihanKategori(
+      String aksi, String cacheKey) async {
+    final hasil = await MasterOffline.daftarDenganCache(aksi, {}, cacheKey);
+    return ((hasil['data'] as List?) ?? [])
+        .whereType<Map<String, dynamic>>()
+        .map(Kategori.fromJson)
+        .toList();
+  }
+
+  int? _angkaInt(Map<String, dynamic> data, List<String> namaKolom) {
+    for (final nama in namaKolom) {
+      final nilai = data[nama];
+      if (nilai is int) return nilai;
+      if (nilai is num) return nilai.toInt();
+      if (nilai is String) {
+        final parsed = int.tryParse(nilai.trim());
+        if (parsed != null) return parsed;
+      }
+    }
+    return null;
+  }
+
+  Future<_FilterTemplateTopup?> _pilihFilterTemplateTopup(
+      List<Kategori> jenis, List<Kategori> tipe) {
+    var mode = _ModeTemplateTopup.semua;
+    int? jenisId;
+    int? tipeId;
+    return showDialog<_FilterTemplateTopup>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Download Template Topup'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                RadioListTile<_ModeTemplateTopup>(
+                  value: _ModeTemplateTopup.semua,
+                  groupValue: mode,
+                  onChanged: (v) => setDialogState(() => mode = v!),
+                  title: const Text('Semua member'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                RadioListTile<_ModeTemplateTopup>(
+                  value: _ModeTemplateTopup.jenis,
+                  groupValue: mode,
+                  onChanged: jenis.isEmpty
+                      ? null
+                      : (v) => setDialogState(() => mode = v!),
+                  title: const Text('Berdasarkan jenis member'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                if (mode == _ModeTemplateTopup.jenis)
+                  DropdownButtonFormField<int>(
+                    value: jenisId,
+                    decoration: const InputDecoration(
+                      labelText: 'Jenis Member',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: jenis
+                        .map((k) => DropdownMenuItem<int>(
+                              value: k.id,
+                              child: Text(k.nama),
+                            ))
+                        .toList(),
+                    onChanged: (v) => setDialogState(() => jenisId = v),
+                  ),
+                const SizedBox(height: 8),
+                RadioListTile<_ModeTemplateTopup>(
+                  value: _ModeTemplateTopup.tipe,
+                  groupValue: mode,
+                  onChanged: tipe.isEmpty
+                      ? null
+                      : (v) => setDialogState(() => mode = v!),
+                  title: const Text('Berdasarkan tipe member'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                if (mode == _ModeTemplateTopup.tipe)
+                  DropdownButtonFormField<int>(
+                    value: tipeId,
+                    decoration: const InputDecoration(
+                      labelText: 'Tipe Member',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: tipe
+                        .map((k) => DropdownMenuItem<int>(
+                              value: k.id,
+                              child: Text(k.nama),
+                            ))
+                        .toList(),
+                    onChanged: (v) => setDialogState(() => tipeId = v),
+                  ),
+                const SizedBox(height: 12),
+                const Text(
+                  'File berisi ID_MEMBER, KODE_MEMBER, NAMA_MEMBER; kolom topup lain dikosongkan.',
+                  style: TextStyle(fontSize: 12.5),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Batal'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                if (mode == _ModeTemplateTopup.jenis && jenisId == null) {
+                  return;
+                }
+                if (mode == _ModeTemplateTopup.tipe && tipeId == null) {
+                  return;
+                }
+                Navigator.of(dialogContext).pop(_FilterTemplateTopup(
+                  mode: mode,
+                  jenisId: jenisId,
+                  tipeId: tipeId,
+                ));
+              },
+              icon: const Icon(Icons.file_download_outlined, size: 18),
+              label: const Text('Download'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _downloadTemplateExcel() async {
+    setStateIfMounted(() => _memprosesBerkas = true);
+    try {
+      final jenis = await _ambilPilihanKategori(
+          'jenis_anggota_list', 'master:jenis_anggota_pilihan');
+      final tipe = await _ambilPilihanKategori(
+          'tipe_anggota_list', 'master:tipe_anggota_pilihan');
+      if (!mounted) return;
+      setStateIfMounted(() => _memprosesBerkas = false);
+      final filter = await _pilihFilterTemplateTopup(jenis, tipe);
+      if (filter == null) return;
+      setStateIfMounted(() => _memprosesBerkas = true);
+      final data = (await _ambilSemuaMember()).where((m) {
+        switch (filter.mode) {
+          case _ModeTemplateTopup.semua:
+            return true;
+          case _ModeTemplateTopup.jenis:
+            return _angkaInt(m, const [
+                  'jenisAnggotaKoperasiId',
+                  'jenis_anggota_koperasi_id',
+                ]) ==
+                filter.jenisId;
+          case _ModeTemplateTopup.tipe:
+            return _angkaInt(m, const [
+                  'tipeAnggotaKoperasiId',
+                  'tipe_anggota_koperasi_id',
+                ]) ==
+                filter.tipeId;
+        }
+      }).toList()
+        ..sort((a, b) => '${a['nama'] ?? ''}'.compareTo('${b['nama'] ?? ''}'));
+      final bytes = buildSimpleXlsx(
+        sheetName: 'Template Topup',
+        headers: const [
+          'ID_MEMBER',
+          'KODE_MEMBER',
+          'NAMA_MEMBER',
+          'NOMINAL',
+          'WAKTU',
+          'TANGGAL_EXPIRED',
+          'METODE_PEMBAYARAN',
+          'KETERANGAN',
+        ],
+        rows: data
+            .map((m) => <Object?>[
+                  m['id'] ?? '',
+                  m['kode'] ?? m['kodeMember'] ?? '',
+                  m['nama'] ?? m['namaMember'] ?? '',
+                  '',
+                  '',
+                  '',
+                  '',
+                  '',
+                ])
+            .toList(),
+      );
+      final labelFilter = switch (filter.mode) {
+        _ModeTemplateTopup.semua => 'Semua',
+        _ModeTemplateTopup.jenis => 'Jenis_${filter.jenisId}',
+        _ModeTemplateTopup.tipe => 'Tipe_${filter.tipeId}',
+      };
+      final lokasi = await FilePicker.platform.saveFile(
+        dialogTitle: 'Simpan Template Topup',
+        fileName:
+            'Template_Topup_${labelFilter}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx',
+        type: FileType.custom,
+        allowedExtensions: const ['xlsx'],
+        bytes: bytes,
+      );
+      if (lokasi != null) {
+        await File(lokasi).writeAsBytes(bytes);
+        _info('${data.length} member berhasil dimasukkan ke template topup.');
+      }
+    } catch (e) {
+      _info(
+          'Template Excel belum berhasil dibuat. Silakan coba lagi. Detail: $e');
+    } finally {
+      if (mounted) setStateIfMounted(() => _memprosesBerkas = false);
     }
   }
 
@@ -495,6 +739,12 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
                   icon: const Icon(Icons.file_download_outlined, size: 18),
                   label: const Text('Download Excel'),
                 ),
+                if (bolehEdit)
+                  OutlinedButton.icon(
+                    onPressed: _memprosesBerkas ? null : _downloadTemplateExcel,
+                    icon: const Icon(Icons.description_outlined, size: 18),
+                    label: const Text('Template Excel'),
+                  ),
                 if (bolehEdit)
                   OutlinedButton.icon(
                     onPressed: _memprosesBerkas ? null : _uploadExcel,
