@@ -107,6 +107,7 @@ void main() {
     expect(source, contains("'pembayaran': _splitBayar"));
     expect(source, contains("'cara_bayar': slot.caraBayar.id"));
     expect(source, contains('validasiAlokasiPembayaran'));
+    expect(source, contains('Split belum tersedia dari server. Hubungi admin untuk pembaruan server.'));
   });
 
   test('backend mengembalikan slot lama dan memvalidasi split baru', () {

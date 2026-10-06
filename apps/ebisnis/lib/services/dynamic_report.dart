@@ -279,7 +279,11 @@ class DynamicReportDesigner {
         ],
       ],
     ));
-    await Printing.layoutPdf(onLayout: (_) => document.save(), name: fileName);
+    await Printing.layoutPdf(
+        onLayout: (_) => document.save(),
+        name: fileName,
+        format: _pageFormat(model),
+        dynamicLayout: false);
   }
 
   static Future<void> exportExcel(BuildContext context, DynamicReportData data,

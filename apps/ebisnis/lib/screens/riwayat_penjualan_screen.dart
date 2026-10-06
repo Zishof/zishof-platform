@@ -900,8 +900,12 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
             else
               DropdownButtonFormField<int>(
                 value: _caraBayarId,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                     labelText: 'Metode pembayaran *',
+                    helperText: widget.modeBaru
+                        ? null
+                        : 'Split belum tersedia dari server. Hubungi admin untuk pembaruan server.',
+                    helperMaxLines: 2,
                     prefixIcon: Icon(Icons.payments_outlined)),
                 items: _metodeTersedia
                     .map((cara) => DropdownMenuItem<int>(

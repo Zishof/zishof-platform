@@ -43,13 +43,13 @@ void main() {
       await tampil();
       expect(find.text('HASIL FILTER AWAL'), findsOneWidget);
       offline = true;
-      await tester.enterText(find.byType(TextField).first, 'filter lain');
+      await tester.enterText(find.widgetWithText(TextField, 'Cari Produk'), 'filter lain');
       await tester.pumpAndSettle();
       expect(find.text('HASIL FILTER AWAL'), findsNothing);
       await tampil();
       expect(find.text('HASIL FILTER AWAL'), findsNothing);
       expect(find.textContaining('belum mempunyai salinan'), findsOneWidget);
-      await tester.enterText(find.byType(TextField).first, '');
+      await tester.enterText(find.widgetWithText(TextField, 'Cari Produk'), '');
       await tampil();
       expect(find.text('HASIL FILTER AWAL'), findsOneWidget);
       expect(find.textContaining('belum mempunyai salinan'), findsNothing);

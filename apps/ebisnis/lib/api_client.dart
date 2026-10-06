@@ -55,6 +55,22 @@ class ApiClient {
       Sesi.instance.tenantId = _tenantId;
       Sesi.instance.tenantKode = sp.getString('tenant_kode') ?? '';
       Sesi.instance.tenantNama = sp.getString('tenant_nama') ?? '';
+
+      // Proses aplikasi membuat ulang singleton Sesi setiap kali EXE/APK
+      // dibuka, sedangkan token dan tenant dipulihkan dari penyimpanan.
+      // Pulihkan juga username yang sudah pernah diverifikasi server. Tanpa
+      // ini varian yang langsung membuka landing (ABChicken) memiliki token
+      // serta tenant sah tetapi userId kosong sampai KasirScreen memuat
+      // konfigurasi; cache local-first HRD lalu menolak konteks tersebut.
+      //
+      // VerifikatorSandiLokal tidak menyimpan kata sandi, hanya username dan
+      // bukti turunannya. Bukti ini dibuang bersama token saat keluar/401,
+      // sehingga tidak dapat membawa identitas akun lama ke sesi berikutnya.
+      if (_token != null) {
+        final username =
+            await VerifikatorSandiLokal.instance.usernameTersimpan();
+        if (username != null) Sesi.instance.userId = username.trim();
+      }
     } else {
       Sesi.instance.bersihkanTenant();
     }
@@ -270,7 +286,7 @@ class ApiClient {
     // Kalau belum ada toko terpilih, kunci ini tidak dikirim dan server tetap
     // menolak dengan pesannya sendiri -- lebih baik ditolak daripada menebak
     // toko lalu menulis ke tempat yang salah.
-    if (_aksiBerTokoId.contains(namaAksi) && !sudahAdaToko) {
+    if (aksiMemakaiTokoId(namaAksi) && !sudahAdaToko) {
       final idToko = Sesi.instance.idTokoTerpilih;
       if (idToko != null) {
         payload['toko_id'] = idToko;
@@ -294,7 +310,7 @@ class ApiClient {
 
   /// Apakah [namaAksi] menerima `toko_id` dari sesi (lihat [_aksiBerTokoId]).
   static bool aksiMemakaiTokoId(String namaAksi) =>
-      _aksiBerTokoId.contains(namaAksi);
+      _aksiBerTokoId.contains(namaAksi) || namaAksi.startsWith('pengadaan_');
 
   /// Nama field yang isinya TIDAK BOLEH ikut tercatat di log teknis.
   ///

@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import '../api_client.dart';
+import '../app_variant.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
@@ -58,6 +59,24 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
   final _controllerProduk = TextEditingController();
   final _controllerPelanggan = TextEditingController();
   bool _perToko = false;
+  String _modeLaporan = '';
+  final _controllerKop = TextEditingController();
+
+  Map<String, String> get _pilihanMode => switch (widget.item['id']) {
+        'pnj_per_cabang' => {
+            '': 'Ringkasan cabang',
+            'harian': 'Harian: Penjualan, BPP, Laba'
+          },
+        'pnj_per_pemasok' => {
+            '': 'Rincian produk',
+            'global': 'Ringkasan global per pemasok'
+          },
+        'pnj_per_kategori_pelanggan' => {
+            '': 'Ringkasan kategori',
+            'member': 'Rincian setiap member'
+          },
+        _ => {},
+      };
   int? _satkerId;
 
   int _versiPermintaan = 0;
@@ -84,6 +103,8 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
   @override
   void initState() {
     super.initState();
+    _controllerKop.text = AppVariant.isAlBahjah ? 'Ekonomi Syariah' : '';
+    _controllerKop.addListener(_filterBerubah);
     _controllerProduk.addListener(_filterBerubah);
     _controllerPelanggan.addListener(_filterBerubah);
     final sekarang = DateTime.now();
@@ -100,6 +121,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
 
   @override
   void dispose() {
+    _controllerKop.dispose();
     _controllerProduk.dispose();
     _controllerPelanggan.dispose();
     super.dispose();
@@ -108,13 +130,17 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
   Map<String, dynamic> _buatPayload() {
     return {
       'r': widget.item['id'],
+      if (_modeLaporan.isNotEmpty) 'modeLaporan': _modeLaporan,
+      if (_controllerKop.text.trim().isNotEmpty)
+        'kopNama': _controllerKop.text.trim(),
       if (_tglMulai != null) 'tglMulai': _formatTgl.format(_tglMulai!),
       if (_tglSampai != null) 'tglSampai': _formatTgl.format(_tglSampai!),
       if (_adaFilterProduk && _controllerProduk.text.trim().isNotEmpty)
         'qProduk': _controllerProduk.text.trim(),
       if (_adaFilterPelanggan && _controllerPelanggan.text.trim().isNotEmpty)
         'qPelanggan': _controllerPelanggan.text.trim(),
-      if (_adaFilterPerToko && _perToko) 'perToko': 'true',
+      if (_adaFilterPerToko && _modeLaporan.isEmpty && _perToko)
+        'perToko': 'true',
       if (_adaFilterSatker && _satkerId != null) 'satkerId': '$_satkerId',
     };
   }
@@ -124,7 +150,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
   /// periode, cari produk/pelanggan, per toko) -- salah kunci berarti hasil
   /// periode A menimpa periode B.
   String _kunciCache(Map<String, dynamic> payload) =>
-      'laporan:jalankan:v2:${jsonEncode([
+      'laporan:jalankan:v3:${jsonEncode([
             ApiClient.baseUrl,
             Sesi.instance.tenantId,
             Sesi.instance.userId,
@@ -186,6 +212,13 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
     try {
       final hasil = await ApiClient.instance.aksi('laporan_jalankan', payload);
       if (!mounted || versi != _versiPermintaan) return;
+      if ((_modeLaporan.isNotEmpty && hasil['modeLaporan'] != _modeLaporan) ||
+          (_controllerKop.text.trim().isNotEmpty &&
+              hasil['kopKustomDidukung'] != true)) {
+        setStateIfMounted(() => _pesanError =
+            'Server belum mendukung bentuk/kop laporan yang dipilih. Hubungi admin untuk pembaruan server; hasil lama tidak digunakan sebagai laporan baru.');
+        return;
+      }
       setStateIfMounted(() {
         _hasil = hasil;
         // Angka server sudah terpasang -> penanda salinan tersimpan padam.
@@ -235,6 +268,15 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
     try {
       final hasil =
           await ApiClient.instance.aksi('laporan_pdf', _buatPayload());
+      if ((_modeLaporan.isNotEmpty && hasil['modeLaporan'] != _modeLaporan) ||
+          (_controllerKop.text.trim().isNotEmpty &&
+              hasil['kopKustomDidukung'] != true)) {
+        if (mounted) {
+          setStateIfMounted(() => _pesanError =
+              'Server belum mendukung bentuk/kop PDF yang dipilih. Hubungi admin untuk pembaruan server.');
+        }
+        return;
+      }
       final b64 = hasil['pdfBase64'] as String?;
       if (b64 == null || b64.isEmpty) {
         throw Exception('Server tidak mengembalikan berkas PDF.');
@@ -298,7 +340,10 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
     if (kolom.isEmpty) return;
 
     try {
-      final bytes = buildLaporanDetailXlsx(kolom, baris);
+      final bytes = buildLaporanDetailXlsx(kolom, baris,
+          kopNama: '${hasil['kopNama'] ?? ''}',
+          judul: '${hasil['judul'] ?? ''}',
+          periode: '${hasil['periode'] ?? ''}');
       final namaFile =
           '${(widget.item['judul'] as String? ?? widget.item['id']).toString().replaceAll(RegExp(r'[^A-Za-z0-9 _-]'), '')}.xlsx';
       final path = await FilePicker.platform.saveFile(
@@ -377,6 +422,36 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
                               () => _pilihTanggal(mulai: false))),
                     ],
                   ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const ValueKey('kop-nama-laporan'),
+                    controller: _controllerKop,
+                    maxLength: 120,
+                    decoration: const InputDecoration(
+                      labelText: 'Nama usaha pada kop laporan',
+                      helperText:
+                          'Kosongkan untuk memakai kop lembaga bawaan. Nama kustom tidak memakai logo kampus.',
+                      helperMaxLines: 2,
+                    ),
+                  ),
+                  if (_pilihanMode.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      key: const ValueKey('mode-laporan-tambahan'),
+                      value: _modeLaporan,
+                      isExpanded: true,
+                      decoration:
+                          const InputDecoration(labelText: 'Bentuk laporan'),
+                      items: _pilihanMode.entries
+                          .map((e) => DropdownMenuItem(
+                              value: e.key, child: Text(e.value)))
+                          .toList(),
+                      onChanged: (value) => setStateIfMounted(() {
+                        _hapusHasil();
+                        _modeLaporan = value ?? '';
+                      }),
+                    ),
+                  ],
                   if (_adaFilterProduk) ...[
                     const SizedBox(height: 12),
                     AppSearchField(
@@ -417,7 +492,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
                       }),
                     ),
                   ],
-                  if (_adaFilterPerToko)
+                  if (_adaFilterPerToko && _modeLaporan.isEmpty)
                     CheckboxListTile(
                         value: _perToko,
                         onChanged: (v) => setStateIfMounted(() {
@@ -901,6 +976,24 @@ class _TabelLaporanState extends State<_TabelLaporan> {
     return 3;
   }
 
+  double _lebarMinimumTabel(List<Map<String, dynamic>> kolom) {
+    var hasil = 32.0; // padding kiri/kanan tabel.
+    for (var i = 0; i < kolom.length; i++) {
+      final tipe = '${kolom[i]['t'] ?? 'text'}';
+      final label = '${kolom[i]['l'] ?? ''}'.toLowerCase();
+      if (tipe == 'num') {
+        hasil += 160;
+      } else if (tipe == 'tgl' || label.contains('tanggal')) {
+        hasil += 180;
+      } else if (i == 0 || label.contains('toko') || label.contains('nama')) {
+        hasil += 190;
+      } else {
+        hasil += 170;
+      }
+    }
+    return hasil;
+  }
+
   String _fmtNum(num? v, bool hitung) {
     if (v == null) return '';
     final neg = v < 0;
@@ -919,6 +1012,12 @@ class _TabelLaporanState extends State<_TabelLaporan> {
       final parsed = num.tryParse(v.toString());
       if (parsed != null) return _fmtNum(parsed, _isHitungKolom(label));
       return v.toString();
+    }
+    if (tipe == 'tgl') {
+      final teks = v.toString().trim();
+      final tengahMalam =
+          RegExp(r'^(\d{2}-\d{2}-\d{4}) 00:00$').firstMatch(teks);
+      if (tengahMalam != null) return tengahMalam.group(1)!;
     }
     return v.toString();
   }
@@ -1005,7 +1104,7 @@ class _TabelLaporanState extends State<_TabelLaporan> {
             return AppTableCell.text(teksSel,
                 flex: _flexKolom(kolom[i], i),
                 align: isNum ? TextAlign.right : TextAlign.left,
-                maxLines: 2,
+                maxLines: 1,
                 style: gaya);
           }
           return AppTableCell(
@@ -1086,30 +1185,39 @@ class _TabelLaporanState extends State<_TabelLaporan> {
     }
 
     if (grup >= 0 && grup < kolom.length) {
+      void tambahGrup(String key, List<List<dynamic>> anggota) {
+        // Satu baris dalam satu grup sudah merupakan total hari tersebut.
+        // Pita+subtotal hanya menggandakan data dan menghabiskan ruang layar.
+        if (anggota.length == 1) {
+          semuaBaris.add(barisData(anggota.single));
+          return;
+        }
+        tambahBarisPita(_fmtSel(
+            key, '${kolom[grup]['t'] ?? 'text'}', '${kolom[grup]['l'] ?? ''}'));
+        final jumlah = <int, double>{};
+        for (final r in anggota) {
+          for (final i in numIdx) {
+            jumlah[i] = (jumlah[i] ?? 0) + ((r[i] as num?)?.toDouble() ?? 0);
+          }
+          final salinan = List<dynamic>.from(r);
+          salinan[grup] = null;
+          semuaBaris.add(barisData(salinan));
+        }
+        tambahBarisSubtotal(key, jumlah);
+      }
+
       String? kunciSaatIni;
-      final jumlahSaatIni = <int, double>{};
+      var anggotaSaatIni = <List<dynamic>>[];
       for (final r in baris) {
         final kunci = r[grup]?.toString() ?? '';
-        if (kunciSaatIni == null) {
-          tambahBarisPita(kunci);
-          kunciSaatIni = kunci;
-        } else if (kunci != kunciSaatIni) {
-          tambahBarisSubtotal(kunciSaatIni, jumlahSaatIni);
-          jumlahSaatIni.clear();
-          tambahBarisPita(kunci);
-          kunciSaatIni = kunci;
+        if (kunciSaatIni != null && kunci != kunciSaatIni) {
+          tambahGrup(kunciSaatIni, anggotaSaatIni);
+          anggotaSaatIni = <List<dynamic>>[];
         }
-        for (final i in numIdx) {
-          jumlahSaatIni[i] =
-              (jumlahSaatIni[i] ?? 0) + ((r[i] as num?)?.toDouble() ?? 0);
-        }
-        final rSalinan = List<dynamic>.from(r);
-        rSalinan[grup] = null;
-        semuaBaris.add(barisData(rSalinan));
+        kunciSaatIni = kunci;
+        anggotaSaatIni.add(r);
       }
-      if (kunciSaatIni != null) {
-        tambahBarisSubtotal(kunciSaatIni, jumlahSaatIni);
-      }
+      if (kunciSaatIni != null) tambahGrup(kunciSaatIni, anggotaSaatIni);
     } else {
       for (final r in baris) {
         semuaBaris.add(barisData(r));
@@ -1210,7 +1318,8 @@ class _TabelLaporanState extends State<_TabelLaporan> {
             ),
           ),
         AppDataTable(
-          minWidth: 760,
+          minWidth: _lebarMinimumTabel(kolom),
+          horizontalScroll: kolom.length > 8,
           emptyText: 'Tidak ada data untuk halaman ini.',
           columns: kolom
               .asMap()
@@ -1272,24 +1381,35 @@ String _escapeXml(String s) => s
 /// pengujian tanpa melewati dialog pemilih berkas.
 Uint8List buildLaporanDetailXlsx(
   List<Map<String, dynamic>> kolom,
-  List<List<dynamic>> baris,
-) {
+  List<List<dynamic>> baris, {
+  String kopNama = '',
+  String judul = '',
+  String periode = '',
+}) {
+  final metadata =
+      [kopNama, judul, periode].where((s) => s.trim().isNotEmpty).toList();
+  final headerRow = metadata.length + 1;
   final sheetXml = StringBuffer()
     ..write('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>')
     ..write(
         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">')
-    ..write('<sheetData>')
-    ..write('<row r="1">');
+    ..write('<sheetData>');
+  for (var m = 0; m < metadata.length; m++) {
+    final row = m + 1;
+    sheetXml.write(
+        '<row r="$row"><c r="A$row" t="inlineStr" s="1"><is><t>${_escapeXml(metadata[m])}</t></is></c></row>');
+  }
+  sheetXml.write('<row r="$headerRow">');
   for (var i = 0; i < kolom.length; i++) {
     final label = _escapeXml((kolom[i]['l'] as String?) ?? '');
     sheetXml.write(
-        '<c r="${_kolomExcel(i)}1" t="inlineStr" s="1"><is><t xml:space="preserve">$label</t></is></c>');
+        '<c r="${_kolomExcel(i)}$headerRow" t="inlineStr" s="1"><is><t xml:space="preserve">$label</t></is></c>');
   }
   sheetXml.write('</row>');
 
   for (var r = 0; r < baris.length; r++) {
     final row = baris[r];
-    final excelRow = r + 2;
+    final excelRow = r + headerRow + 1;
     sheetXml.write('<row r="$excelRow">');
     for (var i = 0; i < kolom.length; i++) {
       final v = i < row.length ? row[i] : null;
@@ -1388,7 +1508,7 @@ class _SelAngkaRincian extends StatelessWidget {
               child: Text(
                 teks,
                 textAlign: TextAlign.right,
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: gaya.copyWith(
                   decoration: TextDecoration.underline,
