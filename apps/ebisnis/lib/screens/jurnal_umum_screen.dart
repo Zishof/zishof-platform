@@ -33,6 +33,24 @@ import '../widgets/aksi_baris_menu.dart';
 /// terbaca laporan keuangan (semua laporan menyaring jurnal terposting), jadi salah ketik masih
 /// bisa diperbaiki. Setelah diposting, jurnal terkunci; untuk mengoreksinya harus dibatalkan
 /// posting-nya lebih dulu.
+class _HasilGagalUpload {
+  final String noBukti;
+  final String tanggal;
+  final String keterangan;
+  final String pesan;
+  final String penyebab;
+  final String solusi;
+
+  const _HasilGagalUpload({
+    required this.noBukti,
+    required this.tanggal,
+    required this.keterangan,
+    required this.pesan,
+    required this.penyebab,
+    required this.solusi,
+  });
+}
+
 class JurnalUmumScreen extends StatefulWidget {
   const JurnalUmumScreen({super.key});
 
@@ -590,134 +608,560 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
 
       if (!mounted) return;
 
+      // 1. DIALOG PRATINJAU (PREVIEW) SEBELUM UPLOAD
       final konfirmasi = await showDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: Row(
-            children: [
-              const Icon(Icons.fact_check_outlined, color: Colors.blue),
-              const SizedBox(width: 8),
-              Expanded(
-                  child: Text(
-                      'Konfirmasi Impor Jurnal (${hasilParse.daftarJurnal.length} Transaksi)')),
-            ],
-          ),
-          content: SizedBox(
-            width: 520,
-            child: SingleChildScrollView(
+        builder: (ctx) {
+          final totalJurnal = hasilParse.daftarJurnal.length;
+          final totalClosing = hasilParse.daftarJurnal.where((j) =>
+              _tanggalClosing.isNotEmpty &&
+              j.tanggal.isNotEmpty &&
+              j.tanggal.compareTo(_tanggalClosing) <= 0).length;
+          final totalAda = hasilParse.daftarJurnal.where((j) =>
+              _jurnal.any((x) =>
+                  '${x['kode'] ?? ''}'.trim() == j.noBukti.trim())).length;
+
+          return AlertDialog(
+            title: Row(
+              children: [
+                const Icon(Icons.table_view_outlined, color: Colors.blue),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Pratinjau Impor Jurnal Umum',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text(
+                        '${file.name} — $totalJurnal transaksi jurnal (${hasilParse.totalBarisMentah} baris)',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 760,
+              height: 480,
               child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Berkas: ${file.name}',
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  // KPI Ringkasan
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _itemStatistikPreview('Total Jurnal', '$totalJurnal', Colors.blue.shade900),
+                        _itemStatistikPreview('Total Debet', _rp(hasilParse.totalDebet), Colors.green.shade800),
+                        _itemStatistikPreview('Total Kredit', _rp(hasilParse.totalKredit), Colors.green.shade800),
+                        _itemStatistikPreview('Timpa Ulang', '$totalAda', Colors.indigo),
+                        if (totalClosing > 0)
+                          _itemStatistikPreview('Terkunci Closing', '$totalClosing', Colors.red.shade700),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 8),
-                  Text('• Total Transaksi Jurnal: ${hasilParse.daftarJurnal.length}'),
-                  Text('• Total Baris Rincian: ${hasilParse.totalBarisMentah}'),
-                  Text('• Total Debet: ${_rp(hasilParse.totalDebet)}'),
-                  Text('• Total Kredit: ${_rp(hasilParse.totalKredit)}'),
-                  const SizedBox(height: 12),
-                  if (hasilParse.daftarPeringatan.isNotEmpty) ...[
+                  if (totalClosing > 0)
                     Container(
+                      margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
-                        border: Border.all(color: Colors.orange.shade300),
+                        color: Colors.red.shade50,
+                        border: Border.all(color: Colors.red.shade300),
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          Row(
-                            children: [
-                              Icon(Icons.warning_amber_rounded,
-                                  size: 16, color: Colors.orange.shade900),
-                              const SizedBox(width: 6),
-                              Text(
-                                  'Catatan / Peringatan (${hasilParse.daftarPeringatan.length}):',
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.orange.shade900)),
-                            ],
+                          Icon(Icons.lock_clock, size: 16, color: Colors.red.shade800),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Ada $totalClosing transaksi yang masuk periode closing buku (sampai $_tanggalClosing) dan akan LANGSUNG DITOLAK server.',
+                              style: TextStyle(fontSize: 11, color: Colors.red.shade900, fontWeight: FontWeight.bold),
+                            ),
                           ),
-                          const SizedBox(height: 6),
-                          ...hasilParse.daftarPeringatan
-                              .take(5)
-                              .map((p) => Text('• $p',
-                                  style: const TextStyle(fontSize: 12))),
-                          if (hasilParse.daftarPeringatan.length > 5)
-                            Text(
-                                '... dan ${hasilParse.daftarPeringatan.length - 5} peringatan lainnya.',
-                                style: const TextStyle(
-                                    fontSize: 11, fontStyle: FontStyle.italic)),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 12),
-                  ],
-                  const Text(
-                    'Jurnal akan diimpor sebagai DRAF ke sistem ebisnis sehingga dapat Anda periksa dan posting.',
-                    style: TextStyle(fontSize: 12),
+                  // Tabel Pratinjau Jurnal
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: ListView.separated(
+                        itemCount: hasilParse.daftarJurnal.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (ctx, idx) {
+                          final j = hasilParse.daftarJurnal[idx];
+                          final isClosing = _tanggalClosing.isNotEmpty &&
+                              j.tanggal.isNotEmpty &&
+                              j.tanggal.compareTo(_tanggalClosing) <= 0;
+                          final isAda = _jurnal.any((x) =>
+                              '${x['kode'] ?? ''}'.trim() == j.noBukti.trim());
+                          final akunKurang = j.rincian.any((b) => b.akunId == null || b.akunId! <= 0);
+
+                          String labelStatus;
+                          Color warnaBadge;
+                          if (isClosing) {
+                            labelStatus = 'Terkunci Closing (Ditolak)';
+                            warnaBadge = Colors.red;
+                          } else if (!j.isSeimbang) {
+                            labelStatus = 'Tidak Seimbang';
+                            warnaBadge = Colors.red.shade700;
+                          } else if (akunKurang) {
+                            labelStatus = 'Akun Belum Ada';
+                            warnaBadge = Colors.orange.shade800;
+                          } else if (isAda) {
+                            labelStatus = 'Timpa Ulang (Belum Closing)';
+                            warnaBadge = Colors.blue;
+                          } else {
+                            labelStatus = 'Jurnal Baru';
+                            warnaBadge = Colors.green.shade700;
+                          }
+
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 140,
+                                  child: Text(
+                                    j.noBukti.isEmpty ? '(Tanpa No Bukti)' : j.noBukti,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 80,
+                                  child: Text(j.tanggal, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    j.keterangan,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 11),
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 100,
+                                  child: Text(
+                                    _rp(j.totalDebet),
+                                    textAlign: TextAlign.right,
+                                    style: const TextStyle(fontSize: 11),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: warnaBadge.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: warnaBadge.withValues(alpha: 0.5)),
+                                  ),
+                                  child: Text(
+                                    labelStatus,
+                                    style: TextStyle(fontSize: 10, color: warnaBadge, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal'),
-            ),
-            FilledButton.icon(
-              onPressed: () => Navigator.pop(ctx, true),
-              icon: const Icon(Icons.check),
-              label: Text(
-                  'Impor ${hasilParse.daftarJurnal.length} Jurnal ke Draf'),
-            ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Batal'),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(ctx, true),
+                icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+                label: Text('Mulai Upload ($totalJurnal Jurnal)'),
+              ),
+            ],
+          );
+        },
       );
 
       if (konfirmasi != true || !mounted) return;
 
-      setStateIfMounted(() => _sibuk = true);
+      // 2. PROSES UPLOAD DENGAN PROGRESS BAR & PERSENTASE (SEPERTI STOK BARANG)
+      final total = hasilParse.daftarJurnal.length;
+      int selesai = 0;
+      int berhasil = 0;
+      final gagalList = <_HasilGagalUpload>[];
+      String statusTeks = 'Mempersiapkan transaksi...';
 
       final defaultJenisId = _jenisTransaksi.isNotEmpty
           ? (_jenisTransaksi.first['id'] as num?)?.toInt()
           : null;
 
-      final payloadList = hasilParse.daftarJurnal
-          .map((j) => j.toPayloadSimpan(jenisTransaksiId: defaultJenisId))
-          .toList();
+      // Tampilkan Modal Dialog Progress
+      late void Function(void Function()) setDialogProgress;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctxProg) => StatefulBuilder(
+          builder: (ctxProg, setStateDialog) {
+            setDialogProgress = setStateDialog;
+            final progres = total > 0 ? (selesai / total).clamp(0.0, 1.0) : 0.0;
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              contentPadding: const EdgeInsets.all(24),
+              content: SizedBox(
+                width: 440,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.cloud_upload_outlined, size: 40, color: Colors.blue),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Mengunggah Jurnal Umum',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: progres,
+                        minHeight: 10,
+                        backgroundColor: Colors.blue.withValues(alpha: 0.15),
+                        color: Colors.blue,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Memproses $selesai dari $total jurnal (${(progres * 100).toStringAsFixed(0)}%)',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      statusTeks,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      );
 
-      try {
-        final resBatch = await ApiClient.instance
-            .aksi('jurnal_umum_import_batch', {'daftar': payloadList});
-        final sukses = resBatch['sukses'] ?? payloadList.length;
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content:
-                    Text('Berhasil mengimpor $sukses jurnal umum ke draf.')),
-          );
+      // Loop pengiriman tiap transaksi secara real-time
+      for (final j in hasilParse.daftarJurnal) {
+        if (!mounted) break;
+        setDialogProgress(() {
+          statusTeks = 'Mengunggah: ${j.noBukti.isNotEmpty ? j.noBukti : j.keterangan}...';
+        });
+
+        // Validasi awal closing di sisi klien
+        if (_tanggalClosing.isNotEmpty &&
+            j.tanggal.isNotEmpty &&
+            j.tanggal.compareTo(_tanggalClosing) <= 0) {
+          gagalList.add(_HasilGagalUpload(
+            noBukti: j.noBukti.isEmpty ? '(Tanpa No Bukti)' : j.noBukti,
+            tanggal: j.tanggal,
+            keterangan: j.keterangan,
+            pesan: 'Sudah masuk periode closing buku sampai $_tanggalClosing.',
+            penyebab: 'Tanggal transaksi (${j.tanggal}) berada di dalam periode tutup buku sampai $_tanggalClosing.',
+            solusi: 'Minta bagian keuangan membuka kembali periode closing buku di menu Akuntansi/ZK bila data perlu diubah.',
+          ));
+          selesai++;
+          setDialogProgress(() {});
+          continue;
         }
-      } catch (_) {
-        // Fallback: simpan satu per satu bila batch endpoint belum tersedia
-        var sukses = 0;
-        for (final p in payloadList) {
-          try {
-            await ApiClient.instance.aksi('jurnal_umum_simpan', p);
-            sukses++;
-          } catch (_) {}
+
+        // Validasi akun lengkap
+        if (!j.rincian.every((b) => b.akunId != null && b.akunId! > 0)) {
+          final akunTakAda = j.rincian
+              .where((b) => b.akunId == null || b.akunId! <= 0)
+              .map((b) => b.kodeAkun)
+              .join(', ');
+          gagalList.add(_HasilGagalUpload(
+            noBukti: j.noBukti.isEmpty ? '(Tanpa No Bukti)' : j.noBukti,
+            tanggal: j.tanggal,
+            keterangan: j.keterangan,
+            pesan: 'Akun belum terdaftar di sistem.',
+            penyebab: 'Kode akun ($akunTakAda) belum terdaftar pada bagan akun AIS.',
+            solusi: 'Daftarkan kode akun tersebut di menu Master Bagan Akun sebelum mengimpor.',
+          ));
+          selesai++;
+          setDialogProgress(() {});
+          continue;
         }
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text(
-                    'Berhasil mengimpor $sukses dari ${payloadList.length} jurnal ke draf.')),
-          );
+
+        // Validasi keseimbangan
+        if (!j.isSeimbang) {
+          gagalList.add(_HasilGagalUpload(
+            noBukti: j.noBukti.isEmpty ? '(Tanpa No Bukti)' : j.noBukti,
+            tanggal: j.tanggal,
+            keterangan: j.keterangan,
+            pesan: 'Total debet dan kredit tidak seimbang.',
+            penyebab: 'Total debet (${_rp(j.totalDebet)}) != Total kredit (${_rp(j.totalKredit)}).',
+            solusi: 'Koreksi nominal debet dan kredit pada berkas Excel agar seimbang.',
+          ));
+          selesai++;
+          setDialogProgress(() {});
+          continue;
         }
+
+        // Kirim ke server
+        try {
+          final payload = j.toPayloadSimpan(jenisTransaksiId: defaultJenisId);
+          final resSimpan = await ApiClient.instance.aksi('jurnal_umum_simpan', payload);
+          if (resSimpan['status'] == '00') {
+            berhasil++;
+          } else {
+            gagalList.add(_HasilGagalUpload(
+              noBukti: j.noBukti.isEmpty ? '(Tanpa No Bukti)' : j.noBukti,
+              tanggal: j.tanggal,
+              keterangan: j.keterangan,
+              pesan: '${resSimpan['message'] ?? 'Ditolak oleh sistem'}',
+              penyebab: '${resSimpan['penyebab'] ?? resSimpan['message'] ?? 'Galat validasi basis data'}',
+              solusi: '${resSimpan['solusi'] ?? 'Periksa data transaksi pada berkas Excel.'}',
+            ));
+          }
+        } catch (e) {
+          gagalList.add(_HasilGagalUpload(
+            noBukti: j.noBukti.isEmpty ? '(Tanpa No Bukti)' : j.noBukti,
+            tanggal: j.tanggal,
+            keterangan: j.keterangan,
+            pesan: '$e',
+            penyebab: 'Galat jaringan atau server: $e',
+            solusi: 'Periksa koneksi jaringan server AIS Anda lalu coba simpan ulang.',
+          ));
+        }
+
+        selesai++;
+        setDialogProgress(() {});
       }
+
+      // Tutup dialog progress
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      // 3. DIALOG LAPORAN HASIL UPLOAD (BERHASIL, GAGAL, PENYEBAB & SOLUSI)
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (ctxLap) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(
+                gagalList.isEmpty ? Icons.check_circle_outline : Icons.warning_amber_rounded,
+                color: gagalList.isEmpty ? Colors.green : Colors.orange,
+              ),
+              const SizedBox(width: 8),
+              const Text('Laporan Hasil Upload Jurnal'),
+            ],
+          ),
+          content: SizedBox(
+            width: 680,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // KPI Statistik
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.blue.shade200),
+                          ),
+                          child: Column(
+                            children: [
+                              Text('$total',
+                                  style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue.shade900)),
+                              const SizedBox(height: 2),
+                              const Text('Total Diproses', style: TextStyle(fontSize: 11)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.green.shade200),
+                          ),
+                          child: Column(
+                            children: [
+                              Text('$berhasil',
+                                  style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.green.shade900)),
+                              const SizedBox(height: 2),
+                              const Text('Berhasil Diimpor', style: TextStyle(fontSize: 11)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: gagalList.isEmpty ? Colors.grey.shade50 : Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                                color: gagalList.isEmpty ? Colors.grey.shade300 : Colors.red.shade200),
+                          ),
+                          child: Column(
+                            children: [
+                              Text('${gagalList.length}',
+                                  style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: gagalList.isEmpty ? Colors.grey : Colors.red.shade900)),
+                              const SizedBox(height: 2),
+                              const Text('Gagal / Ditolak', style: TextStyle(fontSize: 11)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (gagalList.isNotEmpty) ...[
+                    Text(
+                      'Rincian Transaksi yang Gagal / Ditolak (${gagalList.length}):',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    const SizedBox(height: 8),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 280),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: gagalList.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (ctx, i) {
+                          final g = gagalList[i];
+                          return Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50.withValues(alpha: 0.5),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.red.shade200),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.error_outline, size: 16, color: Colors.red),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'No Bukti: ${g.noBukti} (${g.tanggal})',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                    ),
+                                  ],
+                                ),
+                                if (g.keterangan.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2, left: 22),
+                                    child: Text(
+                                      g.keterangan,
+                                      style: const TextStyle(fontSize: 11, color: Colors.black87),
+                                    ),
+                                  ),
+                                const SizedBox(height: 6),
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 22),
+                                  child: Text(
+                                    'Penyebab: ${g.penyebab}',
+                                    style: TextStyle(fontSize: 11, color: Colors.red.shade900),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 22, top: 2),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Icon(Icons.lightbulb_outline, size: 14, color: Colors.blue),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          'Solusi: ${g.solusi}',
+                                          style: const TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.blueAccent,
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ] else ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.green.shade300),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.check_circle, color: Colors.green, size: 20),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Seluruh transaksi jurnal berhasil diimpor sebagai Draf ke sistem ebisnis.',
+                              style: TextStyle(fontSize: 12, color: Colors.green),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(ctxLap);
+              },
+              child: const Text('Tutup & Segarkan Data'),
+            ),
+          ],
+        ),
+      );
 
       await _muat();
     } catch (e) {
@@ -729,6 +1173,19 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
     } finally {
       setStateIfMounted(() => _sibuk = false);
     }
+  }
+
+  Widget _itemStatistikPreview(String label, String nilai, Color warna) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(nilai,
+            style: TextStyle(
+                fontWeight: FontWeight.bold, fontSize: 13, color: warna)),
+        const SizedBox(height: 2),
+        Text(label, style: const TextStyle(fontSize: 10, color: Colors.black54)),
+      ],
+    );
   }
 
   Future<void> _cetakPdf() async {

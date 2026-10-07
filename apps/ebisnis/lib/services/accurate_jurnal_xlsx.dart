@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:archive/archive.dart';
-import 'package:intl/intl.dart';
 
 /// Item rincian per baris jurnal untuk format Accurate / Jurnal Umum.
 class AccurateJurnalBarisItem {
@@ -56,6 +55,8 @@ class AccurateJurnalItem {
   bool get isSeimbang => (totalDebet - totalKredit).abs() < 0.005;
 
   Map<String, dynamic> toPayloadSimpan({int? jenisTransaksiId}) => {
+        'kode': noBukti,
+        'noBukti': noBukti,
         'tanggal': tanggal,
         'keterangan': keterangan.isNotEmpty
             ? keterangan
@@ -65,6 +66,8 @@ class AccurateJurnalItem {
         'baris': rincian
             .map((b) => {
                   'akunId': b.akunId ?? 0,
+                  'kodeAkun': b.kodeAkun,
+                  'namaAkun': b.namaAkun,
                   'debet': b.debet,
                   'kredit': b.kredit,
                   'keterangan': b.keterangan.isNotEmpty

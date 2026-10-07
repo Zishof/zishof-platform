@@ -28,9 +28,43 @@ void main() {
     expect(layar, contains(_rapat('_tampilkanDialogUpload')));
   });
 
-  test('Dialog download dan upload menawarkan pilihan Accurate sebagai default', () {
-    expect(layar, contains(_rapat("formatTerpilih='accurate'")));
-    expect(layar, contains(_rapat("Accurate(HistoriBukuBesarJurnal.xlsx)")));
-    expect(layar, contains(_rapat("FormatStandar(.xlsx)")));
+  test('Upload menampilkan pratinjau (preview) dengan status closing dan keseimbangan', () {
+    expect(layar, contains(_rapat('PratinjauImporJurnalUmum')),
+        reason: 'Harus menampilkan dialog pratinjau sebelum upload');
+    expect(layar, contains(_rapat('TerkunciClosing(Ditolak)')),
+        reason: 'Harus mendeteksi transaksi yang masuk periode closing');
+    expect(layar, contains(_rapat('TimpaUlang(BelumClosing)')),
+        reason: 'Harus menandai nomor bukti yang sudah ada dan belum closing untuk ditimpa ulang');
+  });
+
+  test('Upload menampilkan progress bar dan persentase', () {
+    expect(layar, contains(_rapat('LinearProgressIndicator(value:progres')),
+        reason: 'Harus menampilkan progress bar linear');
+    expect(layar, contains(_rapat('(progres*100).toStringAsFixed(0)')),
+        reason: 'Harus menampilkan persentase progres upload');
+    expect(layar, contains(_rapat(r'Memproses $selesai dari $total jurnal')),
+        reason: 'Harus menampilkan counter jurnal yang sedang diproses');
+  });
+
+  test('Upload menampilkan laporan hasil upload dengan penyebab dan solusi', () {
+    expect(layar, contains(_rapat('LaporanHasilUploadJurnal')),
+        reason: 'Harus menampilkan dialog laporan hasil upload');
+    expect(layar, contains(_rapat(r'Penyebab: ${g.penyebab}')),
+        reason: 'Harus menampilkan penyebab kegagalan');
+    expect(layar, contains(_rapat(r'Solusi: ${g.solusi}')),
+        reason: 'Harus memberikan solusi perbaikan');
+  });
+
+  test('Server JurnalUmumApiHelper menerapkan nomor bukti sebagai kunci dan tolak closing', () {
+    final serverFile = File(r'C:\opt\AIS\ais\src\main\src\ais\action\servlet\api\JurnalUmumApiHelper.java');
+    if (!serverFile.existsSync()) return;
+    final serverCode = _rapat(serverFile.readAsStringSync());
+    expect(serverCode, contains(_rapat('fromGrupTransaksiwherekode=:kode')),
+        reason: 'Server harus memeriksa nomor bukti di database');
+    expect(serverCode, contains(_rapat('Nomorbukti')),
+        reason: 'Pesan penolakan harus menyebut nomor bukti');
+    expect(serverCode, contains(_rapat('DELETEFROMakunting.transaksiWHEREgrup_transaksi=')),
+        reason: 'Server harus menghapus transaksi lama bila nomor bukti sudah ada dan belum closing');
   });
 }
+
