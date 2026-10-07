@@ -318,6 +318,11 @@ HasilParseAccurateJurnal parseAccurateJurnalXlsx(
 
     final barisList = <AccurateJurnalBarisItem>[];
     for (final r in rows) {
+      // Abaikan baris bernilai nol (debet 0 & kredit 0) yang kerap otomatis
+      // disertakan Accurate untuk alokasi HPP/persediaan bernilai 0 / barang jasa,
+      // agar jurnal tetap valid dan tidak ditolak oleh validasi server.
+      if (r.debet == 0 && r.kredit == 0) continue;
+
       // Cari akunId
       int? akunId;
       final kClean = r.kodeAkun.trim().toLowerCase();
