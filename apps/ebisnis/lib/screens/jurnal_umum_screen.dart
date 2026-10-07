@@ -1,8 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+
 import '../api_client.dart';
+import '../services/accurate_jurnal_xlsx.dart';
 import '../services/master_offline.dart';
+import '../sesi.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
@@ -306,11 +316,688 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
     }
   }
 
+  Future<void> _tampilkanDialogDownload() async {
+    String formatTerpilih = 'accurate';
+    final hasil = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.file_download_outlined, color: Colors.blue),
+              SizedBox(width: 8),
+              Text('Pilih Format Download'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Pilih format berkas untuk mengunduh daftar Jurnal Umum periode ini:',
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              RadioListTile<String>(
+                value: 'accurate',
+                groupValue: formatTerpilih,
+                title: const Text('Accurate (Histori Buku Besar Jurnal .xlsx)'),
+                subtitle: const Text(
+                  'Format standar Accurate (template Histori Buku Besar), cocok untuk impor/ekspor antar sistem.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                onChanged: (val) =>
+                    setDialogState(() => formatTerpilih = val ?? 'accurate'),
+              ),
+              RadioListTile<String>(
+                value: 'standar',
+                groupValue: formatTerpilih,
+                title: const Text('Format Standar (.xlsx)'),
+                subtitle: const Text(
+                  'Format tabel sederhana dengan rincian kolom akun, debet, dan kredit.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                onChanged: (val) =>
+                    setDialogState(() => formatTerpilih = val ?? 'standar'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, null),
+              child: const Text('Batal'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(ctx, formatTerpilih),
+              icon: const Icon(Icons.download, size: 18),
+              label: const Text('Download'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (hasil == null || !mounted) return;
+    await _prosesDownload(hasil);
+  }
+
+  Future<void> _prosesDownload(String format) async {
+    setStateIfMounted(() => _sibuk = true);
+    try {
+      final res = await ApiClient.instance.aksi('jurnal_umum_list', {
+        'mulai': _fmtTanggal.format(_mulai),
+        'sampai': _fmtTanggal.format(_sampai),
+        'status': _status,
+        'cari': _cari,
+        'denganBaris': true,
+        'limit': 1000,
+      });
+
+      final rawData =
+          ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+
+      final dataLengkap = <Map<String, dynamic>>[];
+      for (final j in rawData) {
+        final jMap = Map<String, dynamic>.from(j);
+        final baris = jMap['baris'] as List?;
+        if (baris == null ||
+            (baris.isEmpty && (jMap['jumlahBaris'] as num? ?? 0) > 0)) {
+          try {
+            final d = await ApiClient.instance
+                .aksi('jurnal_umum_detail', {'id': jMap['id']});
+            jMap['baris'] = d['baris'];
+          } catch (_) {}
+        }
+        dataLengkap.add(jMap);
+      }
+
+      final namaToko = Sesi.instance.namaTokoFilter.isNotEmpty &&
+              Sesi.instance.namaTokoFilter != 'Semua Toko'
+          ? Sesi.instance.namaTokoFilter
+          : (Sesi.instance.tokoNama.isNotEmpty
+              ? Sesi.instance.tokoNama
+              : 'Toko');
+
+      Uint8List bytes;
+      String namaBerkas;
+      if (format == 'accurate') {
+        bytes = buildAccurateJurnalXlsx(
+          namaToko: namaToko,
+          mulai: _mulai,
+          sampai: _sampai,
+          daftarJurnal: dataLengkap,
+        );
+        namaBerkas =
+            'Histori Buku Besar (Jurnal) ${_fmtTanggal.format(_mulai)}_sd_${_fmtTanggal.format(_sampai)}.xlsx';
+      } else {
+        bytes = buildStandarJurnalXlsx(
+          namaToko: namaToko,
+          mulai: _mulai,
+          sampai: _sampai,
+          daftarJurnal: dataLengkap,
+        );
+        namaBerkas =
+            'Jurnal_Umum_${_fmtTanggal.format(_mulai)}_sd_${_fmtTanggal.format(_sampai)}.xlsx';
+      }
+
+      final savePath = await FilePicker.platform.saveFile(
+        dialogTitle: 'Simpan Berkas Jurnal Umum',
+        fileName: namaBerkas,
+        type: FileType.custom,
+        allowedExtensions: ['xlsx'],
+        bytes: bytes,
+      );
+
+      if (savePath != null) {
+        final f = File(savePath);
+        if (!f.existsSync() || (await f.length()) == 0) {
+          await f.writeAsBytes(bytes);
+        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Berkas berhasil diunduh: $savePath')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal mendownload berkas: $e')),
+        );
+      }
+    } finally {
+      setStateIfMounted(() => _sibuk = false);
+    }
+  }
+
+  Future<void> _tampilkanDialogUpload() async {
+    if (!(Sesi.instance.isAdmin && (_boleh('create') || _boleh('edit')))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'Hanya Administrator dengan hak Tambah/Edit yang dapat mengunggah berkas.')),
+      );
+      return;
+    }
+
+    String formatTerpilih = 'accurate';
+    final hasil = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.file_upload_outlined, color: Colors.green),
+              SizedBox(width: 8),
+              Text('Pilih Format Upload'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Pilih format berkas Excel yang akan diunggah:',
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              RadioListTile<String>(
+                value: 'accurate',
+                groupValue: formatTerpilih,
+                title: const Text('Accurate (Histori Buku Besar Jurnal .xlsx)'),
+                subtitle: const Text(
+                  'Format resmi Accurate (contoh: Downloads/Histori Buku Besar (Jurnal).xlsx).',
+                  style: TextStyle(fontSize: 12),
+                ),
+                onChanged: (val) =>
+                    setDialogState(() => formatTerpilih = val ?? 'accurate'),
+              ),
+              RadioListTile<String>(
+                value: 'standar',
+                groupValue: formatTerpilih,
+                title: const Text('Format Standar (.xlsx)'),
+                subtitle: const Text(
+                  'Format lainnya (pengembangan mendatang).',
+                  style: TextStyle(fontSize: 12),
+                ),
+                onChanged: null, // Dinonaktifkan sementara sesuai kebutuhan user
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, null),
+              child: const Text('Batal'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(ctx, formatTerpilih),
+              icon: const Icon(Icons.folder_open, size: 18),
+              label: const Text('Pilih Berkas'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (hasil == null || !mounted) return;
+    await _prosesUpload(hasil);
+  }
+
+  Future<void> _prosesUpload(String format) async {
+    if (format != 'accurate') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Format selain Accurate belum didukung saat ini.')),
+      );
+      return;
+    }
+
+    try {
+      final res = await FilePicker.platform.pickFiles(
+        dialogTitle: 'Pilih Berkas Excel Accurate',
+        type: FileType.custom,
+        allowedExtensions: ['xlsx'],
+        withData: true,
+      );
+
+      if (res == null || res.files.isEmpty) return;
+
+      final file = res.files.first;
+      Uint8List? bytes = file.bytes;
+      if (bytes == null && file.path != null) {
+        bytes = await File(file.path!).readAsBytes();
+      }
+
+      if (bytes == null || bytes.isEmpty) {
+        throw Exception('Berkas yang dipilih kosong atau tidak terbaca.');
+      }
+
+      setStateIfMounted(() => _sibuk = true);
+
+      // Parse menggunakan parser Accurate
+      final hasilParse = parseAccurateJurnalXlsx(bytes, daftarAkun: _akun);
+
+      setStateIfMounted(() => _sibuk = false);
+
+      if (hasilParse.daftarJurnal.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text(
+                  'Tidak ada data transaksi jurnal yang terbaca dari berkas Excel tersebut.')),
+        );
+        return;
+      }
+
+      if (!mounted) return;
+
+      final konfirmasi = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.fact_check_outlined, color: Colors.blue),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: Text(
+                      'Konfirmasi Impor Jurnal (${hasilParse.daftarJurnal.length} Transaksi)')),
+            ],
+          ),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Berkas: ${file.name}',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Text('• Total Transaksi Jurnal: ${hasilParse.daftarJurnal.length}'),
+                  Text('• Total Baris Rincian: ${hasilParse.totalBarisMentah}'),
+                  Text('• Total Debet: ${_rp(hasilParse.totalDebet)}'),
+                  Text('• Total Kredit: ${_rp(hasilParse.totalKredit)}'),
+                  const SizedBox(height: 12),
+                  if (hasilParse.daftarPeringatan.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        border: Border.all(color: Colors.orange.shade300),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.warning_amber_rounded,
+                                  size: 16, color: Colors.orange.shade900),
+                              const SizedBox(width: 6),
+                              Text(
+                                  'Catatan / Peringatan (${hasilParse.daftarPeringatan.length}):',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.orange.shade900)),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          ...hasilParse.daftarPeringatan
+                              .take(5)
+                              .map((p) => Text('• $p',
+                                  style: const TextStyle(fontSize: 12))),
+                          if (hasilParse.daftarPeringatan.length > 5)
+                            Text(
+                                '... dan ${hasilParse.daftarPeringatan.length - 5} peringatan lainnya.',
+                                style: const TextStyle(
+                                    fontSize: 11, fontStyle: FontStyle.italic)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  const Text(
+                    'Jurnal akan diimpor sebagai DRAF ke sistem ebisnis sehingga dapat Anda periksa dan posting.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Batal'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(ctx, true),
+              icon: const Icon(Icons.check),
+              label: Text(
+                  'Impor ${hasilParse.daftarJurnal.length} Jurnal ke Draf'),
+            ),
+          ],
+        ),
+      );
+
+      if (konfirmasi != true || !mounted) return;
+
+      setStateIfMounted(() => _sibuk = true);
+
+      final defaultJenisId = _jenisTransaksi.isNotEmpty
+          ? (_jenisTransaksi.first['id'] as num?)?.toInt()
+          : null;
+
+      final payloadList = hasilParse.daftarJurnal
+          .map((j) => j.toPayloadSimpan(jenisTransaksiId: defaultJenisId))
+          .toList();
+
+      try {
+        final resBatch = await ApiClient.instance
+            .aksi('jurnal_umum_import_batch', {'daftar': payloadList});
+        final sukses = resBatch['sukses'] ?? payloadList.length;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content:
+                    Text('Berhasil mengimpor $sukses jurnal umum ke draf.')),
+          );
+        }
+      } catch (_) {
+        // Fallback: simpan satu per satu bila batch endpoint belum tersedia
+        var sukses = 0;
+        for (final p in payloadList) {
+          try {
+            await ApiClient.instance.aksi('jurnal_umum_simpan', p);
+            sukses++;
+          } catch (_) {}
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text(
+                    'Berhasil mengimpor $sukses dari ${payloadList.length} jurnal ke draf.')),
+          );
+        }
+      }
+
+      await _muat();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal mengimpor berkas: $e')),
+        );
+      }
+    } finally {
+      setStateIfMounted(() => _sibuk = false);
+    }
+  }
+
+  Future<void> _cetakPdf() async {
+    setStateIfMounted(() => _sibuk = true);
+    try {
+      final res = await ApiClient.instance.aksi('jurnal_umum_list', {
+        'mulai': _fmtTanggal.format(_mulai),
+        'sampai': _fmtTanggal.format(_sampai),
+        'status': _status,
+        'cari': _cari,
+        'denganBaris': true,
+        'limit': 1000,
+      });
+
+      final rawData =
+          ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+
+      final dataLengkap = <Map<String, dynamic>>[];
+      for (final j in rawData) {
+        final jMap = Map<String, dynamic>.from(j);
+        final baris = jMap['baris'] as List?;
+        if (baris == null ||
+            (baris.isEmpty && (jMap['jumlahBaris'] as num? ?? 0) > 0)) {
+          try {
+            final d = await ApiClient.instance
+                .aksi('jurnal_umum_detail', {'id': jMap['id']});
+            jMap['baris'] = d['baris'];
+          } catch (_) {}
+        }
+        dataLengkap.add(jMap);
+      }
+
+      final namaToko = Sesi.instance.namaTokoFilter.isNotEmpty &&
+              Sesi.instance.namaTokoFilter != 'Semua Toko'
+          ? Sesi.instance.namaTokoFilter
+          : (Sesi.instance.tokoNama.isNotEmpty
+              ? Sesi.instance.tokoNama
+              : 'Toko');
+
+      final pdf = pw.Document();
+      final judulStatus = _status == 'draf'
+          ? ' (Draf Saja)'
+          : (_status == 'terposting' ? ' (Terposting Saja)' : '');
+
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4.landscape,
+          margin: const pw.EdgeInsets.all(24),
+          header: (pw.Context context) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(namaToko,
+                      style: pw.TextStyle(
+                          fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Hal. ${context.pageNumber} / ${context.pagesCount}',
+                      style: const pw.TextStyle(fontSize: 10)),
+                ],
+              ),
+              pw.SizedBox(height: 2),
+              pw.Text('LAPORAN JURNAL UMUM$judulStatus',
+                  style: pw.TextStyle(
+                      fontSize: 16, fontWeight: pw.FontWeight.bold)),
+              pw.Text(
+                  'Periode: ${_fmtTanggal.format(_mulai)} s/d ${_fmtTanggal.format(_sampai)}',
+                  style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+              pw.Divider(thickness: 1, height: 12),
+            ],
+          ),
+          build: (pw.Context context) {
+            final rows = <pw.TableRow>[
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+                children: [
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Text('No Bukti',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Text('Tanggal',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Text('Keterangan & Rincian Akun',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Text('Debet (Rp)',
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Text('Kredit (Rp)',
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Text('Status',
+                          textAlign: pw.TextAlign.center,
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                ],
+              ),
+            ];
+
+            double totalDebet = 0;
+            double totalKredit = 0;
+
+            for (final j in dataLengkap) {
+              final kode = '${j['kode'] ?? ''}';
+              final tgl = '${j['tanggal'] ?? ''}';
+              final ket = '${j['keterangan'] ?? ''}';
+              final terposting = j['terposting'] == true;
+              final d = (j['totalDebet'] as num?)?.toDouble() ?? 0.0;
+              final k = (j['totalKredit'] as num?)?.toDouble() ?? 0.0;
+              totalDebet += d;
+              totalKredit += k;
+
+              final barisList =
+                  (j['baris'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+              rows.add(
+                pw.TableRow(
+                  children: [
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(4),
+                        child: pw.Text(kode,
+                            style: const pw.TextStyle(fontSize: 8))),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(4),
+                        child: pw.Text(tgl,
+                            style: const pw.TextStyle(fontSize: 8))),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(ket,
+                              style: pw.TextStyle(
+                                  fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                          if (barisList.isNotEmpty)
+                            ...barisList.map((b) {
+                              final dLine =
+                                  (b['debet'] as num?)?.toDouble() ?? 0.0;
+                              final kLine =
+                                  (b['kredit'] as num?)?.toDouble() ?? 0.0;
+                              final nominal =
+                                  dLine > 0 ? _rp(dLine) : _rp(kLine);
+                              final posisi = dLine > 0 ? '(D)' : '(K)';
+                              return pw.Text(
+                                '  • ${b['kodeAkun'] ?? ''} ${b['namaAkun'] ?? ''} $posisi $nominal',
+                                style: const pw.TextStyle(
+                                    fontSize: 7, color: PdfColors.grey800),
+                              );
+                            }),
+                        ],
+                      ),
+                    ),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(4),
+                        child: pw.Text(_rp(d),
+                            textAlign: pw.TextAlign.right,
+                            style: const pw.TextStyle(fontSize: 8))),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(4),
+                        child: pw.Text(_rp(k),
+                            textAlign: pw.TextAlign.right,
+                            style: const pw.TextStyle(fontSize: 8))),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(4),
+                        child: pw.Text(terposting ? 'Terposting' : 'Draf',
+                            textAlign: pw.TextAlign.center,
+                            style: pw.TextStyle(
+                                fontSize: 8,
+                                color: terposting
+                                    ? PdfColors.green800
+                                    : PdfColors.orange800))),
+                  ],
+                ),
+              );
+            }
+
+            rows.add(
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                children: [
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Text('TOTAL',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Text('')),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Text('${dataLengkap.length} Transaksi',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Text(_rp(totalDebet),
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Text(_rp(totalKredit),
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Text('')),
+                ],
+              ),
+            );
+
+            return [
+              pw.Table(
+                border:
+                    pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+                columnWidths: const {
+                  0: pw.FlexColumnWidth(2),
+                  1: pw.FlexColumnWidth(1.5),
+                  2: pw.FlexColumnWidth(5),
+                  3: pw.FlexColumnWidth(2),
+                  4: pw.FlexColumnWidth(2),
+                  5: pw.FlexColumnWidth(1.5),
+                },
+                children: rows,
+              ),
+            ];
+          },
+        ),
+      );
+
+      await Printing.layoutPdf(
+        onLayout: (_) async => pdf.save(),
+        name:
+            'Jurnal_Umum_${_fmtTanggal.format(_mulai)}_${_fmtTanggal.format(_sampai)}.pdf',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal mencetak PDF: $e')),
+        );
+      }
+    } finally {
+      setStateIfMounted(() => _sibuk = false);
+    }
+  }
+
   String _rp(num? v) => _fmtAngka.format((v ?? 0).round());
 
   @override
   Widget build(BuildContext context) {
     final draf = _jurnal.where((j) => j['terposting'] != true).length;
+    final bolehUpload =
+        Sesi.instance.isAdmin && (_boleh('create') || _boleh('edit'));
+
     return AppShell(
       menuAktif: MenuEBisnis.jurnalUmum,
       judul: 'Jurnal Umum',
@@ -369,6 +1056,20 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
                   onPressed: _memuat ? null : _muat,
                   icon: const Icon(Icons.filter_alt_outlined, size: 18),
                   label: const Text('Terapkan')),
+              OutlinedButton.icon(
+                  onPressed:
+                      _memuat || _sibuk ? null : _tampilkanDialogDownload,
+                  icon: const Icon(Icons.file_download_outlined, size: 18),
+                  label: const Text('Download')),
+              if (bolehUpload)
+                OutlinedButton.icon(
+                    onPressed: _memuat || _sibuk ? null : _tampilkanDialogUpload,
+                    icon: const Icon(Icons.file_upload_outlined, size: 18),
+                    label: const Text('Upload')),
+              OutlinedButton.icon(
+                  onPressed: _memuat || _sibuk ? null : _cetakPdf,
+                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                  label: const Text('Cetak PDF')),
               if (draf > 0)
                 OutlinedButton.icon(
                     // Posting massal memakai wewenang yang sama dgn posting
