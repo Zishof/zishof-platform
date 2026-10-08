@@ -458,7 +458,11 @@ class CaraBayar {
           j['memotongSaldo'] == true ||
           j['memotong_saldo'] == true ||
           namaLower.contains('deposit') ||
-          namaLower.contains('saldo'),
+          namaLower.contains('saldo') ||
+          namaLower.contains('emoney') ||
+          namaLower.contains('e-money') ||
+          namaLower.contains('santri') ||
+          namaLower.contains('tabungan'),
     );
   }
 }

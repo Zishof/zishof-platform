@@ -488,8 +488,13 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   bool _metodeMemotongDeposit(CaraBayar caraBayar) {
     final nama = caraBayar.nama.toLowerCase();
     return caraBayar.memotongDepositEfektif ||
+        caraBayar.memotongDeposit ||
         nama.contains('deposit') ||
-        nama.contains('saldo');
+        nama.contains('saldo') ||
+        nama.contains('emoney') ||
+        nama.contains('e-money') ||
+        nama.contains('santri') ||
+        nama.contains('tabungan');
   }
 
   double _nominalDepositTerpakai() {
