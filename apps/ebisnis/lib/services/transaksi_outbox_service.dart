@@ -601,6 +601,13 @@ class TransaksiOutboxService {
 
     try {
       payload['pengiriman_pending'] = true;
+      if (tokoPayloadInt == null && Sesi.instance.tokoId != null) {
+        payload['idToko'] = Sesi.instance.tokoId;
+        payload['tokoId'] = Sesi.instance.tokoId;
+      }
+      if ('${payload['kasir'] ?? ''}'.trim().isEmpty && Sesi.instance.userId.isNotEmpty) {
+        payload['kasir'] = Sesi.instance.userId;
+      }
       final hasilBayar = await ApiClient.instance.aksi('bayar', payload);
       await PelayananTransaksi.tandaiJikaPerlu(
         payload: payload,
