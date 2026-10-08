@@ -79,6 +79,7 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
   int _jumlahPendingAktif = 0;
   int _halamanPending = 1;
   String? _statusPending;
+  Map<String, int> _ringkasanStatusPending = {};
   int _intervalRetryMenit = TransaksiOutboxService.intervalRetryMenitDefault;
 
   /// Diff emisi "lokal dulu" -- menggerakkan animasi kilau baris (pesanan
@@ -168,12 +169,15 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
         status: _statusPending,
       );
       final jumlahAktif = await CoreDb.instance.jumlahTransaksiPending();
+      final ringkasan =
+          await CoreDb.instance.ringkasanStatusTransaksiPending();
       final interval =
           await TransaksiOutboxService.instance.muatIntervalRetryMenit();
       setStateIfMounted(() {
         _transaksiPending = hasil.data.cast<Map<String, dynamic>>();
         _totalTransaksiPending = hasil.total;
         _jumlahPendingAktif = jumlahAktif;
+        _ringkasanStatusPending = ringkasan;
         _intervalRetryMenit = interval;
         _pesanError = null;
       });
@@ -705,17 +709,28 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                     'SYNCED': 'Sukses',
                     'GAGAL': 'Gagal',
                   }.entries)
-                    ChoiceChip(
-                      label: Text(opsi.value),
-                      selected: _statusPending == opsi.key,
-                      onSelected: (_) {
-                        setStateIfMounted(() {
-                          _statusPending = opsi.key;
-                          _halamanPending = 1;
-                        });
-                        _muatTransaksiPending();
-                      },
-                    ),
+                    Builder(builder: (context) {
+                      final count = opsi.key == null
+                          ? _ringkasanStatusPending.values
+                              .fold<int>(0, (a, b) => a + b)
+                          : (_ringkasanStatusPending[opsi.key] ?? 0);
+                      final labelText =
+                          count > 0 ? '${opsi.value} ($count)' : opsi.value;
+                      return ChoiceChip(
+                        label: Text(labelText),
+                        selected: _statusPending == opsi.key,
+                        selectedColor: opsi.key == 'GAGAL' && count > 0
+                            ? AppColors.danger.withValues(alpha: 0.2)
+                            : null,
+                        onSelected: (_) {
+                          setStateIfMounted(() {
+                            _statusPending = opsi.key;
+                            _halamanPending = 1;
+                          });
+                          _muatTransaksiPending();
+                        },
+                      );
+                    }),
                   if (Sesi.instance.bolehKelola)
                     FilledButton.icon(
                       onPressed:

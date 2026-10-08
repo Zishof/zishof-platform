@@ -2364,6 +2364,19 @@ class CoreDb {
     return (data: data, total: total);
   }
 
+  /// Menghitung jumlah baris transaksi_pending per status untuk label filter tab.
+  Future<Map<String, int>> ringkasanStatusTransaksiPending() async {
+    final database = await db;
+    final rows = await database.rawQuery(
+        'SELECT status, COUNT(*) AS n FROM transaksi_pending GROUP BY status');
+    final hasil = <String, int>{};
+    for (final r in rows) {
+      final s = '${r['status'] ?? ''}'.toUpperCase();
+      hasil[s] = (r['n'] as num?)?.toInt() ?? 0;
+    }
+    return hasil;
+  }
+
   // ============================== SESI KAS LOKAL ==============================
 
   Future<Map<String, Object?>?> sesiKasAktif() async {
