@@ -655,6 +655,34 @@ class TransaksiOutboxService {
         await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
         return _VonisKirim.berhasil;
       }
+      // Bila server mengembalikan penolakan (mis. saldo/limit dianggap kurang atau
+      // terjadi time-out saat respons pertama), periksa apakah transaksi dengan
+      // kodeUnik ini sebenarnya SUDAH tersimpan di database server.
+      try {
+        final cek = await ApiClient.instance.aksi('detail_transaksi', {
+          'kode': kodeUnik,
+          'kodeUnik': kodeUnik,
+          if (tokoPayloadInt != null) 'idToko': tokoPayloadInt,
+          if (tokoPayloadInt != null) 'toko_id': tokoPayloadInt,
+        });
+        final adaId = cek['idTransaksi'] != null || cek['id'] != null;
+        final kodeCocok = '${cek['kode'] ?? ''}'.trim().toLowerCase() ==
+            kodeUnik.toLowerCase();
+        if (adaId || kodeCocok || cek['totalBiaya'] != null) {
+          await CoreDb.instance.simpanHasilServerTransaksi(kodeUnik, {
+            'idTransaksi': cek['idTransaksi'] ?? cek['id'],
+            'total': cek['totalBiaya'],
+            'totalDiskon': cek['totalDiskon'],
+            'saldo': cek['saldo'],
+            'sisaSaldo': cek['sisaSaldo'],
+            'data': cek['item'],
+          });
+          await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
+          return _VonisKirim.berhasil;
+        }
+      } catch (_) {
+        // Abaikan pengecekan jika server tidak dapat dihubungi
+      }
       await CoreDb.instance.tandaiTransaksiGagal(kodeUnik, pesan);
       final percobaan = (row['percobaan'] as num?)?.toInt() ?? 0;
       if (dapatDicobaUlang(e) && percobaan < batasPercobaanOtomatis) {

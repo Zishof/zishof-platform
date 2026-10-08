@@ -2173,6 +2173,42 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
     }
   }
 
+  Future<void> _forceKirimAtauCekServer(Map<String, dynamic> row) async {
+    final kode = '${row['kode'] ?? row['kodeUnik'] ?? row['nomorNota'] ?? ''}'.trim();
+    if (kode.isEmpty) return;
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('Memeriksa status transaksi $kode ke server...'),
+      duration: const Duration(seconds: 2),
+    ));
+
+    try {
+      final hasil = await TransaksiOutboxService.instance.kirimSatuManual(
+        kode,
+        paksa: true,
+      );
+      if (!mounted) return;
+      if (hasil.berhasil > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          backgroundColor: AppColors.success,
+          content: Text('Transaksi $kode berhasil disinkronkan ke server!'),
+        ));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          backgroundColor: AppColors.danger,
+          content: Text(hasil.pesan),
+        ));
+      }
+      await _muat();
+    } catch (e) {
+      if (mounted) {
+        await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+            aktivitas: 'sinkronisasi transaksi $kode ke server');
+      }
+    }
+  }
+
   Future<void> _lihatDetail(Map<String, dynamic> row) async {
     try {
       final payloadLokal = row['payloadLokal'];
@@ -2381,6 +2417,18 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                     row,
                     Map<String, dynamic>.from(payloadLokal),
                   );
+                },
+              ),
+            if (payloadLokal is Map && row['idTransaksi'] == null)
+              FilledButton.icon(
+                icon: const Icon(Icons.sync, size: 19),
+                label: const Text('Force Kirim / Cek Server'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                ),
+                onPressed: () async {
+                  Navigator.of(context).pop();
+                  await _forceKirimAtauCekServer(row);
                 },
               ),
             if (hasil['bolehEditTransaksi'] == true)
