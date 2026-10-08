@@ -175,6 +175,26 @@ bool tanggalArsipLokalMasukRiwayat(
   return true;
 }
 
+@visibleForTesting
+bool tanggalTransaksiDalamRentang(
+  DateTime? waktu, {
+  DateTime? mulai,
+  DateTime? sampai,
+}) {
+  if (mulai == null && sampai == null) return true;
+  if (waktu == null) return false;
+  final tanggal = DateTime(waktu.year, waktu.month, waktu.day);
+  if (mulai != null &&
+      tanggal.isBefore(DateTime(mulai.year, mulai.month, mulai.day))) {
+    return false;
+  }
+  if (sampai != null &&
+      tanggal.isAfter(DateTime(sampai.year, sampai.month, sampai.day))) {
+    return false;
+  }
+  return true;
+}
+
 class _BarisKoreksiTransaksi {
   _BarisKoreksiTransaksi({
     this.pembelianId,
@@ -1530,6 +1550,9 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
   bool _memuat = true;
   bool _menyinkronkanDuaArah = false;
   bool _membandingkanDuaArah = false;
+  String _statusSinkronisasiDuaArah = '';
+  int _kemajuanSinkronisasiDuaArah = 0;
+  int _totalSinkronisasiDuaArah = 0;
   String? _error;
   String? _peringatanServer;
   List<Map<String, dynamic>> _data = [];
@@ -2648,15 +2671,20 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
     await _muat();
   }
 
-  Future<List<Map<String, dynamic>>> _semuaTransaksiServer() async {
+  Future<List<Map<String, dynamic>>> _semuaTransaksiServer({
+    DateTime? tanggalMulai,
+    DateTime? tanggalSampai,
+  }) async {
     final semua = <Map<String, dynamic>>[];
     var halaman = 1;
     while (halaman <= 1000) {
       final hasil =
           await ApiClient.instance.aksi('transaksi_backup_toko_list', {
         'toko_id': Sesi.instance.tokoId,
-        'tglMulai': '2000-01-01',
-        'tglSampai': _formatTanggalServer.format(DateTime.now()),
+        if (tanggalMulai != null)
+          'tglMulai': _formatTanggalServer.format(tanggalMulai),
+        if (tanggalSampai != null)
+          'tglSampai': _formatTanggalServer.format(tanggalSampai),
         'page': halaman,
         'pageSize': 200,
       });
@@ -2667,6 +2695,52 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
       halaman++;
     }
     return semua;
+  }
+
+  Future<bool> _konfirmasiSinkronisasiRentang() async {
+    final awal = _mulai == null
+        ? 'tanggal awal tidak dibatasi'
+        : _formatTanggalServer.format(_mulai!);
+    final akhir = _sampai == null
+        ? 'tanggal akhir tidak dibatasi'
+        : _formatTanggalServer.format(_sampai!);
+    return await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Sinkronkan transaksi pada rentang tanggal ini?'),
+            content: Text(
+              'Pencocokan dibatasi dari $awal sampai $akhir. Transaksi lokal '
+              'yang belum tercatat dapat dikirim menggunakan nomor nota dan '
+              'waktu aslinya. Pemeriksaan pembayaran tetap berlaku; transaksi '
+              'yang ditolak akan tetap perlu ditinjau. Proses dapat memerlukan '
+              'waktu sesuai jumlah nota pada rentang ini.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Batal'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Lanjutkan'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  void _perbaruiStatusSinkronisasiDuaArah(
+    String status, {
+    int? kemajuan,
+    int? total,
+  }) {
+    if (!mounted) return;
+    setState(() {
+      _statusSinkronisasiDuaArah = status;
+      if (kemajuan != null) _kemajuanSinkronisasiDuaArah = kemajuan;
+      if (total != null) _totalSinkronisasiDuaArah = total;
+    });
   }
 
   Map<String, dynamic> _payloadDariServer(Map<String, dynamic> row,
@@ -2711,6 +2785,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
 
   Future<void> _sinkronkanTransaksiDuaArah() async {
     if (!Sesi.instance.bolehKelola || _menyinkronkanDuaArah) return;
+    if (!await _konfirmasiSinkronisasiRentang() || !mounted) return;
     setState(() => _menyinkronkanDuaArah = true);
     var dariServer = 0;
     var keServer = 0;
@@ -2719,18 +2794,116 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
     var payloadTidakLengkap = 0;
     var gagalBisnis = 0;
     try {
-      final server = await _semuaTransaksiServer();
+      _perbaruiStatusSinkronisasiDuaArah(
+          'Mengambil daftar transaksi pada tanggal terpilih...');
+      final server = await _semuaTransaksiServer(
+        tanggalMulai: _mulai,
+        tanggalSampai: _sampai,
+      );
       final serverByKode = <String, Map<String, dynamic>>{};
       for (final row in server) {
         final kode = _kodeTransaksiStabil(row);
         if (kode.isNotEmpty) serverByKode[kode] = row;
       }
-      final lokal = await CoreDb.instance
-          .transaksiArsipLokal(tokoId: Sesi.instance.tokoId, limit: 1000000);
+      _perbaruiStatusSinkronisasiDuaArah('Memeriksa arsip lokal...');
+      final lokal = await CoreDb.instance.transaksiArsipLokal(
+        tokoId: Sesi.instance.tokoId,
+        tanggalMulai: _mulai,
+        tanggalSampai: _sampai,
+        sertakanBelumSinkron: true,
+        limit: 1000000,
+      );
       final lokalByKode = <String, Map<String, Object?>>{};
+      final payloadLokalByKode = <String, Map<String, dynamic>>{};
       for (final row in lokal) {
         final kode = '${row['kode_unik'] ?? ''}'.trim().toLowerCase();
-        if (kode.isNotEmpty) lokalByKode[kode] = row;
+        if (kode.isEmpty) continue;
+        Map<String, dynamic> payload;
+        try {
+          payload = Map<String, dynamic>.from(
+              jsonDecode('${row['payload_json']}') as Map);
+        } catch (_) {
+          if ('${row['status']}'.toUpperCase() != 'SYNCED') {
+            payloadTidakLengkap++;
+          }
+          continue;
+        }
+        final waktu = _waktuPayloadLokal(payload['waktu']) ??
+            DateTime.tryParse('${row['dibuat_pada']}');
+        if (!tanggalTransaksiDalamRentang(waktu,
+            mulai: _mulai, sampai: _sampai)) {
+          if (waktu == null && '${row['status']}'.toUpperCase() != 'SYNCED') {
+            payloadTidakLengkap++;
+          }
+          continue;
+        }
+        lokalByKode[kode] = row;
+        payloadLokalByKode[kode] = payload;
+      }
+
+      final hanyaServer = serverByKode.entries
+          .where((entry) =>
+              !lokalByKode.containsKey(entry.key) &&
+              entry.value['idTransaksi'] != null)
+          .toList();
+      final hanyaLokal = lokalByKode.entries
+          .where((entry) => !serverByKode.containsKey(entry.key))
+          .toList();
+      final totalPekerjaan = hanyaServer.length + hanyaLokal.length;
+      var kemajuan = 0;
+      _perbaruiStatusSinkronisasiDuaArah(
+        'Menyiapkan ${hanyaServer.length} rincian pusat dan '
+        '${hanyaLokal.length} nota lokal...',
+        kemajuan: 0,
+        total: totalPekerjaan,
+      );
+
+      // Rincian hanya dibaca dari endpoint server; ambil beberapa sekaligus,
+      // lalu simpan ke SQLite secara berurutan agar pembacaan tetap cepat dan
+      // penulisan local-first tidak bersaing pada satu database.
+      const ukuranKelompokRincian = 4;
+      for (var awal = 0;
+          awal < hanyaServer.length;
+          awal += ukuranKelompokRincian) {
+        final calonAkhir = awal + ukuranKelompokRincian;
+        final akhir =
+            calonAkhir < hanyaServer.length ? calonAkhir : hanyaServer.length;
+        final kelompok = hanyaServer.sublist(awal, akhir);
+        final rincian = await Future.wait(
+          kelompok.map((entry) async {
+            final id = entry.value['idTransaksi'];
+            final detail =
+                await ApiClient.instance.aksi('detail_transaksi', {'id': id});
+            return MapEntry(entry, detail);
+          }),
+        );
+        for (final hasilRincian in rincian) {
+          final row = hasilRincian.key.value;
+          final detail = hasilRincian.value;
+          final items = ((detail['item'] as List?) ?? const [])
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          final payload = _payloadDariServer(row, detail, items);
+          final kodeAsli = '${payload['kodeUnik']}'.trim();
+          if (kodeAsli.isNotEmpty &&
+              await CoreDb.instance.simpanTransaksiDariServer(
+                kodeAsli,
+                jsonEncode(payload),
+                akunKunci:
+                    '${payload['sumber_username'] ?? payload['kasir'] ?? ''}',
+                tokoId: Sesi.instance.tokoId,
+                idPerangkat:
+                    '${payload['id_perangkat'] ?? payload['sumber_mesin'] ?? ''}',
+              )) {
+            dariServer++;
+          }
+          kemajuan++;
+          _perbaruiStatusSinkronisasiDuaArah(
+            'Menyimpan rincian pusat $kemajuan dari $totalPekerjaan...',
+            kemajuan: kemajuan,
+          );
+        }
       }
 
       for (final entry in serverByKode.entries) {
@@ -2741,48 +2914,30 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                 .tandaiTransaksiSinkron('${lokalAda['kode_unik']}');
           }
           sudahSama++;
-          continue;
-        }
-        final row = entry.value;
-        final id = row['idTransaksi'];
-        if (id == null) continue;
-        final detail =
-            await ApiClient.instance.aksi('detail_transaksi', {'id': id});
-        final items = ((detail['item'] as List?) ?? const [])
-            .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList();
-        final payload = _payloadDariServer(row, detail, items);
-        final kodeAsli = '${payload['kodeUnik']}'.trim();
-        if (kodeAsli.isEmpty) continue;
-        if (await CoreDb.instance.simpanTransaksiDariServer(
-            kodeAsli, jsonEncode(payload),
-            akunKunci:
-                '${payload['sumber_username'] ?? payload['kasir'] ?? ''}',
-            tokoId: Sesi.instance.tokoId,
-            idPerangkat:
-                '${payload['id_perangkat'] ?? payload['sumber_mesin'] ?? ''}')) {
-          dariServer++;
         }
       }
 
-      for (final entry in lokalByKode.entries) {
-        if (serverByKode.containsKey(entry.key)) continue;
-        Map<String, dynamic> payload;
-        try {
-          payload = Map<String, dynamic>.from(
-              jsonDecode('${entry.value['payload_json']}') as Map);
-        } catch (_) {
+      for (final entry in hanyaLokal) {
+        var status = 'Mengirim nota lokal';
+        if (totalPekerjaan > 0) {
+          status = '$status ${kemajuan + 1} dari $totalPekerjaan...';
+        }
+        _perbaruiStatusSinkronisasiDuaArah(status, kemajuan: kemajuan);
+        final payload = payloadLokalByKode[entry.key];
+        if (payload == null) {
           payloadTidakLengkap++;
+          kemajuan++;
           continue;
         }
         final kelayakan = periksaKelayakanPayloadSinkronisasi(payload);
         if (kelayakan.status == StatusKelayakanSinkronisasi.arsipDariServer) {
           arsipServerDilewati++;
+          kemajuan++;
           continue;
         }
         if (!kelayakan.siapDikirim) {
           payloadTidakLengkap++;
+          kemajuan++;
           continue;
         }
         payload['input_supervisor'] = true;
@@ -2811,7 +2966,13 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
             rethrow;
           }
         }
+        kemajuan++;
+        _perbaruiStatusSinkronisasiDuaArah(
+          'Mengirim nota lokal $kemajuan dari $totalPekerjaan...',
+          kemajuan: kemajuan,
+        );
       }
+      _perbaruiStatusSinkronisasiDuaArah('Memuat ulang riwayat penjualan...');
       await _muat();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -2826,7 +2987,14 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
             aktivitas: 'sinkronisasi transaksi lokal dan server');
       }
     } finally {
-      if (mounted) setState(() => _menyinkronkanDuaArah = false);
+      if (mounted) {
+        setState(() {
+          _menyinkronkanDuaArah = false;
+          _statusSinkronisasiDuaArah = '';
+          _kemajuanSinkronisasiDuaArah = 0;
+          _totalSinkronisasiDuaArah = 0;
+        });
+      }
     }
   }
 
@@ -2835,9 +3003,29 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
     setState(() => _membandingkanDuaArah = true);
     try {
       final hasil = bandingkanTransaksiLokalDanServer(
-        await CoreDb.instance
-            .transaksiArsipLokal(tokoId: Sesi.instance.tokoId, limit: 1000000),
-        await _semuaTransaksiServer(),
+        (await CoreDb.instance.transaksiArsipLokal(
+          tokoId: Sesi.instance.tokoId,
+          tanggalMulai: _mulai,
+          tanggalSampai: _sampai,
+          sertakanBelumSinkron: true,
+          limit: 1000000,
+        ))
+            .where((row) {
+          try {
+            final payload = Map<String, dynamic>.from(
+                jsonDecode('${row['payload_json']}') as Map);
+            final waktu = _waktuPayloadLokal(payload['waktu']) ??
+                DateTime.tryParse('${row['dibuat_pada']}');
+            return tanggalTransaksiDalamRentang(waktu,
+                mulai: _mulai, sampai: _sampai);
+          } catch (_) {
+            return false;
+          }
+        }).toList(),
+        await _semuaTransaksiServer(
+          tanggalMulai: _mulai,
+          tanggalSampai: _sampai,
+        ),
       );
       if (!mounted) return;
       final jumlahDihapus = await showDialog<int>(
@@ -3054,6 +3242,27 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                 ],
               ),
             ),
+            if (_menyinkronkanDuaArah)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _statusSinkronisasiDuaArah,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 4),
+                    LinearProgressIndicator(
+                      value: _totalSinkronisasiDuaArah > 0
+                          ? (_kemajuanSinkronisasiDuaArah /
+                                  _totalSinkronisasiDuaArah)
+                              .clamp(0.0, 1.0)
+                          : null,
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 8),
             SizedBox(
               height: 96,

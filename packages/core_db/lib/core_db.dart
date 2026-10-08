@@ -1805,6 +1805,9 @@ class CoreDb {
   Future<List<Map<String, Object?>>> transaksiArsipLokal({
     String? akunKunci,
     int? tokoId,
+    DateTime? tanggalMulai,
+    DateTime? tanggalSampai,
+    bool sertakanBelumSinkron = false,
     int limit = 500,
   }) async {
     final database = await db;
@@ -1818,6 +1821,30 @@ class CoreDb {
       klausa.add('(toko_id = ? OR toko_id IS NULL)');
       args.add(tokoId);
     }
+    final kondisiTanggal = <String>[];
+    final argsTanggal = <Object?>[];
+    if (tanggalMulai != null) {
+      kondisiTanggal.add('dibuat_pada >= ?');
+      argsTanggal.add(_tanggalUntukRentangArsip(tanggalMulai));
+    }
+    if (tanggalSampai != null) {
+      final sampaiEksklusif = DateTime(
+        tanggalSampai.year,
+        tanggalSampai.month,
+        tanggalSampai.day,
+      ).add(const Duration(days: 1));
+      kondisiTanggal.add('dibuat_pada < ?');
+      argsTanggal.add(_tanggalUntukRentangArsip(sampaiEksklusif));
+    }
+    if (kondisiTanggal.isNotEmpty) {
+      final rentang = kondisiTanggal.join(' AND ');
+      if (sertakanBelumSinkron) {
+        klausa.add("(status IN ('PENDING', 'GAGAL') OR ($rentang))");
+      } else {
+        klausa.add('($rentang)');
+      }
+      args.addAll(argsTanggal);
+    }
     return database.query(
       'transaksi_pending',
       where: klausa.isEmpty ? null : klausa.join(' AND '),
@@ -1826,6 +1853,11 @@ class CoreDb {
       limit: limit,
     );
   }
+
+  String _tanggalUntukRentangArsip(DateTime tanggal) =>
+      '${tanggal.year.toString().padLeft(4, '0')}-'
+      '${tanggal.month.toString().padLeft(2, '0')}-'
+      '${tanggal.day.toString().padLeft(2, '0')}';
 
   /// Dipakai saat server MENOLAK transaksi krn alasan bisnis (bukan jaringan
   /// offline, mis. saldo member kurang) -- baris pending dihapus supaya

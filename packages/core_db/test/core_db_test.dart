@@ -194,6 +194,28 @@ void main() {
     );
     await CoreDb.instance
         .tandaiTransaksiGagal('UAT-RETRY-004', 'gangguan jaringan UAT');
+    final besok = DateTime.now().add(const Duration(days: 1));
+    final arsipRentangBesok = await CoreDb.instance.transaksiArsipLokal(
+      tokoId: 1,
+      tanggalMulai: besok,
+      tanggalSampai: besok,
+    );
+    expect(
+      arsipRentangBesok.any((row) => row['kode_unik'] == 'UAT-RETRY-004'),
+      isFalse,
+      reason: 'arsip sinkron di luar tanggal tidak ikut dibaca',
+    );
+    final pendingDiLuarTanggal = await CoreDb.instance.transaksiArsipLokal(
+      tokoId: 1,
+      tanggalMulai: besok,
+      tanggalSampai: besok,
+      sertakanBelumSinkron: true,
+    );
+    expect(
+      pendingDiLuarTanggal.any((row) => row['kode_unik'] == 'UAT-RETRY-004'),
+      isTrue,
+      reason: 'pending lama tetap tersedia untuk dipilih dan diperiksa',
+    );
     final belumSepuluhMenit =
         await CoreDb.instance.transaksiPendingBelumSinkron(
       akunKunci: 'uat-kasir',
