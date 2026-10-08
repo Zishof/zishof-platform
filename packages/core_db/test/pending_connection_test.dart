@@ -7,6 +7,7 @@ class DatabaseGangguan extends Fake implements Database {
   final sesi = Completer<List<Map<String, Object?>>>();
   int ditutup = 0;
   int hitung = 0;
+  int querySesiKas = 0;
   @override
   bool get isOpen => ditutup == 0;
   @override
@@ -25,7 +26,10 @@ class DatabaseGangguan extends Fake implements Database {
       String? orderBy,
       int? limit,
       int? offset}) async {
-    if (table == 'sesi_kas_lokal') return sesi.future;
+    if (table == 'sesi_kas_lokal') {
+      querySesiKas++;
+      return sesi.future;
+    }
     hitung++;
     if (hitung == 1) {
       throw StateError(
@@ -38,6 +42,24 @@ class DatabaseGangguan extends Fake implements Database {
 }
 
 void main() {
+  test('pembacaan pending sesi kas yang berbarengan memakai satu query',
+      () async {
+    final database = DatabaseGangguan();
+    final core = CoreDb.untukPengujian(database);
+    final pertama = core.sesiKasLokalBelumSinkron();
+    final kedua = core.sesiKasLokalBelumSinkron();
+
+    await Future<void>.delayed(Duration.zero);
+    expect(database.querySesiKas, 1);
+    database.sesi.complete([
+      {'kode': 'UAT-KAS', 'status': 'BUKA', 'disinkronkan': 0}
+    ]);
+    final hasil = await Future.wait([pertama, kedua]);
+    expect(hasil[0].single['kode'], 'UAT-KAS');
+    expect(hasil[1].single['kode'], 'UAT-KAS');
+    expect(database.ditutup, 0);
+  });
+
   test('error penghitung tidak menutup koneksi checkout yang masih berjalan',
       () async {
     final database = DatabaseGangguan();

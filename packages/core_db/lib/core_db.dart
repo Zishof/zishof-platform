@@ -56,7 +56,6 @@ class CoreDb {
 
   /// SQLITE_MISUSE berkaitan dengan penggunaan koneksi/API, bukan bukti
   /// korupsi berkas. Jangan pindahkan/hapus database akibat kesalahan ini.
-  @visibleForTesting
   static bool kesalahanPemakaianSqlite(Object error) {
     final teks = error.toString().toLowerCase();
     return teks.contains('sqlite_misuse') ||
@@ -71,6 +70,7 @@ class CoreDb {
   Database? _db;
   String? _pathDb;
   Future<Database>? _openingDb;
+  Future<List<Map<String, Object?>>>? _sesiKasPendingRead;
   Future<void> _errorLogTail = Future.value();
   String? _lastErrorLogKey;
   DateTime? _lastErrorLogAt;
@@ -2361,9 +2361,48 @@ class CoreDb {
   /// Baris sesi kas BUKA yang optimistic-write lokalnya belum terkonfirmasi server -- kandidat
   /// retry (lihat [bukaSesiKasLokal]).
   Future<List<Map<String, Object?>>> sesiKasLokalBelumSinkron() async {
-    final database = await db;
-    return database.query('sesi_kas_lokal',
-        where: "status = 'BUKA' AND disinkronkan = 0");
+    // Pengecekan sesi dipicu dari beberapa jalur (pemuatan awal, refresh
+    // toolbar, dan retry periodik). Satukan pembacaan yang berbarengan agar
+    // satu snapshot sesi lokal tidak membuka beberapa statement identik pada
+    // koneksi FFI yang sama. Ini hanya membagikan operasi baca; tidak menutup,
+    // membuka ulang, atau mengubah status sesi kas.
+    final sedangDibaca = _sesiKasPendingRead;
+    if (sedangDibaca != null) return sedangDibaca;
+
+    late final Future<List<Map<String, Object?>>> pembacaan;
+    pembacaan = _bacaSesiKasLokalBelumSinkron().whenComplete(() {
+      if (identical(_sesiKasPendingRead, pembacaan)) {
+        _sesiKasPendingRead = null;
+      }
+    });
+    _sesiKasPendingRead = pembacaan;
+    return pembacaan;
+  }
+
+  Future<List<Map<String, Object?>>> _bacaSesiKasLokalBelumSinkron() async {
+    try {
+      final database = await db;
+      return await database.query(
+        'sesi_kas_lokal',
+        where: 'status = ? AND disinkronkan = ?',
+        whereArgs: const ['BUKA', 0],
+      );
+    } catch (e) {
+      if (kesalahanPemakaianSqlite(e)) {
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+        try {
+          final database = await db;
+          return await database.query(
+            'sesi_kas_lokal',
+            where: 'status = ? AND disinkronkan = ?',
+            whereArgs: const ['BUKA', 0],
+          );
+        } catch (_) {
+          return const [];
+        }
+      }
+      rethrow;
+    }
   }
 
   Future<void> tandaiSesiKasTersinkron(String kode) async {

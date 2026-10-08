@@ -1,7 +1,7 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -15,6 +15,20 @@ import '../widgets/pulihkan_terhapus.dart';
 import '../widgets/pemilih_akun.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/aksi_baris_menu.dart';
+
+String _normalisasiNamaGrupAkun(String nama) =>
+    nama.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+
+@visibleForTesting
+bool grupAkunNamaSudahDipakai(
+    String nama, Iterable<Map<String, dynamic>> daftar,
+    {Object? kecualiId}) {
+  final normal = _normalisasiNamaGrupAkun(nama);
+  if (normal.isEmpty) return false;
+  return daftar.any((grup) =>
+      '${grup['id'] ?? ''}' != '${kecualiId ?? ''}' &&
+      _normalisasiNamaGrupAkun('${grup['nama'] ?? ''}') == normal);
+}
 
 /// Konfigurasi Kode Akun untuk POS Desktop/Android -- padanan layar ZK
 /// `pages/master/akunting/akun.zul` yang dijadikan RUJUKAN bentuk datanya.
@@ -672,8 +686,9 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
 
   Map<String, bool> _bacaHak(Map<String, dynamic> res) {
     final h = res['hak'];
-    if (h is! Map)
+    if (h is! Map) {
       return const {'create': true, 'update': true, 'delete': true};
+    }
     return {
       'create': h['create'] != false,
       'update': h['update'] != false,
@@ -1111,6 +1126,15 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
       if (nama.text.trim().isEmpty) {
         throw Exception('Nama Grup Akun wajib diisi.');
       }
+      final adaNamaSama = grupAkunNamaSudahDipakai(
+        nama.text,
+        _grupAkun,
+        kecualiId: ubah ? grup['id'] : null,
+      );
+      if (adaNamaSama) {
+        throw Exception(
+            'Nama Grup Akun tersebut sudah digunakan. Gunakan grup yang ada agar daftar tidak bertambah ganda.');
+      }
       final payload = <String, dynamic>{
         if (ubah) 'id': grup['id'],
         'nama': nama.text.trim(),
@@ -1492,42 +1516,64 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                               ]))
                           .toList(),
                     ),
-                    // Grup Akun: pengelompokan bebas milik bagan akun (mis. Kas & Bank,
-                    // Piutang) -- berbeda dari Kelompok Laporan yang menentukan posisi
-                    // akun di Neraca/Laba Rugi.
-                    AppDataTable(
-                      minWidth: 620,
-                      emptyText: 'Belum ada grup akun.',
-                      columns: const [
-                        AppTableColumn('Nama Grup', flex: 3),
-                        AppTableColumn('Keterangan', flex: 5),
-                        AppTableColumn('Jumlah Akun',
-                            flex: 2, align: TextAlign.right),
-                        AppTableColumn('Aksi',
-                            width: 64, align: TextAlign.center),
+                    // Grup Akun hanya label untuk merapikan bagan akun; bukan
+                    // pemetaan yang menentukan akun masuk Neraca atau Laba Rugi.
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Container(
+                          margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .secondaryContainer,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'Grup Akun hanya membantu merapikan daftar akun. Nama lama bisa berbeda bahasa atau memiliki arti yang mirip; jangan hapus grup yang masih dipakai. Untuk menentukan posisi akun pada laporan PSAK, buka Akuntansi > Laporan-Laporan > Setup Laporan dan periksa Kelompok Laporan.',
+                          ),
+                        ),
+                        Expanded(
+                          child: AppDataTable(
+                            minWidth: 620,
+                            emptyText: 'Belum ada grup akun.',
+                            columns: const [
+                              AppTableColumn('Nama Grup', flex: 3),
+                              AppTableColumn('Keterangan', flex: 5),
+                              AppTableColumn('Jumlah Akun',
+                                  flex: 2, align: TextAlign.right),
+                              AppTableColumn('Aksi',
+                                  width: 64, align: TextAlign.center),
+                            ],
+                            rows: _grupAkun
+                                .map((g) => AppTableRowData(cells: [
+                                      AppTableCell.text('${g['nama'] ?? ''}',
+                                          flex: 3),
+                                      AppTableCell.text(
+                                          '${g['keterangan'] ?? ''}',
+                                          flex: 5),
+                                      AppTableCell.text(
+                                          '${_akun.where((a) => '${a['grupAkun'] ?? ''}' == '${g['nama'] ?? ''}').length}',
+                                          flex: 2,
+                                          align: TextAlign.right),
+                                      _aksiBaris(
+                                        hak: _hakGrup,
+                                        onSalin: () =>
+                                            _formGrupAkun(grup: g, salin: true),
+                                        onUbah: () => _formGrupAkun(grup: g),
+                                        onHapus: () => _hapus(
+                                            'kode_akun_grup_hapus',
+                                            g['id'],
+                                            '${g['nama'] ?? ''}',
+                                            kunci: 'kode_akun_grup:${g['id']}',
+                                            cacheKey: _cache('grup')),
+                                      ),
+                                    ]))
+                                .toList(),
+                          ),
+                        ),
                       ],
-                      rows: _grupAkun
-                          .map((g) => AppTableRowData(cells: [
-                                AppTableCell.text('${g['nama'] ?? ''}',
-                                    flex: 3),
-                                AppTableCell.text('${g['keterangan'] ?? ''}',
-                                    flex: 5),
-                                AppTableCell.text(
-                                    '${_akun.where((a) => '${a['grupAkun'] ?? ''}' == '${g['nama'] ?? ''}').length}',
-                                    flex: 2,
-                                    align: TextAlign.right),
-                                _aksiBaris(
-                                  hak: _hakGrup,
-                                  onSalin: () =>
-                                      _formGrupAkun(grup: g, salin: true),
-                                  onUbah: () => _formGrupAkun(grup: g),
-                                  onHapus: () => _hapus('kode_akun_grup_hapus',
-                                      g['id'], '${g['nama'] ?? ''}',
-                                      kunci: 'kode_akun_grup:${g['id']}',
-                                      cacheKey: _cache('grup')),
-                                ),
-                              ]))
-                          .toList(),
                     ),
                   ]),
       ),

@@ -224,7 +224,7 @@ class _KasirScreenState extends State<KasirScreen> {
     }
     _jadwalkanFokusCariItem();
     _timerSinkronSesiKas = Timer.periodic(
-        const Duration(seconds: 30), (_) => _cobaSinkronBukaKasPending());
+        const Duration(seconds: 30), (_) => _cobaSinkronBukaKasPendingAman());
     _timerShiftOtomatis = Timer.periodic(
         const Duration(minutes: 1), (_) => _periksaJadwalTutupOtomatis());
     _perbaruiStatusJaringan();
@@ -324,7 +324,11 @@ class _KasirScreenState extends State<KasirScreen> {
       await _sinkronKatalogDanKonfigurasi(
           tampilkanErrorJikaKosong: _semuaProduk.isEmpty);
       await _muatHargaKanal(_jenisPenjualan);
-      await _periksaSesiKas();
+      try {
+        await _periksaSesiKas();
+      } catch (e) {
+        if (kDebugMode) debugPrint('Pemeriksaan sesi kas awal tertunda: $e');
+      }
       await _terapkanBukaShiftOtomatis();
       await _periksaJadwalTutupOtomatis();
       PesananPoller.instance.mulai();
@@ -765,7 +769,7 @@ class _KasirScreenState extends State<KasirScreen> {
     // (retry lama cuma jalan lewat _muatKasSaatIni, yg no-op selama _kasTerbuka
     // masih null di pemuatan layar pertama) -- itulah sumber "Buka Kas muncul
     // lagi setiap ganti menu" walau baru saja dibuka.
-    await _cobaSinkronBukaKasPending();
+    if (!await _cobaSinkronBukaKasPendingAman()) return;
     try {
       final hasil = await ApiClient.instance.aksi('sesi_kas_status', {
         'id_toko': Sesi.instance.tokoId,
@@ -851,7 +855,7 @@ class _KasirScreenState extends State<KasirScreen> {
   /// 2026-08-11).
   Future<void> _muatKasSaatIni() async {
     if (_kasTerbuka != true) return;
-    await _cobaSinkronBukaKasPending();
+    if (!await _cobaSinkronBukaKasPendingAman()) return;
     try {
       final hasil = await ApiClient.instance.aksi('sesi_kas_status', {
         'id_toko': Sesi.instance.tokoId,
@@ -874,6 +878,31 @@ class _KasirScreenState extends State<KasirScreen> {
       }
     } catch (_) {
       // Offline -- biarkan angka/status lama, jangan ganti dgn nilai yg menyesatkan.
+    }
+  }
+
+  /// Kegagalan SQLite `SQLITE_MISUSE` saat membaca retry lokal tidak boleh
+  /// menutup seluruh POS atau menghapus/mengubah sesi yang belum tersinkron.
+  /// Kunci kasir sementara dan biarkan operator mencoba pemeriksaan ulang.
+  /// Status sesi server tetap diperiksa pada pemanggilan berikutnya.
+  Future<bool> _cobaSinkronBukaKasPendingAman() async {
+    try {
+      await _cobaSinkronBukaKasPending();
+      return true;
+    } catch (e) {
+      if (!CoreDb.kesalahanPemakaianSqlite(e)) rethrow;
+      if (kDebugMode) {
+        debugPrint('Pemeriksaan sesi kas lokal tertunda: SQLite API misuse.');
+      }
+      if (mounted) {
+        setStateIfMounted(() {
+          _kasTerbuka = false;
+          _kasSaatIni = null;
+          _pesanSesiKas =
+              'Status kas lokal belum dapat dibaca. Transaksi dikunci sementara. Tekan Cek Ulang; jangan hapus data aplikasi.';
+        });
+      }
+      return false;
     }
   }
 
@@ -1053,7 +1082,13 @@ class _KasirScreenState extends State<KasirScreen> {
   /// `kode` dipakai ulang APA ADANYA (idempoten di server) supaya retry tak pernah
   /// membuat sesi kas dobel.
   Future<void> _cobaSinkronBukaKasPending() async {
-    final pending = await CoreDb.instance.sesiKasLokalBelumSinkron();
+    List<Map<String, Object?>> pending;
+    try {
+      pending = await CoreDb.instance.sesiKasLokalBelumSinkron();
+    } catch (e) {
+      if (kDebugMode) debugPrint('Gagal membaca sesi kas lokal pending: $e');
+      return;
+    }
     for (final row in pending) {
       final kode = row['kode'] as String;
       try {
