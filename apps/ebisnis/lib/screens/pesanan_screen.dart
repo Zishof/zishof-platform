@@ -274,23 +274,63 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
   /// aturan sapuan otomatis, tombol ini memang permintaan sadar pengguna.
   Future<void> _kirimSemuaPending() async {
     if (_sedangSinkronPending) return;
+    var sudahKonfirmasiRisiko = false;
     final lanjut = await showDialog<bool>(
       context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Kirim semua transaksi pending?'),
-        content: const Text(
-            'Seluruh transaksi yang belum tersinkron di perangkat ini akan'
-            ' dikirim ulang, termasuk yang berstatus Gagal.'
-            '\n\nTanggal transaksi tidak berubah - tetap memakai tanggal saat'
-            ' transaksi terjadi, bukan tanggal pengiriman.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(c, false),
-              child: const Text('Batal')),
-          FilledButton(
-              onPressed: () => Navigator.pop(c, true),
-              child: const Text('Kirim Sekarang')),
-        ],
+      builder: (c) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Forced Kirim — baca risikonya'),
+          content: SizedBox(
+            width: 560,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                      'Tindakan ini mencoba mengirim semua transaksi lokal berstatus Pending atau Gagal yang masuk dalam cakupan akun dan toko aktif. Transaksi yang sudah berstatus Sukses tidak ikut dikirim.'),
+                  SizedBox(height: 12),
+                  Text('Risiko yang perlu dipahami:',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  SizedBox(height: 6),
+                  Text(
+                      '• Jika server belum menerima transaksi, server dapat mencatat penjualan dan dampak pembayarannya saat kiriman ini diterima.'),
+                  Text(
+                      '• Jika transaksi sebenarnya sudah tercatat tetapi jawabannya belum sampai ke perangkat, pengiriman memakai nomor transaksi yang sama agar server dapat mengenali kiriman ulang dan mencegah pencatatan ganda.'),
+                  Text(
+                      '• Isi transaksi, metode pembayaran, nominal, kasir, toko, dan waktu asli tidak diubah oleh tombol ini. Waktu yang tercatat tetap waktu transaksi dibuat.'),
+                  Text(
+                      '• Saldo, stok, hak akses, sesi kas, kelengkapan data, dan pemeriksaan duplikasi tetap diperiksa server. Forced Kirim tidak melompati pemeriksaan tersebut; server masih dapat menolak transaksi.'),
+                  Text(
+                      '• Bila isi/metode pembayaran perlu dibetulkan, jangan paksa kirim payload yang keliru. Tunggu status Gagal final, cocokkan bukti pembayaran, lalu gunakan tindakan koreksi yang tersedia. Jika status masih Pending atau belum pasti, minta PIC mencocokkan transaksi di server terlebih dahulu.'),
+                  SizedBox(height: 12),
+                  Text(
+                      'Jangan lanjutkan bila struk, uang/voucher yang diterima, atau status transaksi di server belum dicocokkan oleh petugas yang berwenang.'),
+                  const SizedBox(height: 12),
+                  CheckboxListTile(
+                    value: sudahKonfirmasiRisiko,
+                    onChanged: (nilai) => setDialogState(
+                        () => sudahKonfirmasiRisiko = nilai == true),
+                    title: const Text(
+                        'Saya berwenang dan sudah mencocokkan transaksi dengan bukti pembayaran.'),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text('Batal')),
+            FilledButton.icon(
+              onPressed:
+                  sudahKonfirmasiRisiko ? () => Navigator.pop(c, true) : null,
+              icon: const Icon(Icons.cloud_upload_outlined),
+              label: const Text('Forced Kirim'),
+            ),
+          ],
+        ),
       ),
     );
     if (lanjut != true) return;
@@ -676,19 +716,34 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                         _muatTransaksiPending();
                       },
                     ),
-                  FilledButton.icon(
-                    onPressed:
-                        _sedangSinkronPending ? null : _kirimSemuaPending,
-                    icon: _sedangSinkronPending
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.cloud_upload_outlined, size: 18),
-                    label: Text(_sedangSinkronPending
-                        ? 'Mengirim...'
-                        : 'Coba Kirim Transaksi Pending'),
-                  ),
+                  if (Sesi.instance.bolehKelola)
+                    FilledButton.icon(
+                      onPressed:
+                          _sedangSinkronPending ? null : _kirimSemuaPending,
+                      icon: _sedangSinkronPending
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.cloud_upload_outlined, size: 18),
+                      label: Text(_sedangSinkronPending
+                          ? 'Mengirim...'
+                          : 'Forced Kirim'),
+                    )
+                  else
+                    FilledButton.icon(
+                      onPressed:
+                          _sedangSinkronPending ? null : _kirimSemuaPending,
+                      icon: _sedangSinkronPending
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.cloud_upload_outlined, size: 18),
+                      label: Text(_sedangSinkronPending
+                          ? 'Mengirim...'
+                          : 'Coba Kirim Transaksi Pending'),
+                    ),
                 ],
               ),
             ],
