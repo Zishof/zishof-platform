@@ -1956,16 +1956,23 @@ class CoreDb {
   Future<int> jumlahTransaksiPendingPemilik({
     required String akunKunci,
     required int tokoId,
-    required String idPerangkat,
+    String? idPerangkat,
   }) async {
     final database = await db;
+    final klausa = <String>[
+      "status IN ('PENDING', 'GAGAL')",
+      '(akun_kunci = ? OR akun_kunci IS NULL)',
+      '(toko_id = ? OR toko_id IS NULL)',
+    ];
+    final args = <Object?>[akunKunci, tokoId];
+    if (idPerangkat != null && idPerangkat.isNotEmpty) {
+      klausa.add('(id_perangkat = ? OR id_perangkat IS NULL)');
+      args.add(idPerangkat);
+    }
     final hasil = await database.rawQuery(
       "SELECT COUNT(*) AS n FROM transaksi_pending "
-      "WHERE status IN ('PENDING', 'GAGAL') "
-      'AND (akun_kunci = ? OR akun_kunci IS NULL) '
-      'AND (toko_id = ? OR toko_id IS NULL) '
-      'AND (id_perangkat = ? OR id_perangkat IS NULL)',
-      [akunKunci, tokoId, idPerangkat],
+      "WHERE ${klausa.join(' AND ')}",
+      args,
     );
     return (hasil.first['n'] as num?)?.toInt() ?? 0;
   }

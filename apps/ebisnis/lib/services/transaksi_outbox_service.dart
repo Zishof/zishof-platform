@@ -479,12 +479,10 @@ class TransaksiOutboxService {
   /// giliran kirim) dan GAGAL (sudah divonis, tidak akan dijemput retry).
   Future<({int pending, int gagal})> hitungTertahan() async {
     final pending = await CoreDb.instance.transaksiPendingBelumSinkron(
-      akunKunci: Sesi.instance.userId,
       tokoId: Sesi.instance.tokoId,
       jedaRetry: Duration.zero,
     );
     final gagal = await CoreDb.instance.transaksiGagalBelumSinkron(
-      akunKunci: Sesi.instance.userId,
       tokoId: Sesi.instance.tokoId,
     );
     return (pending: pending.length, gagal: gagal.length);
@@ -511,7 +509,6 @@ class TransaksiOutboxService {
 
     if (sertakanGagal) {
       final gagal = await CoreDb.instance.transaksiGagalBelumSinkron(
-        akunKunci: Sesi.instance.userId,
         tokoId: Sesi.instance.tokoId,
       );
       if (gagal.isNotEmpty) {
@@ -521,9 +518,7 @@ class TransaksiOutboxService {
     }
 
     final pending = await CoreDb.instance.transaksiPendingBelumSinkron(
-      akunKunci: Sesi.instance.userId,
       tokoId: Sesi.instance.tokoId,
-      idPerangkat: IdentitasMesin.instance.idMesin,
       jedaRetry: jedaRetry,
     );
     var berhasil = 0;
@@ -580,41 +575,26 @@ class TransaksiOutboxService {
       return _VonisKirim.berhentiSementara;
     }
 
-    final kasirPayload = '${payload['kasir'] ?? ''}'.trim();
     final tokoPayload = (payload['tokoId'] ?? payload['idToko']) as Object?;
     final tokoPayloadInt =
         tokoPayload is num ? tokoPayload.toInt() : int.tryParse('$tokoPayload');
     final pemulihanSupervisor =
         payload['input_supervisor'] == true || Sesi.instance.bolehKelola;
-    final perangkatPayload = '${payload['id_perangkat'] ?? ''}'.trim();
-
-    final bool kasirSesuai = kasirPayload.isEmpty ||
-        kasirPayload.toLowerCase() == Sesi.instance.userId.toLowerCase();
     final bool tokoSesuai =
         tokoPayloadInt == null || tokoPayloadInt == Sesi.instance.tokoId;
-    final bool perangkatSesuai = perangkatPayload.isEmpty ||
-        perangkatPayload == IdentitasMesin.instance.idMesin;
 
     final alasanDilewati = <String>[];
-    if (!pemulihanSupervisor && !kasirSesuai) {
-      alasanDilewati
-          .add('transaksi milik kasir "$kasirPayload", sedang login sebagai'
-              ' "${Sesi.instance.userId}"');
-    }
+    // Transaksi dari toko yang sama diizinkan untuk dikirim oleh kasir mana pun yang sedang
+    // bertugas di toko tersebut pada perangkat ini, agar pergantian shift tidak terkunci
+    // oleh antrean transaksi offline kasir sebelumnya. Identitas kasir asli (mis. satim)
+    // dan sesi kas tetap terjaga seutuhnya di dalam payload yang dikirim apa adanya ke server.
     if (!pemulihanSupervisor && !tokoSesuai) {
       alasanDilewati.add('transaksi milik toko $tokoPayloadInt,'
           ' toko aktif ${Sesi.instance.tokoId}');
     }
-    // Perangkat berbeda hanya diperingatkan bila akun kasir dan toko juga tidak cocok
-    // serta bukan supervisor. Jika kasir pemilik transaksi (atau supervisor) sedang login,
-    // perbedaan UUID mesin (mis. instalasi baru/update) diizinkan untuk dikirim.
-    if (!pemulihanSupervisor && !kasirSesuai && !perangkatSesuai) {
-      alasanDilewati.add('transaksi berasal dari perangkat lain');
-    }
     if (alasanDilewati.isNotEmpty) {
       final pesan = 'Belum dikirim: ${alasanDilewati.join('; ')}.'
-          ' Masuk dengan akun kasir yang bersangkutan di perangkat ini,'
-          ' atau minta supervisor memulihkannya.';
+          ' Hubungi supervisor untuk memulihkannya.';
       await CoreDb.instance.tandaiTransaksiGagal(kodeUnik, pesan);
       return _VonisKirim.dilewati;
     }
@@ -748,13 +728,10 @@ class TransaksiOutboxService {
     if (kodeUnik == null || kodeUnik.isEmpty) {
       // jedaRetry nol: permintaan manual tidak tunduk pada jeda otomatis.
       baris.addAll(await CoreDb.instance.transaksiPendingBelumSinkron(
-        akunKunci: Sesi.instance.userId,
         tokoId: Sesi.instance.tokoId,
-        idPerangkat: IdentitasMesin.instance.idMesin,
         jedaRetry: Duration.zero,
       ));
       baris.addAll(await CoreDb.instance.transaksiGagalBelumSinkron(
-        akunKunci: Sesi.instance.userId,
         tokoId: Sesi.instance.tokoId,
       ));
     } else {

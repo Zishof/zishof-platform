@@ -922,7 +922,6 @@ class _KasirScreenState extends State<KasirScreen> {
     final pending = await CoreDb.instance.jumlahTransaksiPendingPemilik(
       akunKunci: Sesi.instance.userId,
       tokoId: tokoIdAktif,
-      idPerangkat: IdentitasMesin.instance.idMesin,
     );
     if (pending > 0) {
       if (!mounted) return;
