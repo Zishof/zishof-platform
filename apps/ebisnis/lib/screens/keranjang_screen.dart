@@ -18,6 +18,7 @@ import '../services/master_offline.dart';
 import '../services/pengaturan_nomor_struk.dart';
 import '../services/pengaturan_nomor_antrian.dart';
 import '../services/pengaturan_pembayaran.dart';
+import '../services/payload_pembayaran.dart';
 import '../services/status_jaringan.dart';
 import '../services/transaksi_outbox_service.dart';
 import '../services/uom_konversi.dart';
@@ -1938,6 +1939,66 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     return null;
   }
 
+  Future<bool> _konfirmasiRincianPembayaran() async {
+    final metode =
+        _splitAktif ? _splitBayar : [SlotBayar(_caraBayarTerpilih!, _total)];
+    final rupiah =
+        NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+    final setuju = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Periksa pembayaran'),
+        content: SizedBox(
+          width: 380,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                  'Pastikan metode dan nominal sesuai dengan uang/voucher yang diterima.'),
+              const SizedBox(height: 12),
+              for (final slot in metode)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(slot.caraBayar.nama)),
+                      Text(rupiah.format(slot.nominal)),
+                    ],
+                  ),
+                ),
+              const Divider(),
+              Row(
+                children: [
+                  const Expanded(
+                      child: Text('Total transaksi',
+                          style: TextStyle(fontWeight: FontWeight.bold))),
+                  Text(rupiah.format(_total),
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                  'Jika ada yang tidak sesuai, kembali dan ubah pembayarannya sebelum transaksi diproses.'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Kembali, periksa lagi'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Sesuai, lanjutkan'),
+          ),
+        ],
+      ),
+    );
+    return setuju == true;
+  }
+
   Future<void> _bayar() async {
     // Pertahanan terhadap pintasan F2/race: member baru memicu pemuatan ulang
     // aturan pembayaran. Jangan pernah mengirim transaksi memakai snapshot
@@ -2013,6 +2074,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     String? kodePercobaan;
     setStateIfMounted(() => _memproses = true);
     try {
+      if (!await _konfirmasiRincianPembayaran()) return;
       // Gerbang ini WAJIB berada sebelum pembuatan kode transaksi, verifikasi
       // biometrik/PIN, simpanTransaksiPending, dan aksi bayar. Jika saldo tidak
       // cukup atau server tidak dapat dihubungi, keranjang tetap utuh dan tidak
@@ -2027,8 +2089,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       if (buktiBiometrik == null) return;
       final waktu =
           widget.draftIdSumber == null ? DateTime.now() : _waktuTransaksi;
-      final payload =
-          _buatPayload(kodeUnik, waktu, sertakanStatusPelayanan: true);
+      final payload = payloadBayarAman(
+        _buatPayload(kodeUnik, waktu, sertakanStatusPelayanan: true),
+        melanjutkanDraft: widget.draftIdSumber != null,
+      );
       payload.addAll(buktiBiometrik);
       final sesiKasLokal = await CoreDb.instance.sesiKasAktif();
       final kodeSesiKas = '${sesiKasLokal?['kode'] ?? ''}'.trim();

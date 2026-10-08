@@ -536,7 +536,7 @@ class ApiClient {
 
     if (!statusResponsSukses(json['status'])) {
       final gagal = ApiException(
-        '${json['message'] ?? json['description'] ?? 'Permintaan belum berhasil.'}',
+        pesanResponsGagal(json),
         // Respons JSON 5xx tetap gangguan teknis, bukan alasan menghapus data
         // lokal atau memvonis outbox gagal permanen.
         offline: gangguanSementaraStatusHttp(resp.statusCode),
@@ -609,6 +609,26 @@ class ApiClient {
   /// `success`. Keduanya merupakan kontrak sukses yang sah.
   static bool statusResponsSukses(Object? status) =>
       status == 'success' || status == '00';
+
+  /// Beberapa endpoint membungkus penolakan bisnis yang rinci (misalnya saldo
+  /// tidak mencukupi) dengan `message` generik, sementara alasan sebenarnya
+  /// disimpan pada `description`. Dahulukan alasan itu hanya saat `message`
+  /// kosong atau jelas merupakan pesan payung; pesan server yang spesifik
+  /// tetap menjadi sumber utama.
+  static String pesanResponsGagal(Map<String, dynamic> json) {
+    final message = '${json['message'] ?? ''}'.trim();
+    final description = '${json['description'] ?? ''}'.trim();
+    final messageLower = message.toLowerCase();
+    final messageGenerik = message.isEmpty ||
+        messageLower == 'permintaan belum berhasil.' ||
+        messageLower.startsWith('server belum dapat menyelesaikan proses') ||
+        messageLower.startsWith('proses belum berhasil') ||
+        messageLower == 'belum dapat diproses';
+    if (messageGenerik && description.isNotEmpty) return description;
+    if (message.isNotEmpty) return message;
+    if (description.isNotEmpty) return description;
+    return 'Permintaan belum berhasil.';
+  }
 
   Future<void> _catatKegagalan(ApiException gagal) async {
     final info = gagal.info;
