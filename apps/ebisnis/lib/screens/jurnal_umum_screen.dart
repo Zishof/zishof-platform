@@ -1447,6 +1447,262 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
     }
   }
 
+  Future<void> _cetakVoucher(Map<String, dynamic> j) async {
+    setStateIfMounted(() => _sibuk = true);
+    try {
+      var baris = (j['baris'] as List?)?.cast<Map<String, dynamic>>();
+      if (baris == null || baris.isEmpty) {
+        final d = await ApiClient.instance
+            .aksi('jurnal_umum_detail', {'id': j['id']});
+        baris = ((d['baris'] as List?) ?? []).cast<Map<String, dynamic>>();
+      }
+
+      final namaToko = Sesi.instance.namaTokoFilter.isNotEmpty &&
+              Sesi.instance.namaTokoFilter != 'Semua Toko'
+          ? Sesi.instance.namaTokoFilter
+          : (Sesi.instance.tokoNama.isNotEmpty
+              ? Sesi.instance.tokoNama
+              : 'Toko Al-Bahjah');
+
+      final kode = '${j['kode'] ?? '-'}';
+      final tanggal = '${j['tanggal'] ?? '-'}';
+      final keterangan = '${j['keterangan'] ?? '-'}';
+      final d = (j['totalDebet'] as num?)?.toDouble() ?? 0.0;
+      final k = (j['totalKredit'] as num?)?.toDouble() ?? 0.0;
+
+      final pdf = pw.Document();
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(32),
+          build: (pw.Context context) {
+            final tableRows = <pw.TableRow>[
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                children: [
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('No',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('Kode Akun',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('Nama Perkiraan / Akun',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('Keterangan Baris',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('Debet (Rp)',
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('Kredit (Rp)',
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                ],
+              ),
+            ];
+
+            int no = 1;
+            for (final b in (baris ?? [])) {
+              final dLine = (b['debet'] as num?)?.toDouble() ?? 0.0;
+              final kLine = (b['kredit'] as num?)?.toDouble() ?? 0.0;
+              tableRows.add(
+                pw.TableRow(
+                  children: [
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text('$no',
+                            style: const pw.TextStyle(fontSize: 8.5))),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text('${b['kodeAkun'] ?? ''}',
+                            style: const pw.TextStyle(fontSize: 8.5))),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text('${b['namaAkun'] ?? ''}',
+                            style: const pw.TextStyle(fontSize: 8.5))),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text('${b['keterangan'] ?? ''}',
+                            style: const pw.TextStyle(fontSize: 8.5))),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text(dLine > 0 ? _rp(dLine) : '-',
+                            textAlign: pw.TextAlign.right,
+                            style: const pw.TextStyle(fontSize: 8.5))),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text(kLine > 0 ? _rp(kLine) : '-',
+                            textAlign: pw.TextAlign.right,
+                            style: const pw.TextStyle(fontSize: 8.5))),
+                  ],
+                ),
+              );
+              no++;
+            }
+
+            tableRows.add(
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+                children: [
+                  pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('')),
+                  pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('')),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('TOTAL',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('')),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text(_rp(d),
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text(_rp(k),
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                ],
+              ),
+            );
+
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(namaToko,
+                            style: pw.TextStyle(
+                                fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                        pw.SizedBox(height: 2),
+                        pw.Text('BUKTI VOUCHER TRANSAKSI KAS & BANK',
+                            style: pw.TextStyle(
+                                fontSize: 12,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.blueGrey800)),
+                      ],
+                    ),
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.end,
+                      children: [
+                        pw.Text('No. Voucher: $kode',
+                            style: pw.TextStyle(
+                                fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                        pw.Text('Tanggal: $tanggal',
+                            style: const pw.TextStyle(fontSize: 10)),
+                        pw.Text(
+                            'Status: ${j['terposting'] == true ? 'TERPOSTING' : 'DRAF'}',
+                            style: pw.TextStyle(
+                                fontSize: 9,
+                                fontWeight: pw.FontWeight.bold,
+                                color: j['terposting'] == true
+                                    ? PdfColors.green800
+                                    : PdfColors.orange800)),
+                      ],
+                    ),
+                  ],
+                ),
+                pw.Divider(height: 16, thickness: 1),
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                  child: pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.SizedBox(
+                          width: 100,
+                          child: pw.Text('Keterangan / Uraian:',
+                              style: pw.TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: pw.FontWeight.bold))),
+                      pw.Expanded(
+                          child: pw.Text(keterangan,
+                              style: const pw.TextStyle(fontSize: 9))),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(height: 10),
+                pw.Table(
+                  border:
+                      pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+                  columnWidths: const {
+                    0: pw.FlexColumnWidth(0.6),
+                    1: pw.FlexColumnWidth(2),
+                    2: pw.FlexColumnWidth(3.5),
+                    3: pw.FlexColumnWidth(3.5),
+                    4: pw.FlexColumnWidth(2),
+                    5: pw.FlexColumnWidth(2),
+                  },
+                  children: tableRows,
+                ),
+                pw.SizedBox(height: 36),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    _kolomTandaTanganPdf('Dibuat Oleh:', '( Kasir / Staf )'),
+                    _kolomTandaTanganPdf(
+                        'Diperiksa Oleh:', '( Akuntansi / Admin )'),
+                    _kolomTandaTanganPdf(
+                        'Disetujui Oleh:', '( Pimpinan / Manager )'),
+                    _kolomTandaTanganPdf('Diterima Oleh:', '( Penerima Dana )'),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+      );
+
+      await Printing.layoutPdf(
+        onLayout: (_) async => pdf.save(),
+        name: 'Voucher_$kode.pdf',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal mencetak Voucher: $e')),
+        );
+      }
+    } finally {
+      setStateIfMounted(() => _sibuk = false);
+    }
+  }
+
+  static pw.Widget _kolomTandaTanganPdf(String judul, String nama) {
+    return pw.Container(
+      width: 110,
+      child: pw.Column(
+        children: [
+          pw.Text(judul, style: const pw.TextStyle(fontSize: 9)),
+          pw.SizedBox(height: 48),
+          pw.Container(height: 0.5, color: PdfColors.black),
+          pw.SizedBox(height: 3),
+          pw.Text(nama, style: const pw.TextStyle(fontSize: 8)),
+        ],
+      ),
+    );
+  }
+
   String _rp(num? v) => _fmtAngka.format((v ?? 0).round());
 
   @override
@@ -1541,6 +1797,33 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2)),
             ]),
+        if (draf > 0 && _status == 'terposting')
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.amber.shade400),
+            ),
+            child: Row(children: [
+              Icon(Icons.info_outline, color: Colors.amber.shade800, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Terdapat $draf Draf Jurnal pada periode ini yang belum diposting (tersembunyi karena filter "Terposting saja").',
+                  style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  setStateIfMounted(() => _status = '');
+                  _muat();
+                },
+                child: const Text('Tampilkan Semua'),
+              ),
+            ]),
+          ),
         const SizedBox(height: 8),
         // Nominal debet/kredit dari salinan tersimpan wajib dinyatakan
         // terang-terangan.
@@ -1630,6 +1913,12 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
                                   onTap: _sibuk
                                       ? null
                                       : () => _bukaEditor(jurnal: j)),
+                              AksiBaris(
+                                  ikon: Icons.receipt_long_outlined,
+                                  label: 'Cetak Voucher',
+                                  onTap: _sibuk
+                                      ? null
+                                      : () => _cetakVoucher(j)),
                               // Posting dan Batalkan posting dahulu saling
                               // menggantikan; kini keduanya tetap tampil dan yang
                               // tidak berlaku hanya diredupkan.
@@ -1707,6 +1996,8 @@ class _EditorJurnalState extends State<_EditorJurnal> {
   final _fmtTanggal = DateFormat('yyyy-MM-dd');
   final _fmtAngka = NumberFormat.decimalPattern('id');
   final _keterangan = TextEditingController();
+  final _penerima = TextEditingController();
+  final _nomorCek = TextEditingController();
   final List<_BarisJurnal> _baris = [];
   DateTime _tanggal = DateTime.now();
   int? _jenisId;
@@ -1722,7 +2013,21 @@ class _EditorJurnalState extends State<_EditorJurnal> {
     super.initState();
     final k = widget.kepala;
     if (k != null) {
-      _keterangan.text = '${k['keterangan'] ?? ''}';
+      String ket = '${k['keterangan'] ?? ''}';
+      // Ekstrak tag penerima dan no ref jika ada
+      final regPenerima = RegExp(r'\(Penerima:\s*([^\)]+)\)');
+      final regCek = RegExp(r'\[No Cek/Ref:\s*([^\]]+)\]');
+      final mPen = regPenerima.firstMatch(ket);
+      if (mPen != null) {
+        _penerima.text = mPen.group(1)?.trim() ?? '';
+        ket = ket.replaceAll(regPenerima, '').trim();
+      }
+      final mCek = regCek.firstMatch(ket);
+      if (mCek != null) {
+        _nomorCek.text = mCek.group(1)?.trim() ?? '';
+        ket = ket.replaceAll(regCek, '').trim();
+      }
+      _keterangan.text = ket;
       final t = '${k['tanggal'] ?? ''}';
       if (t.isNotEmpty) {
         _tanggal = DateTime.tryParse(t) ?? DateTime.now();
@@ -1759,6 +2064,8 @@ class _EditorJurnalState extends State<_EditorJurnal> {
   @override
   void dispose() {
     _keterangan.dispose();
+    _penerima.dispose();
+    _nomorCek.dispose();
     for (final b in _baris) {
       b.buang();
     }
@@ -1858,7 +2165,7 @@ class _EditorJurnalState extends State<_EditorJurnal> {
     });
   }
 
-  Future<void> _simpan() async {
+  Future<void> _simpan({bool postingLangsung = false}) async {
     // Diperiksa di layar lebih dulu supaya penggunanya menerima alasan yang
     // TEPAT seketika. Sebelumnya penolakan server sempat tersamar menjadi pesan
     // generik, dan itulah yang membuat pengguna mengira jurnal tidak bisa diinput.
@@ -1886,6 +2193,18 @@ class _EditorJurnalState extends State<_EditorJurnal> {
           'keterangan': b.keterangan.text.trim(),
         });
       }
+
+      // Format keterangan lengkap menyertakan informasi penerima transfer & no cek
+      String ketFinal = _keterangan.text.trim();
+      final pen = _penerima.text.trim();
+      final noC = _nomorCek.text.trim();
+      if (pen.isNotEmpty) {
+        ketFinal += ' (Penerima: $pen)';
+      }
+      if (noC.isNotEmpty) {
+        ketFinal += ' [No Cek/Ref: $noC]';
+      }
+
       // Lokal-dulu untuk PENYIMPANAN draf jurnal. Yang tetap wajib daring adalah
       // POSTING-nya (jurnal_umum_posting) -- itu "journal posting" pada spec 13.3
       // dan dikunci uji master_offline_kontrak_test. Menyimpan draf tidak memakai
@@ -1900,14 +2219,14 @@ class _EditorJurnalState extends State<_EditorJurnal> {
         rowLokal: {
           if (widget.kepala?['id'] != null) 'id': widget.kepala!['id'],
           'tanggal': _fmtTanggal.format(_tanggal),
-          'keterangan': _keterangan.text.trim(),
+          'keterangan': ketFinal,
           if (_workspaceId != null) 'workspaceIdTeks': _workspaceId,
           if (_anggaranNama != null) 'workspaceNama': _anggaranNama,
         },
         body: {
           if (widget.kepala?['id'] != null) 'id': widget.kepala!['id'],
           'tanggal': _fmtTanggal.format(_tanggal),
-          'keterangan': _keterangan.text.trim(),
+          'keterangan': ketFinal,
           'jenisTransaksiId': _jenisId ?? 0,
           if (_workspaceId != null) 'workspaceIdTeks': _workspaceId,
           'baris': baris,
@@ -1919,6 +2238,34 @@ class _EditorJurnalState extends State<_EditorJurnal> {
             () => _pesan = '${hasil['message'] ?? 'Gagal menyimpan.'}');
         return;
       }
+
+      // Jika pengguna memilih Simpan & Posting Langsung, eksekusi posting ke buku besar
+      if (postingLangsung) {
+        final idJurnal = hasil['id'] ?? widget.kepala?['id'];
+        if (idJurnal != null) {
+          try {
+            final resPost = await ApiClient.instance.aksi('jurnal_umum_posting', {'id': idJurnal});
+            if (mounted && ApiClient.statusResponsSukses(resPost['status'])) {
+              final messenger = ScaffoldMessenger.of(context);
+              Navigator.of(context).pop(true);
+              messenger.showSnackBar(
+                  SnackBar(content: Text('Jurnal ${hasil['kode'] ?? ''} berhasil disimpan dan langsung diposting ke buku besar.')));
+              return;
+            }
+          } catch (ePost) {
+            // Jika posting gagal (misal koneksi atau validasi), jurnal tetap tersimpan sebagai draf
+            if (mounted) {
+              final messenger = ScaffoldMessenger.of(context);
+              Navigator.of(context).pop(true);
+              messenger.showSnackBar(
+                  SnackBar(content: Text('Jurnal tersimpan sebagai draf, namun gagal diposting otomatis: $ePost')));
+              return;
+            }
+          }
+        }
+      }
+
+      if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
       Navigator.of(context).pop(true);
       messenger.showSnackBar(
@@ -2009,12 +2356,32 @@ class _EditorJurnalState extends State<_EditorJurnal> {
                     ),
                   ),
                   SizedBox(
-                    width: 340,
+                    width: 320,
                     child: TextField(
                       controller: _keterangan,
                       readOnly: _terkunci,
                       decoration: const InputDecoration(
                           labelText: 'Keterangan jurnal *', isDense: true),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 280,
+                    child: TextField(
+                      controller: _penerima,
+                      readOnly: _terkunci,
+                      decoration: const InputDecoration(
+                          labelText: 'Penerima / Dibayarkan Kepada (opsional)',
+                          isDense: true),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 220,
+                    child: TextField(
+                      controller: _nomorCek,
+                      readOnly: _terkunci,
+                      decoration: const InputDecoration(
+                          labelText: 'No Cek / Giro / Bukti Ref (opsional)',
+                          isDense: true),
                     ),
                   ),
                   SizedBox(
@@ -2202,17 +2569,29 @@ class _EditorJurnalState extends State<_EditorJurnal> {
                   onPressed: () => Navigator.of(context).pop(false),
                   child: Text(_terkunci ? 'Tutup' : 'Batal')),
               const SizedBox(width: 8),
-              if (!_terkunci)
+              if (!_terkunci) ...[
+                OutlinedButton.icon(
+                  onPressed: _menyimpan || !_seimbang
+                      ? null
+                      : () => _simpan(postingLangsung: false),
+                  icon: const Icon(Icons.save_outlined, size: 18),
+                  label: const Text('Simpan Draf'),
+                ),
+                const SizedBox(width: 8),
                 FilledButton.icon(
-                  onPressed: _menyimpan || !_seimbang ? null : _simpan,
+                  onPressed: _menyimpan || !_seimbang
+                      ? null
+                      : () => _simpan(postingLangsung: true),
                   icon: _menyimpan
                       ? const SizedBox(
                           width: 16,
                           height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.save_outlined, size: 18),
-                  label: const Text('Simpan sebagai Draf'),
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.check_circle_outline, size: 18),
+                  label: const Text('Simpan & Posting Langsung'),
                 ),
+              ],
             ]),
           ]),
         ),

@@ -795,12 +795,36 @@ class _TabelLaporanState extends State<_TabelLaporan> {
       final dimensi = adaRentang
           ? _dimensiBaris(kolom, baris, widget.idLaporan, kolomKe)
           : const <String, dynamic>{};
+      // Deteksi nomor jurnal atau bukti transaksi
+      String noJurnalDitemukan = '';
+      for (var ci = 0; ci < kolom.length; ci++) {
+        final labelCol = '${kolom[ci]['l'] ?? ''}'.toLowerCase();
+        if (labelCol.contains('jurnal') || labelCol.contains('bukti') || labelCol.contains('transaksi')) {
+          if (ci < baris.length && baris[ci] != null && '${baris[ci]}'.trim().isNotEmpty && '${baris[ci]}' != '-') {
+            noJurnalDitemukan = '${baris[ci]}'.trim();
+            break;
+          }
+        }
+      }
+
+      // Deteksi kode akun akuntansi
+      final apakahLaporanAkuntansi = widget.idLaporan.startsWith('akn_') || widget.idLaporan.startsWith('lk_');
+      String kodeAkunDitemukan = '';
+      if (apakahLaporanAkuntansi && judul.isNotEmpty) {
+        final match = RegExp(r'\b[1-9]\d{3,7}\b').firstMatch(judul);
+        if (match != null) {
+          kodeAkunDitemukan = match.group(0)!;
+        } else if (judul.contains('-')) {
+          kodeAkunDitemukan = judul.split('-').first.trim();
+        }
+      }
+
       await showDialog<void>(
         context: context,
         builder: (c) => AlertDialog(
           title: Text('Asal Angka: $judul'),
           content: SizedBox(
-            width: dimensi.isEmpty ? 460 : 860,
+            width: dimensi.isEmpty ? 500 : 860,
             height: dimensi.isEmpty ? null : 460,
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -825,13 +849,19 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                     ]),
                   ),
                 if (dimensi.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 10),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
                     child: Text(
-                        'Angka ini tidak berasal dari transaksi penjualan '
-                        '(mis. stok atau data master), sehingga tidak ada '
-                        'nota penyusun yang bisa ditampilkan.',
-                        style: TextStyle(fontSize: 11)),
+                        apakahLaporanAkuntansi
+                            ? (kodeAkunDitemukan.isNotEmpty
+                                ? 'Tekan tombol "Telusuri Mutasi Buku Besar" di bawah untuk melihat mutasi dan voucher jurnal akun ini.'
+                                : (noJurnalDitemukan.isNotEmpty
+                                    ? 'Tekan tombol "Buka Voucher Jurnal" di bawah untuk melihat rincian transaksi debet-kredit.'
+                                    : 'Data ini merupakan ringkasan saldo akun akuntansi.'))
+                            : 'Angka ini tidak berasal dari transaksi penjualan '
+                                '(mis. stok atau data master), sehingga tidak ada '
+                                'nota penyusun yang bisa ditampilkan.',
+                        style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
                   ),
                 if (dimensi.isNotEmpty) ...[
                   const Divider(height: 22),
@@ -856,6 +886,24 @@ class _TabelLaporanState extends State<_TabelLaporan> {
             ),
           ),
           actions: [
+            if (kodeAkunDitemukan.isNotEmpty && widget.idLaporan != 'akn_buku_besar')
+              FilledButton.icon(
+                icon: const Icon(Icons.menu_book, size: 16),
+                label: const Text('Telusuri Mutasi Buku Besar'),
+                onPressed: () {
+                  Navigator.pop(c);
+                  _bukaBukuBesarAkun(context, kodeAkunDitemukan, judul);
+                },
+              ),
+            if (noJurnalDitemukan.isNotEmpty)
+              FilledButton.icon(
+                icon: const Icon(Icons.receipt_long, size: 16),
+                label: const Text('Buka Voucher Jurnal'),
+                onPressed: () {
+                  Navigator.pop(c);
+                  _bukaVoucherJurnal(context, noJurnalDitemukan);
+                },
+              ),
             TextButton(
                 onPressed: () => Navigator.pop(c), child: const Text('Tutup'))
           ],
@@ -948,6 +996,366 @@ class _TabelLaporanState extends State<_TabelLaporan> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(c), child: const Text('Tutup'))
+        ],
+      ),
+    );
+  }
+
+  Future<void> _bukaVoucherJurnal(BuildContext context, String noJurnal) async {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.receipt_long, color: Colors.blue),
+            const SizedBox(width: 8),
+            Expanded(
+                child: Text('Voucher Jurnal Transaksi: $noJurnal',
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold))),
+          ],
+        ),
+        content: SizedBox(
+          width: 780,
+          height: 480,
+          child: FutureBuilder<Map<String, dynamic>>(
+            future: ApiClient.instance
+                .aksi('jurnal_umum_detail', {'kode': noJurnal}),
+            builder: (c, snap) {
+              if (snap.connectionState != ConnectionState.done) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snap.hasError ||
+                  snap.data == null ||
+                  snap.data!['status'] == '99') {
+                final msg = snap.data?['message'] ??
+                    snap.error?.toString() ??
+                    'Transaksi tidak ditemukan.';
+                return Center(
+                    child: Text('Gagal memuat rincian voucher: $msg'));
+              }
+              final d = snap.data!;
+              final kepala =
+                  (d['kepala'] as Map?)?.cast<String, dynamic>() ?? {};
+              final baris = ((d['baris'] as List?) ?? [])
+                  .cast<Map<String, dynamic>>();
+              final fmtRp = NumberFormat.decimalPattern('id');
+
+              double totDebet = 0;
+              double totKredit = 0;
+              for (final b in baris) {
+                totDebet += (b['debet'] as num?)?.toDouble() ?? 0;
+                totKredit += (b['kredit'] as num?)?.toDouble() ?? 0;
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(ctx)
+                          .colorScheme
+                          .surfaceVariant
+                          .withOpacity(0.4),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                                'Nomor Bukti: ${kepala['kode'] ?? noJurnal}',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13)),
+                            const Spacer(),
+                            Text('Tanggal: ${kepala['tanggal'] ?? '-'}',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13)),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text('Keterangan: ${kepala['keterangan'] ?? '-'}',
+                            style: const TextStyle(fontSize: 12.5)),
+                        if ('${kepala['workspaceLabel'] ?? ''}'.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                                'Mata Anggaran: ${kepala['workspaceLabel']}',
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.blueGrey)),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                      'Rincian Pos Transaksi (Debet - Kredit Seimbang):',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 6),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: DataTable(
+                        columnSpacing: 16,
+                        headingRowHeight: 38,
+                        columns: const [
+                          DataColumn(
+                              label: Text('Kode Akun',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(
+                              label: Text('Nama Akun',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(
+                              label: Text('Debet (Rp)',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold)),
+                              numeric: true),
+                          DataColumn(
+                              label: Text('Kredit (Rp)',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold)),
+                              numeric: true),
+                          DataColumn(
+                              label: Text('Keterangan',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold))),
+                        ],
+                        rows: [
+                          for (final b in baris)
+                            DataRow(cells: [
+                              DataCell(Text('${b['kodeAkun'] ?? '-'}',
+                                  style: const TextStyle(
+                                      fontFamily: 'monospace', fontSize: 12))),
+                              DataCell(Text('${b['namaAkun'] ?? '-'}',
+                                  style: const TextStyle(fontSize: 12))),
+                              DataCell(Text(
+                                (b['debet'] as num?)?.toDouble() != null &&
+                                        (b['debet'] as num) > 0
+                                    ? fmtRp.format(
+                                        (b['debet'] as num).toDouble())
+                                    : '-',
+                                style: const TextStyle(
+                                    fontFamily: 'monospace', fontSize: 12),
+                              )),
+                              DataCell(Text(
+                                (b['kredit'] as num?)?.toDouble() != null &&
+                                        (b['kredit'] as num) > 0
+                                    ? fmtRp.format(
+                                        (b['kredit'] as num).toDouble())
+                                    : '-',
+                                style: const TextStyle(
+                                    fontFamily: 'monospace', fontSize: 12),
+                              )),
+                              DataCell(Text('${b['keterangan'] ?? ''}',
+                                  style: const TextStyle(fontSize: 12))),
+                            ]),
+                          DataRow(
+                            color: MaterialStateProperty.all(Theme.of(ctx)
+                                .colorScheme
+                                .surfaceVariant
+                                .withOpacity(0.5)),
+                            cells: [
+                              const DataCell(Text('TOTAL',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold))),
+                              const DataCell(Text('')),
+                              DataCell(Text(fmtRp.format(totDebet),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontFamily: 'monospace'))),
+                              DataCell(Text(fmtRp.format(totKredit),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontFamily: 'monospace'))),
+                              DataCell(Text(
+                                (totDebet - totKredit).abs() < 0.01
+                                    ? 'SEIMBANG'
+                                    : 'SELISIH: ${fmtRp.format((totDebet - totKredit).abs())}',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: (totDebet - totKredit).abs() < 0.01
+                                        ? Colors.green
+                                        : Colors.red),
+                              )),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Tutup'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _bukaBukuBesarAkun(
+      BuildContext context, String kodeAkun, String labelAkun) async {
+    final payload = Map<String, dynamic>.from(widget.payloadFilter);
+    payload['r'] = 'akn_buku_besar';
+    payload['qProduk'] = kodeAkun;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.menu_book, color: Colors.indigo),
+            const SizedBox(width: 8),
+            Expanded(
+                child: Text('Mutasi Buku Besar: $labelAkun',
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold))),
+          ],
+        ),
+        content: SizedBox(
+          width: 880,
+          height: 480,
+          child: FutureBuilder<Map<String, dynamic>>(
+            future: ApiClient.instance.aksi('laporan_jalankan', payload),
+            builder: (c, snap) {
+              if (snap.connectionState != ConnectionState.done) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snap.hasError || snap.data == null) {
+                return Center(
+                    child: Text(
+                        'Gagal memuat mutasi buku besar: ${snap.error}'));
+              }
+              final d = snap.data!;
+              final rows =
+                  ((d['baris'] as List?) ?? []).cast<List<dynamic>>();
+              if (rows.isEmpty) {
+                return const Center(
+                    child: Text(
+                        'Tidak ada mutasi buku besar untuk akun ini pada periode yang dipilih.'));
+              }
+              final fmtRp = NumberFormat.decimalPattern('id');
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                      'Pilih "Voucher" pada salah satu baris untuk membuka Bukti Transaksi:',
+                      style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SingleChildScrollView(
+                        child: DataTable(
+                          columnSpacing: 16,
+                          headingRowHeight: 38,
+                          columns: const [
+                            DataColumn(
+                                label: Text('Tanggal',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold))),
+                            DataColumn(
+                                label: Text('No. Jurnal',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold))),
+                            DataColumn(
+                                label: Text('Keterangan',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold))),
+                            DataColumn(
+                                label: Text('Debet (Rp)',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold)),
+                                numeric: true),
+                            DataColumn(
+                                label: Text('Kredit (Rp)',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold)),
+                                numeric: true),
+                            DataColumn(
+                                label: Text('Aksi',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold))),
+                          ],
+                          rows: [
+                            for (final r in rows)
+                              DataRow(cells: [
+                                DataCell(Text(
+                                    r.length > 1 ? '${r[1] ?? ''}' : '',
+                                    style: const TextStyle(fontSize: 12))),
+                                DataCell(Text(
+                                    r.length > 2 ? '${r[2] ?? ''}' : '',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontFamily: 'monospace',
+                                        fontSize: 12))),
+                                DataCell(Text(
+                                    r.length > 3 ? '${r[3] ?? ''}' : '',
+                                    style: const TextStyle(fontSize: 12))),
+                                DataCell(Text(
+                                  r.length > 4 &&
+                                          r[4] is num &&
+                                          (r[4] as num) > 0
+                                      ? fmtRp
+                                          .format((r[4] as num).toDouble())
+                                      : '-',
+                                  style: const TextStyle(
+                                      fontFamily: 'monospace', fontSize: 12),
+                                )),
+                                DataCell(Text(
+                                  r.length > 5 &&
+                                          r[5] is num &&
+                                          (r[5] as num) > 0
+                                      ? fmtRp
+                                          .format((r[5] as num).toDouble())
+                                      : '-',
+                                  style: const TextStyle(
+                                      fontFamily: 'monospace', fontSize: 12),
+                                )),
+                                DataCell(
+                                  OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                        visualDensity: VisualDensity.compact),
+                                    onPressed: r.length > 2 &&
+                                            '${r[2] ?? ''}'.trim().isNotEmpty &&
+                                            '${r[2]}' != '-'
+                                        ? () => _bukaVoucherJurnal(
+                                            context, '${r[2]}'.trim())
+                                        : null,
+                                    icon: const Icon(Icons.receipt_long,
+                                        size: 14),
+                                    label: const Text('Voucher',
+                                        style: TextStyle(fontSize: 11)),
+                                  ),
+                                ),
+                              ]),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Tutup'),
+          ),
         ],
       ),
     );
