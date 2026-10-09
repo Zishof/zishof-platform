@@ -1687,7 +1687,6 @@ class CoreDb {
     return maxUrutan;
   }
 
-
   Future<void> tandaiTransaksiGagal(String kodeUnik, String pesanError) async {
     final database = await db;
     await database.rawUpdate(
@@ -1750,6 +1749,30 @@ class CoreDb {
       whereArgs: [kodeUnik],
     );
     if (berubah > 0) await _cadangkanBarisTransaksi(kodeUnik);
+    return berubah > 0;
+  }
+
+  /// Mengganti kode unik transaksi pending yang bentrok di server dengan kode baru yang unik.
+  Future<bool> gantiKodeUnikTransaksi(
+      String kodeLama, String kodeBaru, String payloadBaruJson) async {
+    final database = await db;
+    final sekarang = DateTime.now().toIso8601String();
+    final berubah = await database.update(
+      'transaksi_pending',
+      {
+        'kode_unik': kodeBaru,
+        'payload_json': payloadBaruJson,
+        'status': 'PENDING',
+        'pesan_error': null,
+        'percobaan': 0,
+        'terakhir_dicoba': null,
+        'disinkronkan_pada': null,
+        'diperbarui_pada': sekarang,
+      },
+      where: "kode_unik = ? AND status != 'SYNCED'",
+      whereArgs: [kodeLama],
+    );
+    if (berubah > 0) await _cadangkanBarisTransaksi(kodeBaru);
     return berubah > 0;
   }
 
@@ -1895,6 +1918,43 @@ class CoreDb {
     final database = await db;
     await database.delete('transaksi_pending',
         where: 'kode_unik = ?', whereArgs: [kodeUnik]);
+  }
+
+  /// Menghapus satu transaksi PENDING/GAGAL hanya setelah pemanggil memastikan
+  /// transaksi tersebut tidak tercatat pada server. Status diperiksa kembali
+  /// secara atomik agar baris yang berubah menjadi SYNCED tidak ikut terhapus.
+  /// Tombstone disimpan supaya pemulihan arsip tidak menghidupkan nota batal.
+  Future<bool> hapusTransaksiBelumTerkirimTerverifikasiTidakAdaDiServer(
+    String kodeUnik, {
+    required String pelaku,
+  }) async {
+    final database = await db;
+    final sekarang = DateTime.now().toIso8601String();
+    final terhapus = await database.transaction((txn) async {
+      final rows = await txn.query(
+        'transaksi_pending',
+        columns: const ['kode_unik'],
+        where: "kode_unik = ? AND status IN ('PENDING', 'GAGAL')",
+        whereArgs: [kodeUnik],
+        limit: 1,
+      );
+      if (rows.isEmpty) return false;
+      final jumlah = await txn.delete(
+        'transaksi_pending',
+        where: "kode_unik = ? AND status IN ('PENDING', 'GAGAL')",
+        whereArgs: [kodeUnik],
+      );
+      return jumlah == 1;
+    });
+    if (!terhapus) return false;
+    await _cadangkanTransaksiPersisten(<String, Object?>{
+      'kode_unik': kodeUnik,
+      'dihapus': true,
+      'alasan': 'DIBATALKAN_SETELAH_VERIFIKASI_TIDAK_ADA_DI_SERVER',
+      'dibatalkan_pada': sekarang,
+      'dibatalkan_oleh': pelaku.trim(),
+    });
+    return true;
   }
 
   /// Menghapus transaksi yang telah dipastikan tidak ada pada arsip server.

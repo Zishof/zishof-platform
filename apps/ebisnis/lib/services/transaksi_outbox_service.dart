@@ -10,6 +10,7 @@ import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
 import 'pelayanan_transaksi.dart';
+import 'pengaturan_nomor_struk.dart';
 import 'peringatan_transaksi.dart';
 
 /// Pengirim ulang transaksi POS yang sudah ditulis ke SQLite sebelum request
@@ -80,6 +81,7 @@ class TransaksiOutboxService {
     required Duration jedaRetry,
   })? _jalankanUji;
   Future<HasilSinkronisasiTransaksi>? _manualMenunggu;
+  final Map<String, Future<void>> _pekerjaanPerKode = <String, Future<void>>{};
 
   static final TransaksiOutboxService instance = TransaksiOutboxService._();
 
@@ -274,6 +276,49 @@ class TransaksiOutboxService {
           'Transaksi tidak dapat dikoreksi karena statusnya sudah berubah.');
     }
     kirimDiBackground();
+  }
+
+  /// Memperbarui nomor nota transaksi pending yang bentrok di server pusat dengan nomor nota baru yang unik,
+  /// lalu langsung mengirimkannya secara paksa ke server.
+  Future<HasilKirimManual> perbaruiNomorNotaDanKirim(String kodeLama) async {
+    final kode = kodeLama.trim();
+    if (kode.isEmpty) {
+      return const HasilKirimManual(
+          total: 0, berhasil: 0, pesan: 'Kode transaksi tidak dikenali.');
+    }
+    final row = await CoreDb.instance.transaksiLokalDenganKode(kode);
+    if (row == null) {
+      return HasilKirimManual(
+          total: 0,
+          berhasil: 0,
+          pesan: 'Transaksi $kode tidak ada di perangkat ini.');
+    }
+    final payload = Map<String, dynamic>.from(
+        jsonDecode('${row['payload_json'] ?? '{}'}') as Map);
+
+    // Buat kode baru unik
+    final kodeBaru = await PengaturanNomorStruk.instance.buatNomor();
+    final kodeEfektif = (kodeBaru.trim().isEmpty || kodeBaru.trim() == kode)
+        ? '$kode-R${DateTime.now().millisecondsSinceEpoch % 1000}'
+        : kodeBaru.trim();
+
+    payload['kodeUnik'] = kodeEfektif;
+    payload['clientTrxId'] = kodeEfektif;
+    payload['kode_nota_asal'] = kode;
+
+    final sukses = await CoreDb.instance.gantiKodeUnikTransaksi(
+      kode,
+      kodeEfektif,
+      jsonEncode(payload),
+    );
+    if (!sukses) {
+      return const HasilKirimManual(
+          total: 1,
+          berhasil: 0,
+          pesan: 'Gagal memperbarui nomor nota di database lokal.');
+    }
+
+    return kirimSatuManual(kodeEfektif, paksa: true);
   }
 
   static const int intervalRetryMenitDefault = 10;
@@ -523,7 +568,7 @@ class TransaksiOutboxService {
     );
     var berhasil = 0;
     for (final row in pending) {
-      final vonis = await _kirimSatuBaris(row);
+      final vonis = await _kirimSatuBarisTerkunci(row);
       if (vonis == _VonisKirim.berhasil) berhasil++;
       if (vonis == _VonisKirim.berhentiSementara) break;
     }
@@ -605,7 +650,8 @@ class TransaksiOutboxService {
         payload['idToko'] = Sesi.instance.tokoId;
         payload['tokoId'] = Sesi.instance.tokoId;
       }
-      if ('${payload['kasir'] ?? ''}'.trim().isEmpty && Sesi.instance.userId.isNotEmpty) {
+      if ('${payload['kasir'] ?? ''}'.trim().isEmpty &&
+          Sesi.instance.userId.isNotEmpty) {
         payload['kasir'] = Sesi.instance.userId;
       }
       final hasilBayar = await ApiClient.instance.aksi('bayar', payload);
@@ -701,6 +747,214 @@ class TransaksiOutboxService {
     }
   }
 
+  Future<T> _denganKunciKode<T>(
+      String kode, Future<T> Function() operasional) async {
+    final sebelumnya = _pekerjaanPerKode[kode];
+    final giliranSaya = Completer<void>();
+    final penandaSaya = giliranSaya.future;
+    _pekerjaanPerKode[kode] = penandaSaya;
+    if (sebelumnya != null) await sebelumnya;
+    try {
+      return await operasional();
+    } finally {
+      if (identical(_pekerjaanPerKode[kode], penandaSaya)) {
+        _pekerjaanPerKode.remove(kode);
+      }
+      giliranSaya.complete();
+    }
+  }
+
+  Future<_VonisKirim> _kirimSatuBarisTerkunci(
+    Map<String, Object?> row, {
+    bool izinkanSudahTersinkron = false,
+  }) {
+    final kode = '${row['kode_unik'] ?? ''}'.trim();
+    return _denganKunciKode(kode, () async {
+      // Pengirim bisa saja sudah memuat baris sebelum pembatalan mengambil
+      // kunci. Baca ulang setelah kunci didapat agar baris yang baru saja
+      // dihapus tidak terkirim dari snapshot lama.
+      final terbaru = await CoreDb.instance.transaksiLokalDenganKode(kode);
+      if (terbaru == null) return _VonisKirim.dilewati;
+      final status = '${terbaru['status'] ?? ''}'.trim().toUpperCase();
+      if (status == 'SYNCED' && !izinkanSudahTersinkron) {
+        return _VonisKirim.dilewati;
+      }
+      return _kirimSatuBaris(terbaru);
+    });
+  }
+
+  /// Preflight tombol pembatalan: hanya mengizinkan tampilan tombol aktif bila
+  /// daftar server berhasil dibaca dan kode ini tidak ditemukan di tanggal
+  /// serta toko asalnya. Error pemeriksaan harus ditampilkan sebagai aksi
+  /// nonaktif oleh pemanggil, bukan dianggap sebagai transaksi yang tidak ada.
+  Future<bool> transaksiBolehDibatalkan(String kodeUnik) async {
+    final kode = kodeUnik.trim();
+    if (kode.isEmpty ||
+        !ApiClient.instance.sudahLogin ||
+        !Sesi.instance.bolehHapusPesanan) {
+      return false;
+    }
+    return _denganKunciKode<bool>(kode, () async {
+      final row = await CoreDb.instance.transaksiLokalDenganKode(kode);
+      if (row == null) return false;
+      final status = '${row['status'] ?? ''}'.trim().toUpperCase();
+      if (status != 'PENDING' && status != 'GAGAL') return false;
+      final tokoLokal = (row['toko_id'] as num?)?.toInt();
+      final payload = Map<String, dynamic>.from(
+          jsonDecode('${row['payload_json'] ?? '{}'}') as Map);
+      final nilaiToko = payload['tokoId'] ?? payload['idToko'] ?? tokoLokal;
+      final tokoId = nilaiToko is num
+          ? nilaiToko.toInt()
+          : int.tryParse('${nilaiToko ?? ''}');
+      if (tokoId == null || tokoId <= 0 || tokoId != Sesi.instance.tokoId) {
+        return false;
+      }
+      final tanggal = _tanggalTransaksi(payload['waktu']);
+      if (tanggal == null) return false;
+      return !await _periksaKodePadaServer(
+        kode: kode,
+        tokoId: tokoId,
+        tanggal: tanggal,
+      );
+    });
+  }
+
+  /// Batalkan hanya transaksi PENDING/GAGAL yang sudah dipastikan tidak ada di
+  /// arsip server. Pemeriksaan baca ini online-only demi integritas pembayaran;
+  /// kegagalan jaringan, hasil tak dikenal, atau baris yang berubah status menahan
+  /// penghapusan. Kunci per kode mencegah kirim ulang dari aplikasi ini berjalan
+  /// bersamaan dengan pemeriksaan dan penghapusan.
+  Future<void> batalkanTransaksiGagalBelumTerkirim(String kodeUnik) async {
+    final kode = kodeUnik.trim();
+    if (kode.isEmpty) throw ArgumentError('Kode transaksi tidak dikenali.');
+    if (!ApiClient.instance.sudahLogin) {
+      throw StateError('Sesi login belum siap untuk memeriksa transaksi.');
+    }
+    if (!Sesi.instance.bolehHapusPesanan) {
+      throw StateError(
+          'Hak pembatalan transaksi tidak tersedia untuk akun ini.');
+    }
+    await _denganKunciKode<void>(kode, () async {
+      final row = await CoreDb.instance.transaksiLokalDenganKode(kode);
+      if (row == null) {
+        throw StateError('Transaksi tidak ditemukan pada perangkat ini.');
+      }
+      final status = '${row['status'] ?? ''}'.trim().toUpperCase();
+      if (status != 'PENDING' && status != 'GAGAL') {
+        throw StateError(
+            'Transaksi yang sudah tercatat tidak dapat dibatalkan dari antrean lokal. Muat ulang status transaksi sebelum melanjutkan.');
+      }
+      final tokoLokal = (row['toko_id'] as num?)?.toInt();
+      final payload = Map<String, dynamic>.from(
+          jsonDecode('${row['payload_json'] ?? '{}'}') as Map);
+      final nilaiToko = payload['tokoId'] ?? payload['idToko'] ?? tokoLokal;
+      final tokoId = nilaiToko is num
+          ? nilaiToko.toInt()
+          : int.tryParse('${nilaiToko ?? ''}');
+      if (tokoId == null || tokoId <= 0 || tokoId != Sesi.instance.tokoId) {
+        throw StateError(
+            'Toko transaksi tidak sama dengan toko aktif. Minta supervisor membuka toko asal untuk memeriksanya.');
+      }
+      final tanggal = _tanggalTransaksi(payload['waktu']);
+      if (tanggal == null) {
+        throw StateError(
+            'Tanggal transaksi tidak terbaca; transaksi tidak dihapus demi keamanan.');
+      }
+
+      final ditemukan = await _periksaKodePadaServer(
+        kode: kode,
+        tokoId: tokoId,
+        tanggal: tanggal,
+      );
+      if (ditemukan) {
+        throw StateError(
+            'Transaksi ini sudah tercatat di server dan tidak dapat dibatalkan dari antrean lokal. Muat ulang Riwayat Penjualan.');
+      }
+      final terhapus = await CoreDb.instance
+          .hapusTransaksiBelumTerkirimTerverifikasiTidakAdaDiServer(
+        kode,
+        pelaku: Sesi.instance.userId,
+      );
+      if (!terhapus) {
+        throw StateError(
+            'Status transaksi berubah saat diperiksa. Muat ulang dan pastikan statusnya masih menunggu atau gagal.');
+      }
+    });
+  }
+
+  Future<bool> _periksaKodePadaServer({
+    required String kode,
+    required int tokoId,
+    required DateTime tanggal,
+  }) async {
+    const ukuranHalaman = 200;
+    final kodeNormal = kode.toLowerCase();
+    var halaman = 1;
+    var sudahDibaca = 0;
+    while (halaman <= 1000) {
+      final hasil =
+          await ApiClient.instance.aksi('transaksi_backup_toko_list', {
+        'toko_id': tokoId,
+        'tglMulai': _tanggal(tanggal),
+        'tglSampai': _tanggal(tanggal),
+        'page': halaman,
+        'pageSize': ukuranHalaman,
+      });
+      dynamic raw = hasil['data'];
+      if (raw is Map) {
+        raw = raw['rows'] ?? raw['items'] ?? raw['list'] ?? raw['data'];
+      }
+      raw ??= hasil['rows'] ??
+          hasil['items'] ??
+          hasil['list'] ??
+          hasil['transaksi'];
+      if (raw is! List) {
+        throw const FormatException(
+            'Daftar transaksi server tidak lengkap; pembatalan dihentikan.');
+      }
+      final baris = raw
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      if (baris.any((item) => _kodeServer(item).toLowerCase() == kodeNormal)) {
+        return true;
+      }
+      sudahDibaca += baris.length;
+      final dataMap = hasil['data'] is Map
+          ? Map<String, dynamic>.from(hasil['data'] as Map)
+          : const <String, dynamic>{};
+      final totalRaw = hasil['total'] ??
+          hasil['totalData'] ??
+          hasil['totalRows'] ??
+          hasil['recordsTotal'] ??
+          hasil['count'] ??
+          dataMap['total'] ??
+          dataMap['totalData'] ??
+          dataMap['totalRows'] ??
+          dataMap['recordsTotal'] ??
+          dataMap['count'];
+      final total =
+          totalRaw is num ? totalRaw.toInt() : int.tryParse('$totalRaw');
+      if (total != null && sudahDibaca >= total) return false;
+      if (baris.length < ukuranHalaman) return false;
+      halaman++;
+    }
+    throw StateError(
+        'Pemeriksaan server melebihi batas halaman; transaksi tidak dihapus.');
+  }
+
+  DateTime? _tanggalTransaksi(Object? nilai) {
+    final teks = '${nilai ?? ''}'.trim();
+    final iso = DateTime.tryParse(teks);
+    if (iso != null) return iso;
+    final cocok = RegExp(r'^(\d{2})[-/](\d{2})[-/](\d{4})').firstMatch(teks);
+    if (cocok != null) {
+      return DateTime.tryParse(
+          '${cocok.group(3)}-${cocok.group(2)}-${cocok.group(1)}');
+    }
+    return null;
+  }
+
   /// Kirim ulang SATU transaksi tertentu atas permintaan pengguna.
   ///
   /// Berbeda dari sapuan otomatis, jeda antar-percobaan dan status GAGAL TIDAK
@@ -733,7 +987,10 @@ class TransaksiOutboxService {
       return HasilKirimManual(
           total: 0, berhasil: 0, pesan: 'Transaksi $kode sudah tersinkron.');
     }
-    final vonis = await _kirimSatuBaris(row);
+    final vonis = await _kirimSatuBarisTerkunci(
+      row,
+      izinkanSudahTersinkron: paksa,
+    );
     final berhasil = vonis == _VonisKirim.berhasil;
     return HasilKirimManual(
       total: 1,
@@ -782,7 +1039,7 @@ class TransaksiOutboxService {
     var berhasil = 0;
     var terhenti = false;
     for (final row in baris) {
-      final vonis = await _kirimSatuBaris(row);
+      final vonis = await _kirimSatuBarisTerkunci(row);
       if (vonis == _VonisKirim.berhasil) berhasil++;
       if (vonis == _VonisKirim.berhentiSementara) {
         terhenti = true;

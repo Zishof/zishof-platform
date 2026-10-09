@@ -181,6 +181,66 @@ void main() {
         reason: 'backup append-only harus mencatat tombstone penghapusan');
 
     await CoreDb.instance.simpanTransaksiPending(
+      'UAT-BATAL-GAGAL-006',
+      jsonEncode(<String, Object?>{
+        'kodeUnik': 'UAT-BATAL-GAGAL-006',
+        'kasir': 'uat-kasir',
+        'idToko': 1,
+        'total': 50000,
+      }),
+      akunKunci: 'uat-kasir',
+      tokoId: 1,
+      idPerangkat: 'uat-device',
+    );
+    await CoreDb.instance
+        .tandaiTransaksiDitolak('UAT-BATAL-GAGAL-006', 'penolakan uji');
+    expect(
+      await CoreDb.instance
+          .hapusTransaksiBelumTerkirimTerverifikasiTidakAdaDiServer(
+        'UAT-BATAL-GAGAL-006',
+        pelaku: 'uat-supervisor',
+      ),
+      isTrue,
+    );
+    expect(
+      await CoreDb.instance.transaksiLokalDenganKode('UAT-BATAL-GAGAL-006'),
+      isNull,
+    );
+    final tombstonePembatalan = Map<String, dynamic>.from(
+      jsonDecode((await backup.readAsLines()).last) as Map<dynamic, dynamic>,
+    );
+    expect(tombstonePembatalan['alasan'],
+        'DIBATALKAN_SETELAH_VERIFIKASI_TIDAK_ADA_DI_SERVER');
+    expect(tombstonePembatalan['dibatalkan_oleh'], 'uat-supervisor');
+
+    await CoreDb.instance.simpanTransaksiPending(
+      'UAT-BATAL-SYNCED-007',
+      jsonEncode(<String, Object?>{
+        'kodeUnik': 'UAT-BATAL-SYNCED-007',
+        'kasir': 'uat-kasir',
+        'idToko': 1,
+        'total': 50000,
+      }),
+      akunKunci: 'uat-kasir',
+      tokoId: 1,
+      idPerangkat: 'uat-device',
+    );
+    await CoreDb.instance.tandaiTransaksiSinkron('UAT-BATAL-SYNCED-007');
+    expect(
+      await CoreDb.instance
+          .hapusTransaksiBelumTerkirimTerverifikasiTidakAdaDiServer(
+        'UAT-BATAL-SYNCED-007',
+        pelaku: 'uat-supervisor',
+      ),
+      isFalse,
+      reason: 'transaksi SYNCED tidak boleh dihapus melalui aksi lokal gagal',
+    );
+    expect(
+      await CoreDb.instance.transaksiLokalDenganKode('UAT-BATAL-SYNCED-007'),
+      isNotNull,
+    );
+
+    await CoreDb.instance.simpanTransaksiPending(
       'UAT-RETRY-004',
       jsonEncode(<String, Object?>{
         'kodeUnik': 'UAT-RETRY-004',

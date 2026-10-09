@@ -169,8 +169,7 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
         status: _statusPending,
       );
       final jumlahAktif = await CoreDb.instance.jumlahTransaksiPending();
-      final ringkasan =
-          await CoreDb.instance.ringkasanStatusTransaksiPending();
+      final ringkasan = await CoreDb.instance.ringkasanStatusTransaksiPending();
       final interval =
           await TransaksiOutboxService.instance.muatIntervalRetryMenit();
       setStateIfMounted(() {
@@ -607,10 +606,147 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
     }
   }
 
+  Future<void> _perbaruiNomorNotaDanKirim(Map<String, dynamic> row) async {
+    final kode = '${row['kode_unik'] ?? ''}'.trim();
+    if (kode.isEmpty) return;
+    final konfirmasi = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Perbarui Nomor Nota & Kirim Ulang?'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                  'Nomor nota ($kode) bentrok dengan transaksi lain di server pusat.'),
+              const SizedBox(height: 10),
+              const Text(
+                'Sistem akan menerbitkan nomor nota baru yang unik, memperbarui data transaksi lokal, dan langsung mengirimkannya ke server.',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Seluruh rincian barang, total belanja, dan data pelanggan tetap sama. Saldo voucher/member akan dipotong resmi di server.',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.amber.shade800,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.autorenew, size: 16),
+            label: const Text('Perbarui & Kirim'),
+          ),
+        ],
+      ),
+    );
+    if (konfirmasi != true || !mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+          'Menerbitkan nomor nota baru dan mengirim transaksi $kode ke server...'),
+      duration: const Duration(seconds: 2),
+    ));
+
+    try {
+      final hasil = await TransaksiOutboxService.instance
+          .perbaruiNomorNotaDanKirim(kode);
+      if (!mounted) return;
+      if (hasil.berhasil > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          backgroundColor: AppColors.success,
+          content: Text(
+              'Transaksi berhasil disinkronkan ke server dengan nomor nota baru! Saldo member terpotong.'),
+        ));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          backgroundColor: AppColors.danger,
+          content: Text(hasil.pesan),
+        ));
+      }
+      await _muatTransaksiPending();
+    } catch (e) {
+      if (mounted) {
+        await tampilkanKesalahan(context, e,
+            aktivitas: 'perbarui nomor nota dan kirim');
+      }
+    }
+  }
+
+  Future<void> _batalkanTransaksiPending(Map<String, dynamic> row) async {
+    final kode = '${row['kode_unik'] ?? ''}'.trim();
+    if (!Sesi.instance.bolehHapusPesanan) {
+      await tampilkanKesalahan(
+        context,
+        StateError(
+            'Aksi ini hanya dapat dilakukan oleh pengguna yang berwenang.'),
+        aktivitas: 'membatalkan transaksi gagal',
+      );
+      return;
+    }
+    final lanjut = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Batalkan transaksi ini?'),
+        content: Text(
+          'Aplikasi akan memeriksa catatan server terlebih dahulu. Jika transaksi ternyata sudah tercatat atau pemeriksaan tidak dapat diselesaikan, pembatalan akan ditolak. Jika transaksi masih menunggu atau gagal dan dipastikan belum tercatat, nota ini dihapus dari antrean perangkat dan tidak dapat dikirim kembali dari perangkat ini.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Jangan Batalkan'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Batalkan Transaksi Ini'),
+          ),
+        ],
+      ),
+    );
+    if (lanjut != true || !mounted) return;
+    try {
+      await TransaksiOutboxService.instance
+          .batalkanTransaksiGagalBelumTerkirim(kode);
+      await _muatTransaksiPending();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Transaksi $kode dibatalkan dari antrean perangkat.'),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        await tampilkanKesalahan(context, e,
+            aktivitas: 'membatalkan transaksi gagal');
+      }
+    }
+  }
+
   Future<void> _lihatDetailPending(Map<String, dynamic> row) async {
     final payload = _payloadPending(row);
     final items = (payload['transaksi'] as List?) ?? const [];
     final pesanError = '${row['pesan_error'] ?? ''}'.trim();
+    final statusLokal = '${row['status'] ?? ''}'.trim().toUpperCase();
+    bool? bolehBatalkan;
+    if (const {'PENDING', 'GAGAL'}.contains(statusLokal) &&
+        Sesi.instance.bolehHapusPesanan) {
+      try {
+        bolehBatalkan = await TransaksiOutboxService.instance
+            .transaksiBolehDibatalkan('${row['kode_unik'] ?? ''}');
+      } catch (_) {
+        // Gangguan saat membaca server tidak boleh dianggap sebagai bukti
+        // bahwa transaksi belum terkirim. Tombol tetap nonaktif.
+      }
+      if (!mounted) return;
+    }
     final dapatDikoreksi =
         TransaksiOutboxService.dapatDikoreksiSetelahPenolakan(
                 '${row['status'] ?? ''}') &&
@@ -649,7 +785,8 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                     style: const TextStyle(fontWeight: FontWeight.bold)),
                 if (pesanError.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  if (pesanError.toLowerCase().contains('saldo') && pesanError.toLowerCase().contains('tidak mencukupi')) ...[
+                  if (pesanError.toLowerCase().contains('saldo') &&
+                      pesanError.toLowerCase().contains('tidak mencukupi')) ...[
                     Container(
                       margin: const EdgeInsets.only(bottom: 10),
                       padding: const EdgeInsets.all(12),
@@ -661,12 +798,45 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.lightbulb_outline, color: AppColors.primary, size: 22),
+                          Icon(Icons.lightbulb_outline,
+                              color: AppColors.primary, size: 22),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               'Saldo anggota saat ini Rp0 di server pusat. Agar transaksi dapat tersinkron dan kasir bisa Tutup Kas: jika pelanggan membayar dengan Tunai/QRIS, klik tombol "Ganti ke Pembayaran Lokal" di bawah.',
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (pesanError.toLowerCase().contains('sudah digunakan') ||
+                      pesanError.toLowerCase().contains('nomor nota')) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.amber.shade700),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.autorenew,
+                              color: Colors.amber.shade800, size: 22),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Nomor nota ini bentrok dengan transaksi lain di server pusat. Klik tombol "Perbarui Nomor Nota & Kirim" di bawah agar transaksi diberi nomor nota baru yang unik dan langsung tersimpan ke server.',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.amber.shade900),
                             ),
                           ),
                         ],
@@ -682,6 +852,25 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
           ),
         ),
         actions: [
+          if (const {'PENDING', 'GAGAL'}.contains(statusLokal) &&
+              Sesi.instance.bolehHapusPesanan)
+            Tooltip(
+              message: bolehBatalkan == true
+                  ? 'Transaksi belum tercatat di server dan dapat dibatalkan.'
+                  : bolehBatalkan == false
+                      ? 'Transaksi sudah tercatat atau statusnya berubah; pembatalan tidak tersedia.'
+                      : 'Pemeriksaan server belum berhasil; tombol tidak dapat digunakan.',
+              child: OutlinedButton.icon(
+                onPressed: bolehBatalkan == true
+                    ? () {
+                        Navigator.pop(context);
+                        _batalkanTransaksiPending(row);
+                      }
+                    : null,
+                icon: const Icon(Icons.delete_outline, size: 16),
+                label: const Text('Batalkan Transaksi Ini'),
+              ),
+            ),
           if (dapatDikoreksi)
             FilledButton.icon(
               style: FilledButton.styleFrom(
@@ -693,6 +882,20 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
               },
               icon: const Icon(Icons.swap_horiz),
               label: const Text('Ganti ke Pembayaran Lokal'),
+            ),
+          if (row['status'] != 'SYNCED' &&
+              (pesanError.toLowerCase().contains('sudah digunakan') ||
+                  pesanError.toLowerCase().contains('nomor nota')))
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.amber.shade800,
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                _perbaruiNomorNotaDanKirim(row);
+              },
+              icon: const Icon(Icons.autorenew, size: 16),
+              label: const Text('Perbarui Nomor Nota & Kirim'),
             ),
           if (row['status'] != 'SYNCED') ...[
             OutlinedButton.icon(
@@ -858,8 +1061,21 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                         IconButton(
                           tooltip: 'Ganti ke pembayaran lokal (Tunai/QRIS)',
                           onPressed: () => _gantiMetodePending(row),
-                          icon: Icon(Icons.swap_horiz,
-                              color: AppColors.primary),
+                          icon:
+                              Icon(Icons.swap_horiz, color: AppColors.primary),
+                        ),
+                      if (status != 'SYNCED' &&
+                          ('${row['pesan_error'] ?? ''}'
+                                  .toLowerCase()
+                                  .contains('sudah digunakan') ||
+                              '${row['pesan_error'] ?? ''}'
+                                  .toLowerCase()
+                                  .contains('nomor nota')))
+                        IconButton(
+                          tooltip: 'Perbarui nomor nota yang bentrok dan kirim',
+                          onPressed: () => _perbaruiNomorNotaDanKirim(row),
+                          icon: Icon(Icons.autorenew,
+                              color: Colors.amber.shade800),
                         ),
                       // Baris Sukses pun tetap dapat dikirim ulang: transaksi
                       // bisa saja terhapus di server sementara perangkat ini
