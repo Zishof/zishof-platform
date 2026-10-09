@@ -2091,9 +2091,13 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         _buatPayload(kodeUnik, waktu, sertakanStatusPelayanan: true),
         melanjutkanDraft: widget.draftIdSumber != null,
       );
-      payload.addAll(buktiBiometrik);
-      final sesiKasLokal = await CoreDb.instance.sesiKasAktif();
-      final kodeSesiKas = '${sesiKasLokal?['kode'] ?? ''}'.trim();
+      String kodeSesiKas = '';
+      try {
+        final sesiKasLokal = await CoreDb.instance.sesiKasAktif();
+        kodeSesiKas = '${sesiKasLokal?['kode'] ?? ''}'.trim();
+      } catch (e, st) {
+        debugPrint('Peringatan: Gagal membaca sesi kas lokal saat bayar: $e\n$st');
+      }
       if (kodeSesiKas.isNotEmpty) payload['kode_sesi_kas'] = kodeSesiKas;
 
       final payloadPending = Map<String, dynamic>.from(payload);

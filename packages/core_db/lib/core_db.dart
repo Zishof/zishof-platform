@@ -71,6 +71,7 @@ class CoreDb {
   String? _pathDb;
   Future<Database>? _openingDb;
   Future<List<Map<String, Object?>>>? _sesiKasPendingRead;
+  Future<Map<String, Object?>?>? _sesiKasAktifRead;
   Future<void> _errorLogTail = Future.value();
   String? _lastErrorLogKey;
   DateTime? _lastErrorLogAt;
@@ -2468,10 +2469,35 @@ class CoreDb {
   // ============================== SESI KAS LOKAL ==============================
 
   Future<Map<String, Object?>?> sesiKasAktif() async {
-    final database = await db;
-    final hasil = await database.query('sesi_kas_lokal',
-        where: "status = 'BUKA'", orderBy: 'dibuka_pada DESC', limit: 1);
-    return hasil.isEmpty ? null : hasil.first;
+    final sedangDibaca = _sesiKasAktifRead;
+    if (sedangDibaca != null) return sedangDibaca;
+
+    late final Future<Map<String, Object?>?> pembacaan;
+    pembacaan = _bacaSesiKasAktif().whenComplete(() {
+      if (identical(_sesiKasAktifRead, pembacaan)) {
+        _sesiKasAktifRead = null;
+      }
+    });
+    _sesiKasAktifRead = pembacaan;
+    return pembacaan;
+  }
+
+  Future<Map<String, Object?>?> _bacaSesiKasAktif() async {
+    for (int coba = 0; coba < 3; coba++) {
+      try {
+        final database = await db;
+        final hasil = await database.query('sesi_kas_lokal',
+            where: "status = 'BUKA'", orderBy: 'dibuka_pada DESC', limit: 1);
+        return hasil.isEmpty ? null : hasil.first;
+      } catch (e) {
+        if (kesalahanPemakaianSqlite(e) && coba < 2) {
+          await Future<void>.delayed(Duration(milliseconds: 100 * (coba + 1)));
+          continue;
+        }
+        rethrow;
+      }
+    }
+    return null;
   }
 
   /// [disinkronkan] = false (default) dipakai alur optimistic-open (tulis lokal DULU sebelum

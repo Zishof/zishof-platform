@@ -60,6 +60,24 @@ void main() {
     expect(database.ditutup, 0);
   });
 
+  test('pembacaan aktif sesi kas yang berbarengan memakai satu query',
+      () async {
+    final database = DatabaseGangguan();
+    final core = CoreDb.untukPengujian(database);
+    final pertama = core.sesiKasAktif();
+    final kedua = core.sesiKasAktif();
+
+    await Future<void>.delayed(Duration.zero);
+    expect(database.querySesiKas, 1);
+    database.sesi.complete([
+      {'kode': 'UAT-KAS-AKTIF', 'status': 'BUKA'}
+    ]);
+    final hasil = await Future.wait([pertama, kedua]);
+    expect(hasil[0]?['kode'], 'UAT-KAS-AKTIF');
+    expect(hasil[1]?['kode'], 'UAT-KAS-AKTIF');
+    expect(database.ditutup, 0);
+  });
+
   test('error penghitung tidak menutup koneksi checkout yang masih berjalan',
       () async {
     final database = DatabaseGangguan();
