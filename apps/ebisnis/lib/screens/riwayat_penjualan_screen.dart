@@ -282,9 +282,20 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
   bool _metodeMemberTerkunci = false;
   int _versiMember = 0;
 
-  List<CaraBayar> get _metodeTersedia => _memberPemulihan != null
-      ? (_metodeMember ?? const <CaraBayar>[])
-      : Sesi.instance.caraBayar;
+  List<CaraBayar> get _metodeTersedia {
+    if (_memberPemulihan == null) return Sesi.instance.caraBayar;
+    if (_metodeMember != null && _metodeMember!.isNotEmpty) {
+      final setIds = _metodeMember!.map((m) => m.id).toSet();
+      final gabungan = List<CaraBayar>.from(_metodeMember!);
+      for (final umum in Sesi.instance.caraBayar) {
+        if (!setIds.contains(umum.id) && !umum.wajibPilihMember) {
+          gabungan.add(umum);
+        }
+      }
+      return gabungan;
+    }
+    return Sesi.instance.caraBayar;
+  }
 
   Future<void> _pilihMemberPemulihan() async {
     final member = await pilihMemberPos(context);
@@ -319,11 +330,15 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
         setState(() {
           _metodeMember = metode;
           _metodeMemberTerkunci = hasil['caraBayarTerkunci'] == true;
-          // Pilihan kasir yang masih sah dipertahankan; jangan jatuh ke Tunai.
-          _caraBayarId = metode.any((m) => m.id == lama) ? lama : null;
+          // Pilihan kasir yang masih sah dipertahankan; jangan jatuh ke null jika masih ada metode.
+          _caraBayarId = metode.any((m) => m.id == lama)
+              ? lama
+              : (metode.isNotEmpty ? metode.first.id : lama);
           if (_metodeMemberTerkunci) {
             final id = (hasil['caraBayarDefaultId'] as num?)?.toInt();
-            _caraBayarId = metode.any((m) => m.id == id) ? id : null;
+            if (id != null && metode.any((m) => m.id == id)) {
+              _caraBayarId = id;
+            }
           }
           _pesan = metode.isEmpty
               ? 'Tidak ada metode yang diizinkan untuk member ini.'
@@ -410,10 +425,19 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
         setState(() {
           _metodeMember = metode;
           _metodeMemberTerkunci = hasil['caraBayarTerkunci'] == true;
-          _caraBayarId = metode.any((m) => m.id == lama) ? lama : null;
-          if (_metodeMemberTerkunci) {
-            final id = (hasil['caraBayarDefaultId'] as num?)?.toInt();
-            _caraBayarId = metode.any((m) => m.id == id) ? id : null;
+          if (!widget.modeBaru && !_caraBayarDiubah && lama != null) {
+            // Jaga metode pembayaran transaksi asli agar koreksi tidak terblokir
+            _caraBayarId = lama;
+          } else {
+            _caraBayarId = metode.any((m) => m.id == lama)
+                ? lama
+                : (metode.isNotEmpty ? metode.first.id : lama);
+            if (_metodeMemberTerkunci) {
+              final id = (hasil['caraBayarDefaultId'] as num?)?.toInt();
+              if (id != null && metode.any((m) => m.id == id)) {
+                _caraBayarId = id;
+              }
+            }
           }
           _pesan = metode.isEmpty
               ? 'Tidak ada metode yang diizinkan untuk member ini.'
@@ -671,30 +695,47 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
           () => _pesan = 'Transaksi harus memiliki sedikitnya satu barang.');
       return;
     }
-    if (_caraBayarId == null) {
+    int? caraBayarEfektif = _caraBayarId;
+    if (caraBayarEfektif == null && _splitBayar.isNotEmpty) {
+      caraBayarEfektif = _splitBayar.first.caraBayar.id;
+    }
+    if (caraBayarEfektif == null && !widget.modeBaru) {
+      caraBayarEfektif =
+          widget.caraBayarId ?? _idCaraBayarDariNama(widget.caraBayarNama);
+    }
+    if (caraBayarEfektif == null && Sesi.instance.caraBayar.isNotEmpty) {
+      caraBayarEfektif = Sesi.instance.caraBayar.first.id;
+    }
+    if (caraBayarEfektif == null) {
       setState(() => _pesan = 'Metode pembayaran wajib dipilih.');
       return;
     }
+    _caraBayarId = caraBayarEfektif;
+
     final caraSaatIni = _metodeTersedia.where((m) => m.id == _caraBayarId);
     final metodeWajibMember =
         caraSaatIni.isNotEmpty && caraSaatIni.first.wajibPilihMember;
-    if (widget.modeBaru || _memberPemulihan != null || metodeWajibMember) {
-      final galat = validasiMemberPemulihan(
-          _metodeTersedia, _caraBayarId, _memberPemulihan?.id,
-          memuat: _memuatMember);
-      if (galat != null) {
-        setState(() => _pesan = galat);
-        return;
+    if (widget.modeBaru || _caraBayarDiubah || metodeWajibMember) {
+      if (widget.modeBaru || _caraBayarDiubah) {
+        final galat = validasiMemberPemulihan(
+            _metodeTersedia, _caraBayarId, _memberPemulihan?.id,
+            memuat: _memuatMember);
+        if (galat != null) {
+          setState(() => _pesan = galat);
+          return;
+        }
       }
-      final cara = caraSaatIni.first;
-      final member = _memberPemulihan;
-      if (cara.wajibPin ||
-          member?.wajibPin == true ||
-          member?.wajibBiometricWajah == true ||
-          member?.wajibBiometricFingerprint == true) {
-        setState(() => _pesan =
-            'Member/metode ini memerlukan PIN atau biometrik. Form pemulihan belum mendukung verifikasi tersebut. Hubungi admin; jangan mengubah kebijakan keamanan.');
-        return;
+      if (caraSaatIni.isNotEmpty) {
+        final cara = caraSaatIni.first;
+        final member = _memberPemulihan;
+        if (cara.wajibPin ||
+            member?.wajibPin == true ||
+            member?.wajibBiometricWajah == true ||
+            member?.wajibBiometricFingerprint == true) {
+          setState(() => _pesan =
+              'Member/metode ini memerlukan PIN atau biometrik. Form pemulihan belum mendukung verifikasi tersebut. Hubungi admin; jangan mengubah kebijakan keamanan.');
+          return;
+        }
       }
     }
     if (_caraBayarDiubah && _splitBayar.length >= 2) {
@@ -727,13 +768,18 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
         'cashback': 0,
       });
     }
+    final namaMetode = caraSaatIni.isNotEmpty
+        ? caraSaatIni.first.nama
+        : (_splitBayar.isNotEmpty
+            ? _splitBayar.first.caraBayar.nama
+            : widget.caraBayarNama);
+
     Navigator.of(context).pop({
       'alasan': alasan,
       if (_memberPemulihan != null)
         ...identitasMemberPemulihan(_memberPemulihan),
       if (widget.modeBaru)
-        'cara_bayar_nama':
-            _metodeTersedia.firstWhere((m) => m.id == _caraBayarId).nama,
+        'cara_bayar_nama': namaMetode,
       'item': item,
       'waktu': _waktu.toIso8601String(),
       if (_caraBayarDiubah && _splitBayar.length >= 2)
