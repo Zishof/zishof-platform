@@ -1190,6 +1190,7 @@ class StrukScreen extends StatelessWidget {
 
   /// Salinan dengan sebagian nilai diganti (dipakai [_KoreksiAngkaServer]).
   StrukScreen salin({
+    String? kode,
     double? total,
     double? totalDiskonOverride,
     double? uangDiterima,
@@ -1202,7 +1203,7 @@ class StrukScreen extends StatelessWidget {
   }) {
     return StrukScreen(
       key: key,
-      kode: kode,
+      kode: kode ?? this.kode,
       waktu: waktu,
       item: item,
       total: total ?? this.total,
@@ -1415,6 +1416,7 @@ class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
   double? _totalServer;
   double? _totalDiskonServer;
   double? _saldoServer;
+  String? _kodeRekonsiliasiServer;
 
   @override
   void initState() {
@@ -1443,6 +1445,7 @@ class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
         if (peta is Map) {
           final t = (peta['total'] as num?)?.toDouble();
           final d = (peta['totalDiskon'] as num?)?.toDouble();
+          final kodeBaru = '${peta['kodeNotaDirekonsiliasi'] ?? ''}'.trim();
           // Saat pengakuan server tiba, sekalian sampaikan peringatannya. Kasir
           // masih berdiri di depan layar struk -- ini kesempatan terakhir
           // menyampaikannya kepada orang yang benar-benar bisa menindaklanjuti.
@@ -1461,6 +1464,9 @@ class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
             setState(() {
               _totalServer = t;
               _totalDiskonServer = d;
+              if (kodeBaru.isNotEmpty) {
+                _kodeRekonsiliasiServer = kodeBaru;
+              }
               _saldoServer =
                   StrukScreen.saldoDariSumber(Map<String, dynamic>.from(peta));
               _selesai = true;
@@ -1510,38 +1516,51 @@ class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
     final totalServer = _totalServer;
     if (totalServer == null) {
       return asli.salin(
+        kode: _kodeRekonsiliasiServer ?? asli.kode,
         koreksiSudahDiterapkan: true,
         menungguAngkaServer: !_selesai,
         saldo: _saldoServer,
       );
     }
+    // Lonjakan anomali: bila total server melonjak naik melebihi belanjaan asli kasir
+    // (> Rp500 di atas total asli), ini indikasi kuat balasan server salah sasaran
+    // akibat bentrok nomor nota dengan transaksi orang lain di masa lalu.
+    // Total fisik belanjaan pelanggan tidak boleh digelembungkan.
+    final lonjakanAnomali = totalServer > (asli.total + 500);
+    final totalEfektif = lonjakanAnomali ? asli.total : totalServer;
+    final totalDiskonEfektif =
+        lonjakanAnomali ? null : _totalDiskonServer;
+
     // Pembanding 1 rupiah: beda di bawah itu hanya pembulatan, bukan selisih
     // yang perlu diberitahukan ke kasir.
-    final berbeda = (totalServer - asli.total).abs() >= 1;
+    final berbeda = (totalEfektif - asli.total).abs() >= 1;
     // Angka server sudah diterima; itu berarti transaksinya SUDAH tersimpan di
     // server. Struk yang dicetak sejak titik ini tidak boleh lagi berkata
     // "tersimpan offline dan akan disinkronkan otomatis" -- pembeli menerima
     // kertas yang menyebut keadaan yang sudah tidak berlaku.
     final pembayaranTunai = StrukScreen.pembayaranTunaiSetelahKoreksiServer(
       totalSebelum: asli.total,
-      totalServer: totalServer,
+      totalServer: totalEfektif,
       uangDiterima: asli.uangDiterima,
       kembalian: asli.kembalian,
     );
     return asli.salin(
+      kode: _kodeRekonsiliasiServer ?? asli.kode,
       koreksiSudahDiterapkan: true,
       tersinkron: true,
-      total: totalServer,
-      totalDiskonOverride: _totalDiskonServer,
+      total: totalEfektif,
+      totalDiskonOverride: totalDiskonEfektif,
       uangDiterima: pembayaranTunai.uangDiterima,
       kembalian: pembayaranTunai.kembalian,
       saldo: _saldoServer,
-      catatanKoreksi: berbeda
-          ? 'Total disesuaikan server dari ${_rupiah(asli.total)} menjadi'
-              ' ${_rupiah(totalServer)}'
-              '${(_totalDiskonServer ?? 0) > 0 ? ' karena diskon ${_rupiah(_totalDiskonServer!)} baru diterapkan' : ''}.'
-              ' Pastikan pembayaran pelanggan mengikuti angka ini.'
-          : null,
+      catatanKoreksi: lonjakanAnomali
+          ? 'Nomor nota disesuaikan server; total struk dipertahankan ${_rupiah(asli.total)} sesuai belanjaan fisik.'
+          : (berbeda
+              ? 'Total disesuaikan server dari ${_rupiah(asli.total)} menjadi'
+                  ' ${_rupiah(totalEfektif)}'
+                  '${(_totalDiskonServer ?? 0) > 0 ? ' karena diskon ${_rupiah(_totalDiskonServer!)} baru diterapkan' : ''}.'
+                  ' Pastikan pembayaran pelanggan mengikuti angka ini.'
+              : null),
     );
   }
 
