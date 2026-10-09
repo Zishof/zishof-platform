@@ -697,6 +697,17 @@ class TransaksiOutboxService {
         await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
         return _VonisKirim.berhasil;
       }
+      // Deteksi penolakan nomor nota bentrok dari server untuk auto-resolve instan
+      final pesanLower = pesan.toLowerCase();
+      if (pesanLower.contains('sudah digunakan oleh transaksi lain') ||
+          pesanLower.contains('gunakan nomor nota baru')) {
+        try {
+          final hasilAutoResolve = await perbaruiNomorNotaDanKirim(kodeUnik);
+          if (hasilAutoResolve.berhasil > 0) {
+            return _VonisKirim.berhasil;
+          }
+        } catch (_) {}
+      }
       // Bila server mengembalikan penolakan (mis. saldo/limit dianggap kurang atau
       // terjadi time-out saat respons pertama), periksa apakah transaksi dengan
       // kodeUnik ini sebenarnya SUDAH tersimpan di database server.

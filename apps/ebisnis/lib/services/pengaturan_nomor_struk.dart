@@ -137,7 +137,18 @@ class PengaturanNomorStruk {
     } catch (_) {}
 
     var urutan = urutanSebelumnya + 1;
-    final pref = prefix ?? '';
+    var pref = prefix ?? '';
+    if (pref.isEmpty) {
+      if (kodeDeviceKustom != null && kodeDeviceKustom!.trim().isNotEmpty) {
+        pref = kodeDeviceKustom!.trim();
+      } else {
+        await IdentitasMesin.instance.muat();
+        final idM = IdentitasMesin.instance.idMesin.trim();
+        if (idM.isNotEmpty) {
+          pref = kodeDeviceDariId(idM);
+        }
+      }
+    }
     var kandidat = '$pref$tanggal${urutan.toString().padLeft(5, '0')}';
 
     // Pastikan nomor nota yang dihasilkan belum pernah dipakai di baris lokal
