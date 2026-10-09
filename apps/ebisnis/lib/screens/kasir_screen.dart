@@ -922,6 +922,9 @@ class _KasirScreenState extends State<KasirScreen> {
     final pending = await CoreDb.instance.jumlahTransaksiPendingPemilik(
       akunKunci: Sesi.instance.userId,
       tokoId: tokoIdAktif,
+      // Sesi kas terikat ke perangkat. Tanpa filter ini, antrean akun/toko
+      // yang tersimpan pada perangkat kasir lain ikut menahan tutup kas.
+      idPerangkat: IdentitasMesin.instance.idMesin,
     );
     if (pending > 0) {
       if (!mounted) return;

@@ -427,13 +427,16 @@ class SinkronisasiTabelService {
       return MasterOffline.flush();
     })();
 
-    await Future.wait<String>([
-      jalankan('outbox_master', tungguMaster: futureMaster, hasilMaster: true),
-      jalankan('produk_cache', tungguMaster: futureMaster),
-      jalankan('anggota_cache', tungguMaster: futureMaster),
-      jalankan('transaksi_pending'),
-      jalankan('outbox_is'),
-    ]);
+    // Semua adapter memakai satu koneksi SQLite FFI bersama. Jalankan bertahap
+    // agar pemeriksaan/flush antar tabel tidak mengirim operasi bersamaan ke
+    // handle yang sama; SQLite misuse harus terlihat sebagai kegagalan, bukan
+    // dipulihkan dengan menutup atau membuka ulang database.
+    await jalankan('outbox_master',
+        tungguMaster: futureMaster, hasilMaster: true);
+    await jalankan('produk_cache', tungguMaster: futureMaster);
+    await jalankan('anggota_cache', tungguMaster: futureMaster);
+    await jalankan('transaksi_pending');
+    await jalankan('outbox_is');
 
     // Urutan hasil stabil sesuai grid, walaupun penyelesaiannya paralel.
     return daftar.map((nama) => pesanPerTabel[nama]!).toList(growable: false);
