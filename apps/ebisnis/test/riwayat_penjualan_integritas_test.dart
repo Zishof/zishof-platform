@@ -168,4 +168,42 @@ void main() {
       expect(hasil.last['idTransaksi'], 456);
     });
   });
+
+  group('label status arsip transaksi', () {
+    test('transaksi dengan status SYNCED diakui tercatat pada data server', () {
+      expect(
+        labelStatusArsipTransaksi({'statusSinkronLokal': 'SYNCED'}),
+        'Tercatat pada data server',
+      );
+      expect(
+        labelStatusArsipTransaksi({
+          'idTransaksi': 12462,
+          'statusSinkronLokal': 'SYNCED',
+        }),
+        'Tercatat pada data server',
+      );
+    });
+
+    test('transaksi dengan idTransaksi server selalu tercatat pada server', () {
+      expect(
+        labelStatusArsipTransaksi({'idTransaksi': 12345}),
+        'Tercatat pada data server',
+      );
+    });
+
+    test('transaksi gagal sinkron memberi tanda perlu diperiksa', () {
+      expect(
+        labelStatusArsipTransaksi({'statusSinkronLokal': 'GAGAL'}),
+        'Gagal sinkron · perlu diperiksa',
+      );
+    });
+
+    test('transaksi pending memberi tanda cadangan lokal menunggu sinkron', () {
+      expect(
+        labelStatusArsipTransaksi({'statusSinkronLokal': 'PENDING'}),
+        'Cadangan lokal · menunggu sinkron',
+      );
+    });
+  });
 }
+

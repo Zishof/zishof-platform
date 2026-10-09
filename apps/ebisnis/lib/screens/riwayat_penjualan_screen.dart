@@ -52,12 +52,11 @@ String kunciCacheRiwayatPenjualan(
 /// Status lokal lama dapat berasal dari penandaan manual, bukan ACK server.
 @visibleForTesting
 String labelStatusArsipTransaksi(Map<String, dynamic> row) {
-  if (row['idTransaksi'] != null) return 'Tercatat pada data server';
+  if (row['idTransaksi'] != null || row['statusSinkronLokal'] == 'SYNCED') {
+    return 'Tercatat pada data server';
+  }
   if (row['statusSinkronLokal'] == 'GAGAL') {
     return 'Gagal sinkron · perlu diperiksa';
-  }
-  if (row['statusSinkronLokal'] == 'SYNCED') {
-    return 'Selesai di perangkat · belum dicocokkan server';
   }
   return 'Cadangan lokal · menunggu sinkron';
 }
@@ -1773,7 +1772,20 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
           (maxQty > 0 && qty > maxQty)) {
         continue;
       }
+      Map<String, dynamic>? hasilServer;
+      try {
+        final rawHasil = source['hasil_server_json'];
+        if (rawHasil != null && '$rawHasil'.trim().isNotEmpty) {
+          final dec = jsonDecode('$rawHasil');
+          if (dec is Map) hasilServer = Map<String, dynamic>.from(dec);
+        }
+      } catch (_) {}
+      final idServer = hasilServer?['idTransaksi'] ??
+          hasilServer?['pembelianAnggotaKoperasi'] ??
+          hasilServer?['id'];
+
       hasil.add(_normalisasiTransaksi(<String, dynamic>{
+        if (idServer != null) 'idTransaksi': idServer,
         'nomorNota': kode,
         'waktu': waktu.toIso8601String(),
         'pembeli': pembeli,
@@ -2294,14 +2306,29 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
       } else {
         final idTransaksi = row['idTransaksi'];
         if (idTransaksi == null) {
-          // Jangan pernah mengirim `id:null`. Snapshot lokal masih merupakan
-          // detail yang benar untuk dibaca; sesudah refresh dari server, merge
-          // berdasarkan kode stabil di atas akan melengkapinya dengan ID.
-          if (payloadLokal is Map) {
-            pakaiSnapshotLokal(payloadLokal);
-          } else {
-            throw const FormatException(
-                'Detail transaksi belum memiliki ID server. Muat ulang data lalu coba kembali.');
+          var dimuatServer = false;
+          final kodeCari = _kodeTransaksiStabil(row);
+          if (kodeCari.isNotEmpty) {
+            try {
+              hasil = await ApiClient.instance.aksi('detail_transaksi', {
+                'kode': kodeCari,
+                'kodeUnik': kodeCari,
+              });
+              items =
+                  ((hasil['item'] as List?) ?? []).cast<Map<String, dynamic>>();
+              if (hasil['idTransaksi'] != null || hasil['id'] != null) {
+                row['idTransaksi'] = hasil['idTransaksi'] ?? hasil['id'];
+              }
+              dimuatServer = true;
+            } catch (_) {}
+          }
+          if (!dimuatServer) {
+            if (payloadLokal is Map) {
+              pakaiSnapshotLokal(payloadLokal);
+            } else {
+              throw const FormatException(
+                  'Detail transaksi belum memiliki ID server. Muat ulang data lalu coba kembali.');
+            }
           }
         } else {
           try {
@@ -2340,9 +2367,12 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                       _chipRingkasan(
                           'Sinkron',
                           labelStatusArsipTransaksi(row),
-                          row['idTransaksi'] != null
+                          (row['idTransaksi'] != null ||
+                                  row['statusSinkronLokal'] == 'SYNCED')
                               ? AppColors.success
-                              : AppColors.warning),
+                              : (row['statusSinkronLokal'] == 'GAGAL'
+                                  ? AppColors.danger
+                                  : AppColors.warning)),
                     _chipRingkasan('Diskon', _formatRupiah.format(diskonHeader),
                         AppColors.warning),
                     _chipRingkasan('Pajak', _formatRupiah.format(pajakHeader),
@@ -3642,9 +3672,12 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600,
-                                  color: row['idTransaksi'] != null
+                                  color: (row['idTransaksi'] != null ||
+                                          row['statusSinkronLokal'] == 'SYNCED')
                                       ? AppColors.success
-                                      : AppColors.warning,
+                                      : (row['statusSinkronLokal'] == 'GAGAL'
+                                          ? AppColors.danger
+                                          : AppColors.warning),
                                 ),
                               ),
                             ],
@@ -3688,6 +3721,10 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                               ikon: Icons.visibility_outlined,
                               label: 'Detail transaksi',
                               onTap: () => _lihatDetail(row)),
+                          AksiBaris(
+                              ikon: Icons.sync,
+                              label: 'Kirim / Cek Status Server',
+                              onTap: () => _forceKirimAtauCekServer(row)),
                           // Riwayat revisi header nota (AuditTrails/Envers)
                           // -- hanya baris server yg punya id transaksi.
                           AksiBaris(

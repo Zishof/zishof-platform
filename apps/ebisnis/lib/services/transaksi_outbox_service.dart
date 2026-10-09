@@ -620,6 +620,9 @@ class TransaksiOutboxService {
       // sebelum dicetak, dan agar selisihnya tidak lagi hilang diam-diam.
       try {
         await CoreDb.instance.simpanHasilServerTransaksi(kodeUnik, {
+          'idTransaksi': hasilBayar['idTransaksi'] ??
+              hasilBayar['pembelianAnggotaKoperasi'] ??
+              hasilBayar['id'],
           'total': hasilBayar['total'],
           'totalDiskon': hasilBayar['totalDiskon'],
           'saldo': hasilBayar['saldo'],
@@ -627,13 +630,6 @@ class TransaksiOutboxService {
           'diskonFaktur': hasilBayar['diskonFaktur'],
           'totalKlien': payload['total'],
           'data': hasilBayar['data'],
-          // Peringatan pasca-transaksi ikut disimpan, bukan dibuang. Checkout POS
-          // bersifat lokal-dulu: responsnya tiba di sini, jauh setelah kasir
-          // menutup layar. Kalau tidak ditulis ke baris outbox, satu-satunya tanda
-          // bahwa ada yang perlu direkonsiliasi lenyap tanpa pernah terbaca.
-          //
-          // Disimpan SUDAH DIRATAKAN jadi daftar kalimat: layar struk tinggal
-          // menampilkannya, tanpa perlu tahu bentuk amplop respons servernya.
           'peringatanTransaksi': PeringatanTransaksi.dari(hasilBayar),
         });
       } catch (e) {
