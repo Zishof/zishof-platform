@@ -8,6 +8,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 import '../api_client.dart';
 import '../app_variant.dart';
 import '../sesi.dart';
@@ -816,6 +818,10 @@ class _TabelLaporanState extends State<_TabelLaporan> {
           kodeAkunDitemukan = match.group(0)!;
         } else if (judul.contains('-')) {
           kodeAkunDitemukan = judul.split('-').first.trim();
+        } else if (judul.toUpperCase().contains('KAS') || judul.toUpperCase().contains('BANK')) {
+          kodeAkunDitemukan = '1101'; // Kode pos Kas & Bank
+        } else {
+          kodeAkunDitemukan = judul.trim();
         }
       }
 
@@ -1091,11 +1097,21 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  const Text(
-                      'Rincian Pos Transaksi (Debet - Kredit Seimbang):',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 13)),
+                  Row(
+                    children: [
+                      const Text(
+                          'Rincian Pos Transaksi (Debet - Kredit Seimbang):',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 13)),
+                      const Spacer(),
+                      FilledButton.icon(
+                        icon: const Icon(Icons.print, size: 16),
+                        label: const Text('Cetak Voucher PDF'),
+                        onPressed: () => _cetakVoucherPdf(
+                            kepala, baris, totDebet, totKredit),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 6),
                   Expanded(
                     child: SingleChildScrollView(
@@ -1201,6 +1217,255 @@ class _TabelLaporanState extends State<_TabelLaporan> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _cetakVoucherPdf(
+      Map<String, dynamic> kepala,
+      List<Map<String, dynamic>> baris,
+      double totDebet,
+      double totKredit) async {
+    try {
+      final namaToko = Sesi.instance.namaTokoFilter.isNotEmpty &&
+              Sesi.instance.namaTokoFilter != 'Semua Toko'
+          ? Sesi.instance.namaTokoFilter
+          : (Sesi.instance.tokoNama.isNotEmpty
+              ? Sesi.instance.tokoNama
+              : 'Toko Al-Bahjah');
+      final kode = '${kepala['kode'] ?? '-'}';
+      final tanggal = '${kepala['tanggal'] ?? '-'}';
+      final keterangan = '${kepala['keterangan'] ?? '-'}';
+      final fmtRp = NumberFormat.decimalPattern('id');
+
+      final pdf = pw.Document();
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(32),
+          build: (pw.Context context) {
+            final tableRows = <pw.TableRow>[
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                children: [
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('No',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('Kode Akun',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('Nama Perkiraan / Akun',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('Keterangan Baris',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('Debet (Rp)',
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('Kredit (Rp)',
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                ],
+              ),
+            ];
+
+            int no = 1;
+            for (final b in baris) {
+              final dLine = (b['debet'] as num?)?.toDouble() ?? 0.0;
+              final kLine = (b['kredit'] as num?)?.toDouble() ?? 0.0;
+              tableRows.add(
+                pw.TableRow(
+                  children: [
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text('$no',
+                            style: const pw.TextStyle(fontSize: 8.5))),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text('${b['kodeAkun'] ?? ''}',
+                            style: const pw.TextStyle(fontSize: 8.5))),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text('${b['namaAkun'] ?? ''}',
+                            style: const pw.TextStyle(fontSize: 8.5))),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text('${b['keterangan'] ?? ''}',
+                            style: const pw.TextStyle(fontSize: 8.5))),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text(
+                            dLine > 0 ? fmtRp.format(dLine) : '-',
+                            textAlign: pw.TextAlign.right,
+                            style: const pw.TextStyle(fontSize: 8.5))),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text(
+                            kLine > 0 ? fmtRp.format(kLine) : '-',
+                            textAlign: pw.TextAlign.right,
+                            style: const pw.TextStyle(fontSize: 8.5))),
+                  ],
+                ),
+              );
+              no++;
+            }
+
+            tableRows.add(
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+                children: [
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6), child: pw.Text('')),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6), child: pw.Text('')),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('TOTAL',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6), child: pw.Text('')),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text(fmtRp.format(totDebet),
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text(fmtRp.format(totKredit),
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 9))),
+                ],
+              ),
+            );
+
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(namaToko,
+                            style: pw.TextStyle(
+                                fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                        pw.SizedBox(height: 2),
+                        pw.Text('BUKTI VOUCHER TRANSAKSI KAS & BANK',
+                            style: pw.TextStyle(
+                                fontSize: 12,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.blueGrey800)),
+                      ],
+                    ),
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.end,
+                      children: [
+                        pw.Text('No. Voucher: $kode',
+                            style: pw.TextStyle(
+                                fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                        pw.Text('Tanggal: $tanggal',
+                            style: const pw.TextStyle(fontSize: 10)),
+                        pw.Text(
+                            'Status: ${kepala['terposting'] == true ? 'TERPOSTING' : 'DRAF'}',
+                            style: pw.TextStyle(
+                                fontSize: 9,
+                                fontWeight: pw.FontWeight.bold,
+                                color: kepala['terposting'] == true
+                                    ? PdfColors.green800
+                                    : PdfColors.orange800)),
+                      ],
+                    ),
+                  ],
+                ),
+                pw.Divider(height: 16, thickness: 1),
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                  child: pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.SizedBox(
+                          width: 100,
+                          child: pw.Text('Keterangan / Uraian:',
+                              style: pw.TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: pw.FontWeight.bold))),
+                      pw.Expanded(
+                          child: pw.Text(keterangan,
+                              style: const pw.TextStyle(fontSize: 9))),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(height: 10),
+                pw.Table(
+                  border:
+                      pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+                  columnWidths: const {
+                    0: pw.FlexColumnWidth(0.6),
+                    1: pw.FlexColumnWidth(2),
+                    2: pw.FlexColumnWidth(3.5),
+                    3: pw.FlexColumnWidth(3.5),
+                    4: pw.FlexColumnWidth(2),
+                    5: pw.FlexColumnWidth(2),
+                  },
+                  children: tableRows,
+                ),
+                pw.SizedBox(height: 36),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    _kolomTandaTanganPdf('Dibuat Oleh:', '( Kasir / Staf )'),
+                    _kolomTandaTanganPdf(
+                        'Diperiksa Oleh:', '( Akuntansi / Admin )'),
+                    _kolomTandaTanganPdf(
+                        'Disetujui Oleh:', '( Pimpinan / Manager )'),
+                    _kolomTandaTanganPdf('Diterima Oleh:', '( Penerima Dana )'),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+      );
+
+      await Printing.layoutPdf(
+        onLayout: (_) async => pdf.save(),
+        name: 'Voucher_$kode.pdf',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal mencetak voucher: $e')));
+      }
+    }
+  }
+
+  static pw.Widget _kolomTandaTanganPdf(String judul, String peran) {
+    return pw.Column(
+      children: [
+        pw.Text(judul, style: const pw.TextStyle(fontSize: 9)),
+        pw.SizedBox(height: 40),
+        pw.Container(width: 90, height: 0.5, color: PdfColors.black),
+        pw.SizedBox(height: 2),
+        pw.Text(peran, style: const pw.TextStyle(fontSize: 8)),
+      ],
     );
   }
 
