@@ -451,18 +451,20 @@ class CaraBayar {
               ? null
               : (j['wajibPilihMember'] == true ||
                   j['wajib_pilih_member'] == true),
-      memotongDeposit: j['memotongDeposit'] == true ||
-          j['memotong_deposit'] == true ||
-          j['potongSaldo'] == true ||
-          j['potong_saldo'] == true ||
-          j['memotongSaldo'] == true ||
-          j['memotong_saldo'] == true ||
-          namaLower.contains('deposit') ||
-          namaLower.contains('saldo') ||
-          namaLower.contains('emoney') ||
-          namaLower.contains('e-money') ||
-          namaLower.contains('santri') ||
-          namaLower.contains('tabungan'),
+      memotongDeposit: () {
+        final explicit = j['memotongDeposit'] ??
+            j['memotong_deposit'] ??
+            j['potongSaldo'] ??
+            j['potong_saldo'] ??
+            j['memotongSaldo'] ??
+            j['memotong_saldo'];
+        if (explicit != null) {
+          return explicit == true;
+        }
+        return namaLower.contains('deposit') ||
+            namaLower.contains('saldo') ||
+            namaLower.contains('tabungan');
+      }(),
     );
   }
 }
