@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:core_db/core_db.dart';
 import 'package:core_device/core_device.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -118,25 +119,45 @@ class PengaturanNomorStruk {
     return '$prefix$tanggal$jam$acak';
   }
 
-  Future<String> _buatTanggalUrut() async {
+  Future<String> _buatTanggalUrut({String? prefix}) async {
     final sp = await SharedPreferences.getInstance();
     final now = DateTime.now();
     String pad(int x) => x.toString().padLeft(2, '0');
     final tanggal = '${pad(now.day)}${pad(now.month)}${now.year}';
     final tanggalTerakhir = sp.getString(_kTanggalUrutTerakhir);
-    final urutanSebelumnya =
+    var urutanSebelumnya =
         tanggalTerakhir == tanggal ? sp.getInt(_kUrutanTerakhir) ?? 0 : 0;
-    final urutan = urutanSebelumnya + 1;
+
+    // Rekonsiliasi dengan riwayat database lokal agar tidak pernah mundur saat app restart/cache hilang
+    try {
+      final urutanDb = await CoreDb.instance.urutanTerakhirHariIni(tanggal);
+      if (urutanDb > urutanSebelumnya) {
+        urutanSebelumnya = urutanDb;
+      }
+    } catch (_) {}
+
+    var urutan = urutanSebelumnya + 1;
+    final pref = prefix ?? '';
+    var kandidat = '$pref$tanggal${urutan.toString().padLeft(5, '0')}';
+
+    // Pastikan nomor nota yang dihasilkan belum pernah dipakai di baris lokal
+    try {
+      while (await CoreDb.instance.transaksiLokalDenganKode(kandidat) != null) {
+        urutan++;
+        kandidat = '$pref$tanggal${urutan.toString().padLeft(5, '0')}';
+      }
+    } catch (_) {}
+
     await sp.setString(_kTanggalUrutTerakhir, tanggal);
     await sp.setInt(_kUrutanTerakhir, urutan);
-    return '$tanggal${urutan.toString().padLeft(5, '0')}';
+    return kandidat;
   }
 
   Future<String> _buatDeviceTanggalUrut() async {
     await IdentitasMesin.instance.muat();
     final kodeDevice =
         kodeDeviceKustom ?? kodeDeviceDariId(IdentitasMesin.instance.idMesin);
-    return '$kodeDevice${await _buatTanggalUrut()}';
+    return _buatTanggalUrut(prefix: kodeDevice);
   }
 
   FormatNomorStruk _dariKode(String? kode) {

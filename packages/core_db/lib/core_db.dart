@@ -1660,6 +1660,34 @@ class CoreDb {
     return rows.isEmpty ? null : rows.first;
   }
 
+  /// Menghitung nomor urut tertinggi untuk format tanggal tertentu (mis. ddMMyyyy)
+  /// yang sudah pernah tersimpan di database lokal, agar pembuatan nomor nota baru
+  /// tidak pernah mundur atau membenturkan transaksi lama.
+  Future<int> urutanTerakhirHariIni(String tanggal) async {
+    final database = await db;
+    final rows = await database.rawQuery(
+      "SELECT kode_unik FROM transaksi_pending WHERE kode_unik LIKE ?",
+      ['%$tanggal%'],
+    );
+    var maxUrutan = 0;
+    for (final row in rows) {
+      final kode = '${row['kode_unik'] ?? ''}'.trim();
+      final idx = kode.indexOf(tanggal);
+      if (idx >= 0) {
+        final setelah = kode.substring(idx + tanggal.length);
+        final match = RegExp(r'^(\d{1,6})').firstMatch(setelah);
+        if (match != null) {
+          final angka = int.tryParse(match.group(1)!);
+          if (angka != null && angka > maxUrutan) {
+            maxUrutan = angka;
+          }
+        }
+      }
+    }
+    return maxUrutan;
+  }
+
+
   Future<void> tandaiTransaksiGagal(String kodeUnik, String pesanError) async {
     final database = await db;
     await database.rawUpdate(
