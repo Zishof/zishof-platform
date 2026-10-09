@@ -190,7 +190,8 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan>
   void initState() {
     super.initState();
     final now = DateTime.now();
-    _dari = DateTime(now.year, now.month, 1);
+    // Default 3 bulan terakhir agar riwayat mutasi voucher/tabungan langsung terlihat tanpa perlu ganti tanggal manual
+    _dari = DateTime(now.year, now.month - 2, 1);
     _sampai = now;
     _muat();
   }

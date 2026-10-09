@@ -106,7 +106,8 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
   void initState() {
     super.initState();
     final kini = DateTime.now();
-    _dari = DateTime(kini.year, kini.month, 1);
+    // Default 3 bulan terakhir (awal semester) agar mutasi voucher pejuang/santri tampil lengkap
+    _dari = DateTime(kini.year, kini.month - 2, 1);
     _sampai = DateTime(kini.year, kini.month, kini.day);
     _muat();
   }
@@ -151,8 +152,6 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
       });
     }
   }
-
-  double _angka(dynamic v) => _angkaSaldoVoucher(v);
 
   /// Rekap per anggota: masuk/keluar dijumlahkan, saldo akhir diambil dari
   /// snapshot resmi server agar sama dengan saldo yang dipakai kasir.
@@ -247,72 +246,17 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
     await _muat();
   }
 
-  /// Riwayat transaksi voucher SATU anggota -- diambil dari baris mutasi yang
-  /// sudah dimuat, jadi tidak menembak server lagi saat baris diklik.
+  /// Riwayat transaksi voucher SATU anggota. Mengambil mutasi lengkap anggota
+  /// dari server dengan rentang waktu yang dapat disesuaikan di dalam dialog.
   void _bukaRiwayat(Map<String, dynamic> anggota) {
-    final id = anggota['idAnggota'];
-    final nama = '${anggota['namaAnggota'] ?? '-'}';
-    final riwayat = _mutasi
-        .where((m) => id == null
-            ? '${m['namaAnggota']}' == nama
-            : '${m['idAnggota']}' == '$id')
-        .toList()
-      ..sort((a, b) => '${a['waktu']}'.compareTo('${b['waktu']}'));
     showDialog<void>(
       context: context,
-      builder: (c) => AlertDialog(
-        title: Text('Riwayat Voucher: $nama'),
-        content: SizedBox(
-          width: 760,
-          height: 440,
-          child: riwayat.isEmpty
-              ? const Center(
-                  child: Text('Belum ada transaksi pada rentang ini.'))
-              : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
-                        'Saldo akhir ${_fmtRp.format(anggota['saldoAkhir'] ?? 0)}  -  ${riwayat.length} transaksi',
-                        style: const TextStyle(fontWeight: FontWeight.w700)),
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: DataTable(
-                        columnSpacing: 20,
-                        columns: const [
-                          DataColumn(label: Text('Waktu')),
-                          DataColumn(label: Text('Jenis')),
-                          DataColumn(label: Text('Keterangan')),
-                          DataColumn(label: Text('Masuk'), numeric: true),
-                          DataColumn(label: Text('Keluar'), numeric: true),
-                          DataColumn(label: Text('Saldo'), numeric: true),
-                        ],
-                        rows: [
-                          for (final m in riwayat)
-                            DataRow(cells: [
-                              DataCell(Text('${m['waktu'] ?? '-'}')),
-                              DataCell(Text('${m['jenisMutasi'] ?? '-'}')),
-                              DataCell(SizedBox(
-                                  width: 220,
-                                  child: Text('${m['keterangan'] ?? '-'}',
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis))),
-                              DataCell(Text(_fmtRp.format(_angka(m['masuk'])))),
-                              DataCell(
-                                  Text(_fmtRp.format(_angka(m['keluar'])))),
-                              DataCell(Text(_fmtRp
-                                  .format(_angka(m['saldoPerPenabung'])))),
-                            ])
-                        ],
-                      ),
-                    ),
-                  ),
-                ]),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(c), child: const Text('Tutup'))
-        ],
+      builder: (c) => _DialogRiwayatAnggota(
+        idAnggota: anggota['idAnggota'],
+        namaAnggota: '${anggota['namaAnggota'] ?? '-'}',
+        saldoAkhirDefault: (anggota['saldoAkhir'] as num?)?.toDouble() ?? 0,
+        rentangAwalDari: _dari,
+        rentangAwalSampai: _sampai,
       ),
     );
   }
@@ -492,6 +436,229 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
                       ),
       ),
     ]);
+  }
+}
+
+class _DialogRiwayatAnggota extends StatefulWidget {
+  const _DialogRiwayatAnggota({
+    required this.idAnggota,
+    required this.namaAnggota,
+    required this.saldoAkhirDefault,
+    required this.rentangAwalDari,
+    required this.rentangAwalSampai,
+  });
+
+  final Object? idAnggota;
+  final String namaAnggota;
+  final double saldoAkhirDefault;
+  final DateTime rentangAwalDari;
+  final DateTime rentangAwalSampai;
+
+  @override
+  State<_DialogRiwayatAnggota> createState() => _DialogRiwayatAnggotaState();
+}
+
+class _DialogRiwayatAnggotaState extends State<_DialogRiwayatAnggota> {
+  static final _fmtRp =
+      NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+  static final _fmtTgl = DateFormat('yyyy-MM-dd');
+  static final _fmtTglTampil = DateFormat('dd/MM/yyyy');
+
+  late DateTime _dari;
+  late DateTime _sampai;
+  bool _memuat = true;
+  String? _galat;
+  List<Map<String, dynamic>> _daftar = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _dari = widget.rentangAwalDari;
+    _sampai = widget.rentangAwalSampai;
+    _muat();
+  }
+
+  Future<void> _muat() async {
+    final id = widget.idAnggota;
+    if (id == null) {
+      setStateIfMounted(() {
+        _memuat = false;
+      });
+      return;
+    }
+    setStateIfMounted(() {
+      _memuat = true;
+      _galat = null;
+    });
+    try {
+      final res = await ApiClient.instance.aksi('mutasi_tabungan_list', {
+        'id_anggota': id,
+        'dari': _fmtTgl.format(_dari),
+        'sampai': _fmtTgl.format(_sampai),
+      });
+      final sukses = res['status'] == '00' || res['status'] == 'success';
+      if (!mounted) return;
+      if (sukses && res['data'] is List) {
+        setStateIfMounted(() {
+          _daftar = (res['data'] as List)
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList()
+            ..sort((a, b) => '${a['waktu']}'.compareTo('${b['waktu']}'));
+          _memuat = false;
+        });
+      } else {
+        setStateIfMounted(() {
+          _galat = '${res['description'] ?? 'Gagal memuat riwayat.'}';
+          _memuat = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setStateIfMounted(() {
+        _galat = '$e';
+        _memuat = false;
+      });
+    }
+  }
+
+  Future<void> _pilihRentang() async {
+    final hasil = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      initialDateRange: DateTimeRange(start: _dari, end: _sampai),
+    );
+    if (hasil == null || !mounted) return;
+    setStateIfMounted(() {
+      _dari = hasil.start;
+      _sampai = hasil.end;
+    });
+    await _muat();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final totalMasuk = _daftar.fold<double>(
+        0, (s, r) => s + _angkaSaldoVoucher(r['masuk']));
+    final totalKeluar = _daftar.fold<double>(
+        0, (s, r) => s + _angkaSaldoVoucher(r['keluar']));
+    final saldoAkhirTampil = _daftar.isNotEmpty
+        ? _angkaSaldoVoucher(_daftar.last['saldoPerPenabung'])
+        : widget.saldoAkhirDefault;
+
+    return AlertDialog(
+      title: Row(
+        children: [
+          Expanded(child: Text('Riwayat Voucher: ${widget.namaAnggota}')),
+          OutlinedButton.icon(
+            onPressed: _memuat ? null : _pilihRentang,
+            icon: const Icon(Icons.date_range, size: 16),
+            label: Text(
+                '${_fmtTglTampil.format(_dari)} - ${_fmtTglTampil.format(_sampai)}'),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 800,
+        height: 480,
+        child: _memuat
+            ? const Center(child: CircularProgressIndicator())
+            : _galat != null
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_galat!, style: const TextStyle(color: Colors.red)),
+                        const SizedBox(height: 8),
+                        FilledButton(
+                            onPressed: _muat, child: const Text('Coba Lagi')),
+                      ],
+                    ),
+                  )
+                : _daftar.isEmpty
+                    ? Center(
+                        child: Text(
+                            'Belum ada transaksi pada rentang ${_fmtTglTampil.format(_dari)} s/d ${_fmtTglTampil.format(_sampai)}.'))
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest
+                                  .withValues(alpha: 0.5),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisAlignment:
+                                  MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('Total Masuk: ${_fmtRp.format(totalMasuk)}',
+                                    style: const TextStyle(
+                                        color: Colors.green,
+                                        fontWeight: FontWeight.w600)),
+                                Text('Total Keluar: ${_fmtRp.format(totalKeluar)}',
+                                    style: const TextStyle(
+                                        color: Colors.red,
+                                        fontWeight: FontWeight.w600)),
+                                Text('Saldo Akhir: ${_fmtRp.format(saldoAkhirTampil)}',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w800)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              child: DataTable(
+                                columnSpacing: 16,
+                                columns: const [
+                                  DataColumn(label: Text('Waktu')),
+                                  DataColumn(label: Text('Jenis')),
+                                  DataColumn(label: Text('Keterangan')),
+                                  DataColumn(
+                                      label: Text('Masuk'), numeric: true),
+                                  DataColumn(
+                                      label: Text('Keluar'), numeric: true),
+                                  DataColumn(
+                                      label: Text('Saldo'), numeric: true),
+                                ],
+                                rows: [
+                                  for (final m in _daftar)
+                                    DataRow(cells: [
+                                      DataCell(Text('${m['waktu'] ?? '-'}')),
+                                      DataCell(
+                                          Text('${m['jenisMutasi'] ?? '-'}')),
+                                      DataCell(SizedBox(
+                                          width: 240,
+                                          child: Text('${m['keterangan'] ?? '-'}',
+                                              maxLines: 2,
+                                              overflow:
+                                                  TextOverflow.ellipsis))),
+                                      DataCell(Text(_fmtRp.format(
+                                          _angkaSaldoVoucher(m['masuk'])))),
+                                      DataCell(Text(_fmtRp.format(
+                                          _angkaSaldoVoucher(m['keluar'])))),
+                                      DataCell(Text(_fmtRp.format(
+                                          _angkaSaldoVoucher(
+                                              m['saldoPerPenabung'])))),
+                                    ]),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tutup')),
+      ],
+    );
   }
 }
 
