@@ -649,6 +649,30 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                     style: const TextStyle(fontWeight: FontWeight.bold)),
                 if (pesanError.isNotEmpty) ...[
                   const SizedBox(height: 12),
+                  if (pesanError.toLowerCase().contains('saldo') && pesanError.toLowerCase().contains('tidak mencukupi')) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.primary),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.lightbulb_outline, color: AppColors.primary, size: 22),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Saldo anggota saat ini Rp0 di server pusat. Agar transaksi dapat tersinkron dan kasir bisa Tutup Kas: jika pelanggan membayar dengan Tunai/QRIS, klik tombol "Ganti ke Pembayaran Lokal" di bawah.',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   AppErrorPanel(
                     info: AppErrorInfo.dari(pesanError, aktivitas: 'bayar'),
                   ),
@@ -658,8 +682,20 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
           ),
         ),
         actions: [
-          if (row['status'] != 'SYNCED') ...[
+          if (dapatDikoreksi)
             FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                _gantiMetodePending(row);
+              },
+              icon: const Icon(Icons.swap_horiz),
+              label: const Text('Ganti ke Pembayaran Lokal'),
+            ),
+          if (row['status'] != 'SYNCED') ...[
+            OutlinedButton.icon(
               onPressed: () {
                 Navigator.pop(context);
                 _kirimSatuPending(row, paksa: true);
@@ -668,15 +704,6 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
               label: const Text('Coba Kirim Sekarang'),
             ),
           ],
-          if (dapatDikoreksi)
-            OutlinedButton.icon(
-              onPressed: () {
-                Navigator.pop(context);
-                _gantiMetodePending(row);
-              },
-              icon: const Icon(Icons.swap_horiz),
-              label: const Text('Ganti ke Pembayaran Lokal'),
-            ),
           TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Tutup')),
@@ -815,7 +842,7 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                 AppTableCell.text('${row['pesan_error'] ?? '-'}',
                     flex: 4, maxLines: 2),
                 AppTableCell(
-                  width: 110,
+                  width: 140,
                   align: TextAlign.center,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -826,6 +853,14 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                         onPressed: () => _lihatDetailPending(row),
                         icon: const Icon(Icons.visibility_outlined),
                       ),
+                      if (status == 'GAGAL' &&
+                          '${row['pesan_error'] ?? ''}'.trim().isNotEmpty)
+                        IconButton(
+                          tooltip: 'Ganti ke pembayaran lokal (Tunai/QRIS)',
+                          onPressed: () => _gantiMetodePending(row),
+                          icon: Icon(Icons.swap_horiz,
+                              color: AppColors.primary),
+                        ),
                       // Baris Sukses pun tetap dapat dikirim ulang: transaksi
                       // bisa saja terhapus di server sementara perangkat ini
                       // masih menyimpan jurnalnya. Kiriman ulang aman karena
