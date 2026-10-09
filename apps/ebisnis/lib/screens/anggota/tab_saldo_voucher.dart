@@ -372,7 +372,7 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  'Saldo Voucher Pelanggan menampilkan sisa voucher aktif yang siap dibelanjakan kasir (setelah penyesuaian masa berlaku voucher/hangus). Arus transaksi dapat dilihat di Mutasi Voucher.',
+                  'Daftar ini hanya mencakup anggota yang memiliki mutasi pada rentang tanggal terpilih. Saldo akhir per anggota mengikuti hitungan resmi server, termasuk penyesuaian masa berlaku. Total tabel hanya menjumlahkan anggota yang tampil, bukan otomatis saldo seluruh anggota.',
                   style: TextStyle(
                       fontSize: 11,
                       color: Colors.grey.shade600,

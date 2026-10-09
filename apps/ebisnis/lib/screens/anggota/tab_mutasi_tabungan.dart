@@ -745,25 +745,25 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan>
             final saldoTotalBukuBesar = _data.isNotEmpty
                 ? ((_data.last['saldoTotal'] as num?)?.toDouble() ?? totalSaldoAkhir)
                 : totalSaldoAkhir;
-            final double selisihAnggotaPasif = saldoTotalBukuBesar - totalSaldoAkhir;
-            final bool adaAnggotaPasif = selisihAnggotaPasif.abs() > 0.5;
+            final double selisihCakupan = saldoTotalBukuBesar - totalSaldoAkhir;
+            final bool adaSelisihCakupan = selisihCakupan.abs() > 0.5;
 
             return Column(
               children: [
                 Row(children: [
                   Expanded(
                       child: _KartuTotal(
-                          label: adaAnggotaPasif ? 'Saldo Awal (Aktif)' : 'Saldo Awal',
+                          label: 'Saldo Awal Rekap',
                           nilai: _formatRpMutasiTabungan.format(totalSaldoAwal),
                           warna: AppColors.info)),
                   const SizedBox(width: 8),
                   Expanded(
                       child: _KartuTotal(
-                          label: adaAnggotaPasif ? 'Saldo Akhir (Aktif)' : 'Saldo Akhir',
+                          label: 'Saldo Akhir Rekap',
                           nilai: _formatRpMutasiTabungan.format(totalSaldoAkhir),
                           warna: AppColors.primary)),
                 ]),
-                if (adaAnggotaPasif)
+                if (adaSelisihCakupan)
                   Container(
                     margin: const EdgeInsets.only(top: 8),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -778,8 +778,8 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan>
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Saldo Berjalan Kumulatif (Buku Besar): ${_formatRpMutasiTabungan.format(saldoTotalBukuBesar)}. '
-                            'Selisih ${_formatRpMutasiTabungan.format(selisihAnggotaPasif)} merupakan saldo awal anggota yang belum bertransaksi pada rentang tanggal ini.',
+                            'Saldo berjalan sesuai cakupan filter: ${_formatRpMutasiTabungan.format(saldoTotalBukuBesar)}. '
+                            'Selisih ${_formatRpMutasiTabungan.format(selisihCakupan)} antara saldo berjalan dan rekap periode dapat dipengaruhi cakupan saldo awal anggota dan batas data mutasi yang ditampilkan. Periksa rincian sebelum menyimpulkan penyebab.',
                             style: TextStyle(fontSize: 12, color: Colors.blue.shade900),
                           ),
                         ),

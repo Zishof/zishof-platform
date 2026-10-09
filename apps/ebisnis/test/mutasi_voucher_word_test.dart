@@ -112,6 +112,15 @@ void main() {
             'final ringkas = ringkasMutasiVoucher(_data, _rekapPerAnggota);'));
   });
 
+  test('keterangan selisih tidak memastikan penyebab tanpa rekonsiliasi', () {
+    final layar =
+        File('lib/screens/anggota/tab_mutasi_tabungan.dart').readAsStringSync();
+    expect(layar, contains("label: 'Saldo Awal Rekap'"));
+    expect(layar, contains("label: 'Saldo Akhir Rekap'"));
+    expect(layar, contains('Periksa rincian sebelum menyimpulkan penyebab.'));
+    expect(layar, isNot(contains('merupakan saldo awal anggota yang belum bertransaksi')));
+  });
+
   test('aksi koreksi hanya untuk baris deposit topup tabungan', () {
     expect(
         idDepositDariBarisMutasi({

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:ebisnis/screens/anggota/tab_saldo_voucher.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -54,5 +56,12 @@ void main() {
 
     expect(hasil.single['saldoAwal'], 10000);
     expect(hasil.single['saldoAkhir'], 25000);
+  });
+
+  test('keterangan total membatasi cakupan pada anggota yang tampil', () {
+    final layar =
+        File('lib/screens/anggota/tab_saldo_voucher.dart').readAsStringSync();
+    expect(layar, contains('anggota yang memiliki mutasi pada rentang tanggal terpilih'));
+    expect(layar, contains('bukan otomatis saldo seluruh anggota'));
   });
 }
