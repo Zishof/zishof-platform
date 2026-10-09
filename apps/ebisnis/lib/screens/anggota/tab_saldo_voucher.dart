@@ -363,6 +363,25 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
             ],
           ),
         ),
+      if (!_memuat && _galat == null)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, size: 14, color: Colors.grey.shade600),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Saldo Voucher Pelanggan menampilkan sisa voucher aktif yang siap dibelanjakan kasir (setelah penyesuaian masa berlaku voucher/hangus). Arus transaksi dapat dilihat di Mutasi Voucher.',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey.shade600,
+                      fontStyle: FontStyle.italic),
+                ),
+              ),
+            ],
+          ),
+        ),
       Expanded(
         child: _memuat
             ? const Center(child: CircularProgressIndicator())

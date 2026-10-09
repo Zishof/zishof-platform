@@ -741,19 +741,54 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan>
                     warna: AppColors.danger)),
           ]),
           const SizedBox(height: 8),
-          Row(children: [
-            Expanded(
-                child: _KartuTotal(
-                    label: 'Saldo Awal',
-                    nilai: _formatRpMutasiTabungan.format(totalSaldoAwal),
-                    warna: AppColors.info)),
-            const SizedBox(width: 8),
-            Expanded(
-                child: _KartuTotal(
-                    label: 'Saldo Akhir',
-                    nilai: _formatRpMutasiTabungan.format(totalSaldoAkhir),
-                    warna: AppColors.primary)),
-          ]),
+          Builder(builder: (context) {
+            final saldoTotalBukuBesar = _data.isNotEmpty
+                ? ((_data.last['saldoTotal'] as num?)?.toDouble() ?? totalSaldoAkhir)
+                : totalSaldoAkhir;
+            final double selisihAnggotaPasif = saldoTotalBukuBesar - totalSaldoAkhir;
+            final bool adaAnggotaPasif = selisihAnggotaPasif.abs() > 0.5;
+
+            return Column(
+              children: [
+                Row(children: [
+                  Expanded(
+                      child: _KartuTotal(
+                          label: adaAnggotaPasif ? 'Saldo Awal (Aktif)' : 'Saldo Awal',
+                          nilai: _formatRpMutasiTabungan.format(totalSaldoAwal),
+                          warna: AppColors.info)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: _KartuTotal(
+                          label: adaAnggotaPasif ? 'Saldo Akhir (Aktif)' : 'Saldo Akhir',
+                          nilai: _formatRpMutasiTabungan.format(totalSaldoAkhir),
+                          warna: AppColors.primary)),
+                ]),
+                if (adaAnggotaPasif)
+                  Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 18, color: Colors.blue.shade700),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Saldo Berjalan Kumulatif (Buku Besar): ${_formatRpMutasiTabungan.format(saldoTotalBukuBesar)}. '
+                            'Selisih ${_formatRpMutasiTabungan.format(selisihAnggotaPasif)} merupakan saldo awal anggota yang belum bertransaksi pada rentang tanggal ini.',
+                            style: TextStyle(fontSize: 12, color: Colors.blue.shade900),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            );
+          }),
           const SizedBox(height: 12),
           const Text('Rekap per Anggota',
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
