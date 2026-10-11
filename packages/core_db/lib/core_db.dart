@@ -1332,6 +1332,7 @@ class CoreDb {
     String keyword = '',
     int? kategoriId,
     String jenisItem = 'SEMUA',
+    String? pemasok,
     int limit = 15,
     int offset = 0,
   }) async {
@@ -1360,6 +1361,12 @@ class CoreDb {
         syarat.add('jenis_item = ?');
         argumen.add(jenis);
       }
+    }
+    final pem = pemasok?.trim();
+    if (pem != null && pem.isNotEmpty) {
+      syarat.add(
+          "(LOWER(COALESCE(json_extract(detail_json, '\$.pemasokNama'), json_extract(detail_json, '\$.pemasok'), '')) = ?)");
+      argumen.add(pem.toLowerCase());
     }
     try {
       return await database.query(
@@ -1395,6 +1402,7 @@ class CoreDb {
     String keyword = '',
     int? kategoriId,
     String jenisItem = 'SEMUA',
+    String? pemasok,
   }) async {
     final database = await db;
     final syarat = <String>[];
@@ -1420,6 +1428,12 @@ class CoreDb {
         argumen.add(jenis);
       }
     }
+    final pem = pemasok?.trim();
+    if (pem != null && pem.isNotEmpty) {
+      syarat.add(
+          "(LOWER(COALESCE(json_extract(detail_json, '\$.pemasokNama'), json_extract(detail_json, '\$.pemasok'), '')) = ?)");
+      argumen.add(pem.toLowerCase());
+    }
     try {
       final hasil = await database.rawQuery(
         'SELECT COUNT(*) AS n FROM produk_cache${syarat.isEmpty ? '' : ' WHERE ${syarat.join(' AND ')}'}',
@@ -1431,6 +1445,52 @@ class CoreDb {
         debugPrint('jumlahProdukCacheMaster gagal kueri lokal: $e');
       }
       return 0;
+    }
+  }
+
+  /// Mengambil daftar nama pemasok unik yang tersimpan pada cache produk lokal.
+  /// Dipakai untuk dropdown filter pencarian per supplier dan autocomplete form produk.
+  Future<List<String>> daftarPemasokCache() async {
+    final database = await db;
+    try {
+      final rows = await database.rawQuery('''
+        SELECT DISTINCT COALESCE(json_extract(detail_json, '\$.pemasokNama'), json_extract(detail_json, '\$.pemasok')) AS pemasok
+        FROM produk_cache
+        WHERE COALESCE(json_extract(detail_json, '\$.pemasokNama'), json_extract(detail_json, '\$.pemasok')) IS NOT NULL
+          AND TRIM(COALESCE(json_extract(detail_json, '\$.pemasokNama'), json_extract(detail_json, '\$.pemasok'))) != ''
+        ORDER BY pemasok COLLATE NOCASE ASC
+      ''');
+      return rows
+          .map((r) => r['pemasok'] as String?)
+          .where((s) => s != null && s.trim().isNotEmpty)
+          .map((s) => s!.trim())
+          .toSet()
+          .toList();
+    } catch (_) {
+      try {
+        final rows = await database.query('produk_cache', columns: ['detail_json']);
+        final setPemasok = <String>{};
+        for (final r in rows) {
+          final dj = r['detail_json'] as String?;
+          if (dj != null && dj.isNotEmpty) {
+            try {
+              final m = jsonDecode(dj);
+              if (m is Map) {
+                final s = '${m['pemasokNama'] ?? m['pemasok'] ?? ''}'.trim();
+                if (s.isNotEmpty) setPemasok.add(s);
+              }
+            } catch (_) {}
+          }
+        }
+        final list = setPemasok.toList();
+        list.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        return list;
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('daftarPemasokCache gagal: $e');
+        }
+        return const <String>[];
+      }
     }
   }
 

@@ -141,6 +141,10 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
   /// `'SEMUA'` = tanpa filter (default).
   String _filterJenisItem = 'SEMUA';
 
+  /// Filter pencarian per Pemasok Utama. null = Semua Pemasok.
+  String? _filterPemasok;
+  List<String> _daftarSemuaPemasok = [];
+
   /// Tanggal acuan stok. null = stok berjalan (perilaku lama).
   DateTime? _tanggalStok;
   HasilStokTanggal? _stokTanggal;
@@ -172,6 +176,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
       keyword: _kataKunci.trim(),
       kategoriId: _kategoriTerpilih,
       jenisItem: _filterJenisItem,
+      pemasok: _filterPemasok,
       limit: _itemPerHalaman,
       offset: _halaman * _itemPerHalaman,
     );
@@ -179,6 +184,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
       keyword: _kataKunci.trim(),
       kategoriId: _kategoriTerpilih,
       jenisItem: _filterJenisItem,
+      pemasok: _filterPemasok,
     );
     if (!mounted) return;
     setStateIfMounted(() {
@@ -196,6 +202,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
     final kataKunci = _kataKunci.trim();
     final kategoriId = _kategoriTerpilih;
     final jenisItem = _filterJenisItem;
+    final pemasok = _filterPemasok;
     setStateIfMounted(() {
       _memuat = true;
       _pesanError = null;
@@ -213,6 +220,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
           keyword: kataKunci,
           kategoriId: kategoriId,
           jenisItem: jenisItem,
+          pemasok: pemasok,
           limit: _itemPerHalaman,
           offset: halaman * _itemPerHalaman,
         );
@@ -220,9 +228,19 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
           keyword: kataKunci,
           kategoriId: kategoriId,
           jenisItem: jenisItem,
+          pemasok: pemasok,
         );
         final pendingOutbox = await CoreDb.instance.outboxMasterPending();
         final gagalOutbox = await CoreDb.instance.outboxMasterGagal(batas: 500);
+
+        try {
+          final daftarLokal = await CoreDb.instance.daftarPemasokCache();
+          if (daftarLokal.isNotEmpty) {
+            final setP = <String>{..._daftarSemuaPemasok, ...daftarLokal};
+            _daftarSemuaPemasok = setP.toList()
+              ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+          }
+        } catch (_) {}
 
         if (!mounted || generasi != _generasiMuat) return;
         final produkLokal = barisLokal
@@ -263,6 +281,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
         if (kataKunci.isNotEmpty) 'keyword': kataKunci,
         if (kategoriId != null) 'kategori_id': kategoriId,
         if (jenisItem != 'SEMUA') 'jenisItem': jenisItem,
+        if (pemasok != null) 'pemasok_nama': pemasok,
         // LINGKUP TOKO wajib eksplisit untuk admin lintas toko.
         if (Sesi.instance.idTokoTerpilih != null)
           'toko_id': Sesi.instance.idTokoTerpilih,
@@ -316,6 +335,18 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
         _jumlahHapus = 0;
         if (idBaru.isNotEmpty || idBerubah.isNotEmpty) _versiPerubahan++;
       });
+
+      final serverPemasok = ((katalog['daftarPemasok'] as List?) ?? const [])
+          .map((e) => '$e'.trim())
+          .where((s) => s.isNotEmpty);
+      final setPemasok = <String>{
+        ..._daftarSemuaPemasok,
+        ...serverPemasok,
+        for (final p in produkServer)
+          if (p.pemasokNama.trim().isNotEmpty) p.pemasokNama.trim(),
+      };
+      _daftarSemuaPemasok = setPemasok.toList()
+        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
       final hasilKategori = await MasterOffline.daftarDenganCache(
           'jenis_produk_list',
@@ -818,6 +849,122 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
     );
   }
 
+  /// Widget pemilih filter Pemasok Utama di atas daftar produk.
+  Widget _pemilihFilterPemasok() {
+    final aktif = _filterPemasok != null;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: aktif
+            ? AppColors.primary.withValues(alpha: 0.1)
+            : Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: aktif ? AppColors.primary : AppColors.borderOf(context),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.local_shipping_outlined,
+            size: 16,
+            color: aktif ? AppColors.primary : AppColors.textSecondaryOf(context),
+          ),
+          const SizedBox(width: 6),
+          InkWell(
+            onTap: _tampilkanDialogPilihPemasok,
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _filterPemasok == null
+                        ? 'Pemasok Utama: Semua'
+                        : 'Pemasok Utama: $_filterPemasok',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: aktif ? FontWeight.w600 : FontWeight.normal,
+                      color: aktif
+                          ? AppColors.primary
+                          : Theme.of(context).textTheme.bodyMedium?.color,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.arrow_drop_down,
+                    size: 18,
+                    color: aktif
+                        ? AppColors.primary
+                        : AppColors.textSecondaryOf(context),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (aktif) ...[
+            const SizedBox(width: 4),
+            InkWell(
+              onTap: () {
+                setStateIfMounted(() {
+                  _filterPemasok = null;
+                  _halaman = 0;
+                });
+                _muatSemua();
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: const Padding(
+                padding: EdgeInsets.all(2),
+                child: Icon(
+                  Icons.cancel,
+                  size: 16,
+                  color: Colors.deepOrange,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _tampilkanDialogPilihPemasok() async {
+    final setPemasok = <String>{
+      ..._daftarSemuaPemasok,
+      for (final p in _semuaProduk)
+        if (p.pemasokNama.trim().isNotEmpty) p.pemasokNama.trim(),
+    };
+    try {
+      final lokal = await CoreDb.instance.daftarPemasokCache();
+      setPemasok.addAll(lokal);
+    } catch (_) {}
+    final daftar = setPemasok.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    if (!mounted) return;
+
+    final terpilih = await showDialog<String?>(
+      context: context,
+      builder: (ctx) => _DialogPilihPemasok(
+        pemasokSaatIni: _filterPemasok,
+        daftarPemasok: daftar,
+      ),
+    );
+
+    if (terpilih != null) {
+      final nilai = terpilih == '__SEMUA__' ? null : terpilih;
+      if (nilai != _filterPemasok) {
+        setStateIfMounted(() {
+          _filterPemasok = nilai;
+          _halaman = 0;
+        });
+        await _muatSemua();
+      }
+    }
+  }
+
   Future<void> _bukaFormProduk({Produk? produk}) async {
     // Daftar relasi resep/ekstra bukan tabel utama, namun tetap dimuat secara
     // terukur (maks. 100 per jenis) agar paging katalog 15 baris tidak membuat
@@ -871,6 +1018,18 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
       // Form tetap dibuka. Validator UOM akan memberi petunjuk yang dapat
       // dilakukan user bila daftar master belum berhasil dimuat.
     }
+    final setPemasok = <String>{
+      ..._daftarSemuaPemasok,
+      for (final p in _semuaProduk)
+        if (p.pemasokNama.trim().isNotEmpty) p.pemasokNama.trim(),
+    };
+    try {
+      final lokal = await CoreDb.instance.daftarPemasokCache();
+      setPemasok.addAll(lokal);
+    } catch (_) {}
+    final daftarPemasokTerurut = setPemasok.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
     if (!mounted) return;
     final tersimpan = await showModalBottomSheet<bool>(
       context: context,
@@ -880,7 +1039,8 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
           kategori: _kategori,
           kebijakanRetur: _kebijakanRetur.where((e) => e.aktif).toList(),
           pilihanUom: pilihanUom,
-          semuaProduk: pilihanRelasi.values.toList()),
+          semuaProduk: pilihanRelasi.values.toList(),
+          daftarPemasok: daftarPemasokTerurut),
     );
     if (tersimpan == true) {
       await _muatSemua();
@@ -1497,6 +1657,16 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                                       _muatSemua();
                                                     },
                                                   ),
+                                                ),
+                                                const SizedBox(height: 10),
+                                                Wrap(
+                                                  spacing: 8,
+                                                  runSpacing: 8,
+                                                  crossAxisAlignment:
+                                                      WrapCrossAlignment.center,
+                                                  children: [
+                                                    _pemilihFilterPemasok(),
+                                                  ],
                                                 ),
                                                 const SizedBox(height: 10),
                                                 SizedBox(
@@ -2652,12 +2822,14 @@ class _FormProduk extends StatefulWidget {
   final List<KebijakanRetur> kebijakanRetur;
   final List<Map<String, dynamic>> pilihanUom;
   final List<Produk> semuaProduk;
+  final List<String> daftarPemasok;
   const _FormProduk(
       {required this.produk,
       required this.kategori,
       required this.kebijakanRetur,
       required this.pilihanUom,
-      required this.semuaProduk});
+      required this.semuaProduk,
+      this.daftarPemasok = const []});
 
   @override
   State<_FormProduk> createState() => _FormProdukState();
@@ -3790,10 +3962,9 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                   Row(
                     children: [
                       Expanded(
-                        child: AppFormTextField(
-                          label: 'Nama Pemasok Utama',
+                        child: _InputAutocompletePemasok(
                           controller: _pemasok,
-                          hintText: 'mis. AB Grosir',
+                          daftarPemasok: widget.daftarPemasok,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -4592,3 +4763,288 @@ class _DialogPilihProdukState extends State<_DialogPilihProduk> {
     );
   }
 }
+
+/// Widget peraga teks dengan penyorotan (highlight) warna kuning muda pada
+/// bagian teks yang cocok dengan inisial/kata kunci pencarian pemasok.
+class _TeksSorotPemasok extends StatelessWidget {
+  final String teks;
+  final String kataKunci;
+  final TextStyle? style;
+
+  const _TeksSorotPemasok({
+    required this.teks,
+    required this.kataKunci,
+    this.style,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final kata = kataKunci.trim().toLowerCase();
+    if (kata.isEmpty || !teks.toLowerCase().contains(kata)) {
+      return Text(teks, style: style);
+    }
+
+    final spans = <TextSpan>[];
+    final defaultStyle = style ?? DefaultTextStyle.of(context).style;
+    final hlStyle = defaultStyle.copyWith(
+      backgroundColor: const Color(0xFFFFF176),
+      color: Colors.black87,
+      fontWeight: FontWeight.bold,
+    );
+
+    final lower = teks.toLowerCase();
+    int start = 0;
+    while (true) {
+      final index = lower.indexOf(kata, start);
+      if (index < 0) {
+        spans.add(TextSpan(text: teks.substring(start), style: defaultStyle));
+        break;
+      }
+      if (index > start) {
+        spans.add(TextSpan(text: teks.substring(start, index), style: defaultStyle));
+      }
+      spans.add(TextSpan(
+        text: teks.substring(index, index + kata.length),
+        style: hlStyle,
+      ));
+      start = index + kata.length;
+    }
+
+    return RichText(text: TextSpan(children: spans));
+  }
+}
+
+/// Dialog pemilihan pemasok utama untuk menyaring daftar produk (seperti Accurate).
+/// Menyediakan kotak pencarian instan dan opsi "Semua Pemasok (Tanpa Filter)".
+class _DialogPilihPemasok extends StatefulWidget {
+  final String? pemasokSaatIni;
+  final List<String> daftarPemasok;
+
+  const _DialogPilihPemasok({
+    this.pemasokSaatIni,
+    required this.daftarPemasok,
+  });
+
+  @override
+  State<_DialogPilihPemasok> createState() => _DialogPilihPemasokState();
+}
+
+class _DialogPilihPemasokState extends State<_DialogPilihPemasok> {
+  final TextEditingController _cariCtrl = TextEditingController();
+  String _kataKunci = '';
+
+  @override
+  void dispose() {
+    _cariCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final kata = _kataKunci.trim().toLowerCase();
+    final tersaring = widget.daftarPemasok
+        .where((p) => kata.isEmpty || p.toLowerCase().contains(kata))
+        .toList();
+
+    return AlertDialog(
+      title: const Text('Pilih Pemasok Utama', style: TextStyle(fontSize: 16)),
+      contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      content: SizedBox(
+        width: 440,
+        height: 420,
+        child: Column(
+          children: [
+            TextField(
+              controller: _cariCtrl,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Ketik nama pemasok...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: _kataKunci.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () {
+                          _cariCtrl.clear();
+                          setState(() => _kataKunci = '');
+                        },
+                      )
+                    : null,
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onChanged: (v) => setState(() => _kataKunci = v),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              dense: true,
+              leading: const Icon(Icons.all_inclusive, size: 20),
+              title: const Text('Semua Pemasok (Tanpa Filter)'),
+              trailing: widget.pemasokSaatIni == null
+                  ? Icon(Icons.check, color: AppColors.primary, size: 20)
+                  : null,
+              onTap: () => Navigator.of(context).pop('__SEMUA__'),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: tersaring.isEmpty
+                  ? Center(
+                      child: Text(
+                        'Pemasok tidak ditemukan.',
+                        style: TextStyle(
+                          color: AppColors.textSecondaryOf(context),
+                          fontSize: 13,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: tersaring.length,
+                      itemBuilder: (ctx, idx) {
+                        final nama = tersaring[idx];
+                        final terpilih = widget.pemasokSaatIni == nama;
+                        return ListTile(
+                          dense: true,
+                          leading: const Icon(Icons.local_shipping_outlined, size: 18),
+                          title: _TeksSorotPemasok(
+                            teks: nama,
+                            kataKunci: _kataKunci,
+                            style: TextStyle(
+                              fontWeight: terpilih ? FontWeight.bold : FontWeight.normal,
+                              color: terpilih ? AppColors.primary : null,
+                            ),
+                          ),
+                          trailing: terpilih
+                              ? Icon(Icons.check, color: AppColors.primary, size: 20)
+                              : null,
+                          onTap: () => Navigator.of(context).pop(nama),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Batal'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Field autocomplete untuk Pemasok Utama di form produk.
+/// Memunculkan dropdown saran saat pengguna mengetik inisial nama pemasok
+/// dengan penanda sorotan kuning pada bagian yang cocok. Pengguna tetap bebas
+/// mengetik nama pemasok baru jika belum ada di database.
+class _InputAutocompletePemasok extends StatefulWidget {
+  final TextEditingController controller;
+  final List<String> daftarPemasok;
+
+  const _InputAutocompletePemasok({
+    required this.controller,
+    required this.daftarPemasok,
+  });
+
+  @override
+  State<_InputAutocompletePemasok> createState() => _InputAutocompletePemasokState();
+}
+
+class _InputAutocompletePemasokState extends State<_InputAutocompletePemasok> {
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode();
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RawAutocomplete<String>(
+      textEditingController: widget.controller,
+      focusNode: _focusNode,
+      optionsBuilder: (TextEditingValue textEditingValue) {
+        final query = textEditingValue.text.trim().toLowerCase();
+        if (query.isEmpty) {
+          return widget.daftarPemasok.take(15);
+        }
+        return widget.daftarPemasok
+            .where((p) => p.toLowerCase().contains(query))
+            .take(20);
+      },
+      onSelected: (String pilihan) {
+        widget.controller.text = pilihan;
+      },
+      fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+        return TextFormField(
+          controller: textEditingController,
+          focusNode: focusNode,
+          decoration: AppFormStyle.fieldDecoration(
+            context,
+            labelText: 'Nama Pemasok Utama',
+            hintText: 'mis. AB Grosir',
+          ).copyWith(
+            suffixIcon: const Icon(Icons.arrow_drop_down, size: 20),
+          ),
+          onFieldSubmitted: (val) => onFieldSubmitted(),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 6,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: BorderSide(color: AppColors.borderOf(context)),
+            ),
+            color: Theme.of(context).cardColor,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 240, maxWidth: 360),
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (context, index) {
+                  final option = options.elementAt(index);
+                  return InkWell(
+                    onTap: () => onSelected(option),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.local_shipping_outlined, size: 16, color: Colors.grey),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _TeksSorotPemasok(
+                              teks: option,
+                              kataKunci: widget.controller.text,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Theme.of(context).textTheme.bodyMedium?.color,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
