@@ -786,6 +786,48 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
     final keyword = _controllerCari.text.trim();
     final kategoriId = _kategoriTerpilihId;
 
+    // Render cache SQLite terlebih dahulu. Permintaan server di bawah hanya
+    // menyegarkan halaman yang sama; bila jaringan gagal, halaman lokal tetap
+    // tampil dan tidak diganti dengan daftar kosong.
+    List<Map<String, dynamic>> daftarLokal = [];
+    var totalLokal = 0;
+    try {
+      final lokal = await CoreDb.instance.produkCacheMaster(
+        keyword: keyword,
+        kategoriId: kategoriId,
+        limit: _itemPerHalaman,
+        offset: _halaman * _itemPerHalaman,
+      );
+      daftarLokal = lokal.map((row) {
+        final id = (row['id'] as num?)?.toInt() ?? 0;
+        return {
+          'id': id,
+          'kode': '${row['kode'] ?? ''}',
+          'barcode': '${row['barcode'] ?? ''}',
+          'nama': '${row['nama'] ?? ''}',
+          'hargaJual': (row['harga_jual'] as num?)?.toDouble() ?? 0.0,
+          'kategoriId': (row['kategori_id'] as num?)?.toInt(),
+          'kategoriNama': '${row['kategori_nama'] ?? ''}',
+          'pemasokNama': '${row['pemasokNama'] ?? row['pemasok'] ?? ''}',
+        };
+      }).toList();
+      totalLokal = await CoreDb.instance.jumlahProdukCacheMaster(
+        keyword: keyword,
+        kategoriId: kategoriId,
+      );
+    } catch (_) {
+      // Cache belum tersedia/terbaca; lanjutkan refresh server.
+    }
+    if (!mounted || generasi != _generasiMuat) return;
+    setStateIfMounted(() {
+      _daftarProdukHalaman = daftarLokal;
+      _totalProduk = totalLokal;
+      _memuat = false;
+    });
+    if (_model == ModelPriceTag.promo) {
+      unawaited(_muatProdukPromoJikaPerlu());
+    }
+
     try {
       final body = <String, dynamic>{
         'page': _halaman + 1,
@@ -802,54 +844,32 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
             await ApiClient.instance.aksi('price_tag_list_produk', body);
       } catch (_) {}
 
-      List<Map<String, dynamic>> daftarBaris = [];
-      int totalBaris = 0;
-
       if (hasilServer != null && hasilServer['status'] == '00') {
         final arr = (hasilServer['data'] as List?) ?? [];
-        daftarBaris =
+        final daftarServer =
             arr.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        totalBaris =
-            (hasilServer['total'] as num?)?.toInt() ?? daftarBaris.length;
-        await _lengkapiMetadataProduk(daftarBaris);
-      } else {
-        final lokal = await CoreDb.instance.produkCacheMaster(
-          keyword: keyword,
-          kategoriId: kategoriId,
-          limit: _itemPerHalaman,
-          offset: _halaman * _itemPerHalaman,
-        );
-        daftarBaris = lokal.map((row) {
-          final id = (row['id'] as num?)?.toInt() ?? 0;
-          return {
-            'id': id,
-            'kode': '${row['kode'] ?? ''}',
-            'barcode': '${row['barcode'] ?? ''}',
-            'nama': '${row['nama'] ?? ''}',
-            'hargaJual': (row['harga_jual'] as num?)?.toDouble() ?? 0.0,
-            'kategoriId': (row['kategori_id'] as num?)?.toInt(),
-            'kategoriNama': '${row['kategori_nama'] ?? ''}',
-          };
-        }).toList();
-        totalBaris = await CoreDb.instance.jumlahProdukCacheMaster(
-          keyword: keyword,
-          kategoriId: kategoriId,
-        );
-      }
+        final totalServer =
+            (hasilServer['total'] as num?)?.toInt() ?? daftarServer.length;
+        await _lengkapiMetadataProduk(daftarServer);
 
-      if (!mounted || generasi != _generasiMuat) return;
+        if (!mounted || generasi != _generasiMuat) return;
 
-      setStateIfMounted(() {
-        _daftarProdukHalaman = daftarBaris;
-        _totalProduk = totalBaris;
-      });
-
-      if (_model == ModelPriceTag.promo) {
-        unawaited(_muatProdukPromoJikaPerlu());
+        setStateIfMounted(() {
+          _daftarProdukHalaman = daftarServer;
+          _totalProduk = totalServer;
+        });
+      } else if (daftarLokal.isEmpty) {
+        setStateIfMounted(() {
+          _pesanError =
+              'Data produk belum tersedia. Periksa koneksi lalu coba lagi.';
+        });
       }
     } catch (e) {
       if (!mounted || generasi != _generasiMuat) return;
-      setStateIfMounted(() => _pesanError = terapkanGalat(e));
+      // Cache yang sudah tampil dipertahankan bila refresh server gagal.
+      if (daftarLokal.isEmpty) {
+        setStateIfMounted(() => _pesanError = terapkanGalat(e));
+      }
     } finally {
       if (mounted && generasi == _generasiMuat) {
         setStateIfMounted(() => _memuat = false);
@@ -900,42 +920,17 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
     });
   }
 
-  /// Endpoint `price_tag_list_produk` kadang hanya membawa data minimal
-  /// (nama/kode/harga) tanpa `barcode` dan kategori. Halaman Produk memakai
-  /// endpoint `katalog` yang lebih lengkap; supaya filter kategori di sini
-  /// konsisten, lengkapi metadata dari cache lokal terlebih dahulu, lalu
-  /// fallback ke `katalog` bila cache belum berisi kategori.
+  /// Lengkapi metadata dari cache lokal. Jangan meminta endpoint katalog tanpa
+  /// batas di sini: katalog besar harus tetap diproses per halaman.
   Future<void> _lengkapiMetadataProduk(
       List<Map<String, dynamic>> produk) async {
-    var adaKategori = _adaKategoriProduk(produk);
     try {
       final cache = await CoreDb.instance.produkCache();
       _gabungMetadataProduk(produk, cache);
-      adaKategori = _adaKategoriProduk(produk);
     } catch (_) {
       // Cache lokal gagal dibaca (mis. belum pernah sinkron). Lanjut fallback
-      // ke endpoint katalog di bawah; kalau itu juga gagal, price tag tetap
-      // dapat dicetak hanya tanpa filter kategori yang lengkap.
+      // ke data minimal dari endpoint price tag; halaman tetap terbatas.
     }
-
-    if (adaKategori) return;
-    try {
-      final katalog = await ApiClient.instance.aksi('katalog');
-      final produkJson =
-          ((katalog['produk'] as List?) ?? []).cast<Map<String, dynamic>>();
-      _gabungMetadataProduk(produk, produkJson);
-    } catch (_) {
-      // Fallback katalog gagal/offline -- biarkan daftar tampil dengan data
-      // minimal dari price_tag_list_produk.
-    }
-  }
-
-  bool _adaKategoriProduk(List<Map<String, dynamic>> produk) {
-    return produk.any((p) {
-      final id = p['kategoriId'] ?? p['kategori_id'];
-      final nama = _kategoriNamaProduk(p);
-      return id != null || nama.isNotEmpty;
-    });
   }
 
   void _gabungMetadataProduk(
