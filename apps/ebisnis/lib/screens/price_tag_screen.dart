@@ -509,7 +509,16 @@ final _ukuranPromo = [
 class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
   bool _memuat = true;
   String? _pesanError;
-  List<Map<String, dynamic>> _semuaProduk = [];
+  int _halaman = 0;
+  final int _itemPerHalaman = 50;
+  int _totalProduk = 0;
+  int _generasiMuat = 0;
+  Timer? _debounceCari;
+  List<Map<String, dynamic>> _daftarProdukHalaman = [];
+  final Map<int, Map<String, dynamic>> _produkTerpilihMap = {};
+  List<Map<String, dynamic>> _daftarKategori = [];
+  int? _kategoriTerpilihId;
+  List<Map<String, dynamic>> get _semuaProduk => _daftarProdukHalaman;
   Set<int>? _promoProdukIds;
   bool _promoTampilkanSemuaProduk = false;
   bool _memuatProdukPromo = false;
@@ -661,6 +670,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
 
   @override
   void dispose() {
+    _debounceCari?.cancel();
     _debounceSimpanPengaturan?.cancel();
     // Flush pengaturan terakhir (mis. keyboard belum sempat "settle" 500ms
     // sebelum user tutup layar) -- baca .text SEBELUM controller di-dispose.
@@ -729,27 +739,165 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
     try {
       await PengaturanStruk.instance.muat();
       await PengaturanPriceTag.instance.muat();
-      final hasil = await ApiClient.instance.aksi('price_tag_list_produk', {});
-      final arr = (hasil['data'] as List?) ?? [];
-      final produk =
-          arr.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-      await _lengkapiMetadataProduk(produk);
       setStateIfMounted(() {
-        _semuaProduk = produk;
         _logoPath = PengaturanStruk.instance.priceTagLogoPath;
         _marginKotakMm = PengaturanStruk.instance.priceTagMarginKotakMm;
         _model =
             _modelDari(PengaturanPriceTag.instance.modelTerakhir) ?? _model;
         _terapkanPengaturanModel(_model);
       });
-      if (_model == ModelPriceTag.promo) {
-        unawaited(_muatProdukPromoJikaPerlu());
-      }
+      await _muatKategori();
+      await _muatHalaman(resetHalaman: true);
     } catch (e) {
       setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
+  }
+
+  Future<void> _muatKategori() async {
+    try {
+      final hasil = await MasterOffline.daftarDenganCache(
+        'jenis_produk_list',
+        {'page': 1, 'page_size': 200},
+        'master:jenis_produk',
+      );
+      final arr =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      if (mounted) {
+        setStateIfMounted(() {
+          _daftarKategori = arr;
+        });
+      }
+    } catch (_) {}
+  }
+
+  int get _totalHalaman =>
+      (_totalProduk / _itemPerHalaman).ceil().clamp(1, 999999);
+
+  Future<void> _muatHalaman({bool resetHalaman = false}) async {
+    if (resetHalaman) _halaman = 0;
+    final generasi = ++_generasiMuat;
+    setStateIfMounted(() {
+      _memuat = true;
+      _pesanError = null;
+    });
+
+    final keyword = _controllerCari.text.trim();
+    final kategoriId = _kategoriTerpilihId;
+
+    try {
+      final body = <String, dynamic>{
+        'page': _halaman + 1,
+        'page_size': _itemPerHalaman,
+        if (keyword.isNotEmpty) 'keyword': keyword,
+        if (kategoriId != null) 'kategori_id': kategoriId,
+        if (Sesi.instance.idTokoTerpilih != null)
+          'toko_id': Sesi.instance.idTokoTerpilih,
+      };
+
+      Map<String, dynamic>? hasilServer;
+      try {
+        hasilServer =
+            await ApiClient.instance.aksi('price_tag_list_produk', body);
+      } catch (_) {}
+
+      List<Map<String, dynamic>> daftarBaris = [];
+      int totalBaris = 0;
+
+      if (hasilServer != null && hasilServer['status'] == '00') {
+        final arr = (hasilServer['data'] as List?) ?? [];
+        daftarBaris =
+            arr.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        totalBaris =
+            (hasilServer['total'] as num?)?.toInt() ?? daftarBaris.length;
+        await _lengkapiMetadataProduk(daftarBaris);
+      } else {
+        final lokal = await CoreDb.instance.produkCacheMaster(
+          keyword: keyword,
+          kategoriId: kategoriId,
+          limit: _itemPerHalaman,
+          offset: _halaman * _itemPerHalaman,
+        );
+        daftarBaris = lokal.map((row) {
+          final id = (row['id'] as num?)?.toInt() ?? 0;
+          return {
+            'id': id,
+            'kode': '${row['kode'] ?? ''}',
+            'barcode': '${row['barcode'] ?? ''}',
+            'nama': '${row['nama'] ?? ''}',
+            'hargaJual': (row['harga_jual'] as num?)?.toDouble() ?? 0.0,
+            'kategoriId': (row['kategori_id'] as num?)?.toInt(),
+            'kategoriNama': '${row['kategori_nama'] ?? ''}',
+          };
+        }).toList();
+        totalBaris = await CoreDb.instance.jumlahProdukCacheMaster(
+          keyword: keyword,
+          kategoriId: kategoriId,
+        );
+      }
+
+      if (!mounted || generasi != _generasiMuat) return;
+
+      setStateIfMounted(() {
+        _daftarProdukHalaman = daftarBaris;
+        _totalProduk = totalBaris;
+      });
+
+      if (_model == ModelPriceTag.promo) {
+        unawaited(_muatProdukPromoJikaPerlu());
+      }
+    } catch (e) {
+      if (!mounted || generasi != _generasiMuat) return;
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
+    } finally {
+      if (mounted && generasi == _generasiMuat) {
+        setStateIfMounted(() => _memuat = false);
+      }
+    }
+  }
+
+  void _onCariChanged(String v) {
+    _debounceCari?.cancel();
+    _debounceCari = Timer(const Duration(milliseconds: 350), () {
+      _muatHalaman(resetHalaman: true);
+    });
+  }
+
+  void _togglePilihProduk(Map<String, dynamic> p) {
+    final id = _idProduk(p);
+    setStateIfMounted(() {
+      if (_idTerpilih.contains(id)) {
+        _idTerpilih.remove(id);
+        _produkTerpilihMap.remove(id);
+      } else {
+        _idTerpilih.add(id);
+        _produkTerpilihMap[id] = p;
+      }
+    });
+  }
+
+  void _pilihSemuaHalamanIni(bool centang) {
+    setStateIfMounted(() {
+      for (final p in _daftarProdukHalaman) {
+        final id = _idProduk(p);
+        if (id <= 0) continue;
+        if (centang) {
+          _idTerpilih.add(id);
+          _produkTerpilihMap[id] = p;
+        } else {
+          _idTerpilih.remove(id);
+          _produkTerpilihMap.remove(id);
+        }
+      }
+    });
+  }
+
+  void _bersihkanSemuaPilihan() {
+    setStateIfMounted(() {
+      _idTerpilih.clear();
+      _produkTerpilihMap.clear();
+    });
   }
 
   /// Endpoint `price_tag_list_produk` kadang hanya membawa data minimal
@@ -922,57 +1070,59 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
     return '$mulai - $selesai';
   }
 
-  List<Map<String, dynamic>> get _terfilter {
-    final kw = _controllerCari.text.trim().toLowerCase();
-    return _produkSumberModel.where((p) {
-      final cocokKategori = _kategoriTerpilihKey == null ||
-          _kategoriKeyProduk(p) == _kategoriTerpilihKey;
-      if (!cocokKategori) return false;
-      if (kw.isEmpty) return true;
-      final nama = (p['nama'] as String? ?? '').toLowerCase();
-      final kode = '${p['kode'] ?? ''}'.toLowerCase();
-      final barcode = '${p['barcode'] ?? ''}'.toLowerCase();
-      return nama.contains(kw) || kode.contains(kw) || barcode.contains(kw);
-    }).toList();
-  }
+  List<Map<String, dynamic>> get _terfilter => _daftarProdukTampil;
 
-  void _submitCariProduk(String nilai) {
+  Future<void> _submitCariProduk(String nilai) async {
     final v = nilai.trim();
     if (v.isEmpty) return;
-    final cocok = _produkSumberModel.where((p) {
+    final cocok = _daftarProdukHalaman.where((p) {
       final kode = '${p['kode'] ?? ''}'.trim();
       final barcode = '${p['barcode'] ?? ''}'.trim();
       return kode == v || barcode == v;
     }).toList();
-    setStateIfMounted(() {
-      if (cocok.isNotEmpty) {
-        _idTerpilih.add(_idProduk(cocok.first));
+    if (cocok.isNotEmpty) {
+      final p = cocok.first;
+      final id = _idProduk(p);
+      setStateIfMounted(() {
+        _idTerpilih.add(id);
+        _produkTerpilihMap[id] = p;
+        _controllerCari.clear();
+      });
+      _fokusCari.requestFocus();
+      return;
+    }
+
+    try {
+      final hasil = await ApiClient.instance.aksi('price_tag_list_produk', {
+        'keyword': v,
+        'page': 1,
+        'page_size': 10,
+        if (Sesi.instance.idTokoTerpilih != null)
+          'toko_id': Sesi.instance.idTokoTerpilih,
+      });
+      final arr = (hasil['data'] as List?) ?? [];
+      if (arr.isNotEmpty) {
+        final p = Map<String, dynamic>.from(arr.first as Map);
+        final id = _idProduk(p);
+        setStateIfMounted(() {
+          _idTerpilih.add(id);
+          _produkTerpilihMap[id] = p;
+          _controllerCari.clear();
+        });
+        await _muatHalaman();
       }
-      _controllerCari.clear();
-    });
+    } catch (_) {}
     _fokusCari.requestFocus();
   }
 
-  List<Map<String, dynamic>> get _daftarProdukTampil {
-    final hasilFilter = _terfilter;
-    if (_idTerpilih.isEmpty) return hasilFilter;
-
-    final terpilihDiAtas = _produkSumberModel
-        .where((p) => _idTerpilih.contains(_idProduk(p)))
-        .toList();
-    final idTerpilihDiAtas = terpilihDiAtas.map(_idProduk).toSet();
-    return [
-      ...terpilihDiAtas,
-      ...hasilFilter.where((p) => !idTerpilihDiAtas.contains(_idProduk(p))),
-    ];
-  }
+  List<Map<String, dynamic>> get _daftarProdukTampil => _produkSumberModel.toList();
 
   Iterable<Map<String, dynamic>> get _produkSumberModel {
-    if (_model != ModelPriceTag.promo) return _semuaProduk;
-    if (_promoTampilkanSemuaProduk) return _semuaProduk;
+    if (_model != ModelPriceTag.promo) return _daftarProdukHalaman;
+    if (_promoTampilkanSemuaProduk) return _daftarProdukHalaman;
     final ids = _promoProdukIds;
     if (ids == null) return const Iterable<Map<String, dynamic>>.empty();
-    return _semuaProduk.where((p) => ids.contains(_idProduk(p)));
+    return _daftarProdukHalaman.where((p) => ids.contains(_idProduk(p)));
   }
 
   void _aturPromoTampilkanSemuaProduk(bool value) {
@@ -1028,7 +1178,11 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
   Future<void> _muatProdukPromoJikaPerlu({bool paksa = false}) async {
     if (_memuatProdukPromo) return;
     if (!paksa && _promoProdukIds != null) return;
-    if (_semuaProduk.isEmpty) {
+    final targetEvaluasi = <Map<String, dynamic>>{
+      ..._daftarProdukHalaman,
+      ..._produkTerpilihMap.values,
+    }.toList();
+    if (targetEvaluasi.isEmpty) {
       setStateIfMounted(() => _promoProdukIds = <int>{});
       return;
     }
@@ -1038,62 +1192,47 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
       if (paksa) _promoProdukIds = null;
     });
     try {
-      final idsPromo = <int>{};
-      _promoHargaAsliDefaultPerProduk.clear();
-      _promoHargaPromoDefaultPerProduk.clear();
-      _promoMasaPerProduk.clear();
+      final idsPromo = <int>{...(_promoProdukIds ?? const <int>{})};
       final aturanById = await _muatAturanDiskonPromoById();
-      const ukuranBatch = 80;
-      for (var start = 0; start < _semuaProduk.length; start += ukuranBatch) {
-        final batch = _semuaProduk.skip(start).take(ukuranBatch).toList();
-        final hasil = await ApiClient.instance.aksi('diskon_evaluasi', {
-          if (Sesi.instance.tokoId != null) 'toko_id': Sesi.instance.tokoId,
-          'items': batch
-              .map((p) => {
-                    'id': _idProduk(p),
-                    'harga': (p['hargaJual'] as num?)?.toDouble() ?? 0,
-                    'jumlah': 1,
-                  })
-              .toList(),
-        });
-        final items = (hasil['items'] as List?) ?? [];
-        for (var i = 0; i < items.length && i < batch.length; i++) {
-          final m = Map<String, dynamic>.from(items[i] as Map);
-          final p = batch[i];
-          final id = _idProduk(p);
-          final diskon = (m['diskon'] as num?)?.toDouble() ?? 0;
-          final cashback = (m['cashback'] as num?)?.toDouble() ?? 0;
-          final aturanDiskon = m['aturanDiskon'];
-          if (diskon <= 0 && cashback <= 0 && aturanDiskon == null) continue;
-          idsPromo.add(id);
-          final harga = (p['hargaJual'] as num?)?.toDouble() ?? 0;
-          final hargaPromo = max(0, harga - diskon);
-          final hargaAsliText =
-              _formatRupiah(harga).replaceFirst('Rp ', 'Rp. ');
-          final hargaPromoText =
-              _formatRupiah(hargaPromo).replaceFirst('Rp ', 'Rp. ');
-          _promoHargaAsliDefaultPerProduk[id] = hargaAsliText;
-          _promoHargaPromoDefaultPerProduk[id] = hargaPromoText;
-          p['hargaAsliPromoTag'] = harga;
-          p['hargaPromoTag'] = hargaPromo;
-          final masaPromo = _masaPromoDariEvaluasi(m, aturanById);
-          if (masaPromo.isNotEmpty) {
-            _promoMasaPerProduk[id] = masaPromo;
-            p['masaPromoTag'] = masaPromo;
-          }
+      final hasil = await ApiClient.instance.aksi('diskon_evaluasi', {
+        if (Sesi.instance.tokoId != null) 'toko_id': Sesi.instance.tokoId,
+        'items': targetEvaluasi
+            .map((p) => {
+                  'id': _idProduk(p),
+                  'harga': (p['hargaJual'] as num?)?.toDouble() ?? 0,
+                  'jumlah': 1,
+                })
+            .toList(),
+      });
+      final items = (hasil['items'] as List?) ?? [];
+      for (var i = 0; i < items.length && i < targetEvaluasi.length; i++) {
+        final m = Map<String, dynamic>.from(items[i] as Map);
+        final p = targetEvaluasi[i];
+        final id = _idProduk(p);
+        final diskon = (m['diskon'] as num?)?.toDouble() ?? 0;
+        final cashback = (m['cashback'] as num?)?.toDouble() ?? 0;
+        final aturanDiskon = m['aturanDiskon'];
+        if (diskon <= 0 && cashback <= 0 && aturanDiskon == null) continue;
+        idsPromo.add(id);
+        final harga = (p['hargaJual'] as num?)?.toDouble() ?? 0;
+        final hargaPromo = max(0, harga - diskon);
+        final hargaAsliText =
+            _formatRupiah(harga).replaceFirst('Rp ', 'Rp. ');
+        final hargaPromoText =
+            _formatRupiah(hargaPromo).replaceFirst('Rp ', 'Rp. ');
+        _promoHargaAsliDefaultPerProduk[id] = hargaAsliText;
+        _promoHargaPromoDefaultPerProduk[id] = hargaPromoText;
+        p['hargaAsliPromoTag'] = harga;
+        p['hargaPromoTag'] = hargaPromo;
+        final masaPromo = _masaPromoDariEvaluasi(m, aturanById);
+        if (masaPromo.isNotEmpty) {
+          _promoMasaPerProduk[id] = masaPromo;
+          p['masaPromoTag'] = masaPromo;
         }
       }
       if (!mounted) return;
       setStateIfMounted(() {
         _promoProdukIds = idsPromo;
-        if (!_promoTampilkanSemuaProduk) {
-          _idTerpilih.removeWhere((id) => !idsPromo.contains(id));
-          if (_kategoriTerpilihKey != null &&
-              !_daftarKategoriProduk
-                  .any((k) => k.key == _kategoriTerpilihKey)) {
-            _kategoriTerpilihKey = null;
-          }
-        }
       });
     } catch (e) {
       if (!mounted) return;
@@ -1758,22 +1897,18 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
     return total;
   }
 
-  void _pilihSemua(bool centang) {
-    setStateIfMounted(() {
-      if (centang) {
-        _idTerpilih.addAll(_terfilter.map(_idProduk).where((id) => id > 0));
-      } else {
-        for (final p in _terfilter) {
-          _idTerpilih.remove(_idProduk(p));
-        }
-      }
-    });
-  }
+
 
   Future<void> _cetak() async {
-    final terpilih = _semuaProduk
-        .where((p) => _idTerpilih.contains(_idProduk(p)))
-        .toList();
+    final terpilih = <Map<String, dynamic>>[];
+    for (final id in _idTerpilih) {
+      final p = _produkTerpilihMap[id] ??
+          _daftarProdukHalaman.firstWhere(
+            (e) => _idProduk(e) == id,
+            orElse: () => const <String, dynamic>{},
+          );
+      if (p.isNotEmpty) terpilih.add(p);
+    }
     if (terpilih.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Pilih minimal satu produk.')));
@@ -2130,48 +2265,40 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
     );
   }
 
-  void _ubahKategoriProduk(String? key) {
-    setStateIfMounted(() {
-      _kategoriTerpilihKey = key;
-      if (key != null) {
-        final ids = _produkSumberModel
-            .where((p) => _kategoriKeyProduk(p) == key)
-            .map(_idProduk)
-            .where((id) => id > 0);
-        _idTerpilih
-          ..clear()
-          ..addAll(ids);
-      }
-    });
-  }
+
 
   Widget _filterKategoriProduk() {
-    final kategori = _daftarKategoriProduk;
-    final selectedValid = _kategoriTerpilihKey == null ||
-        kategori.any((k) => k.key == _kategoriTerpilihKey);
-    final value = selectedValid ? _kategoriTerpilihKey : null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      child: DropdownButtonFormField<String?>(
-        value: value,
+      child: DropdownButtonFormField<int?>(
+        value: _kategoriTerpilihId,
         isExpanded: true,
         decoration: const InputDecoration(
           labelText: 'Kategori Barang',
-          helperText: 'Pilih kategori untuk otomatis memilih semua itemnya.',
+          helperText: 'Saring daftar barang berdasarkan kategori.',
           border: OutlineInputBorder(),
           isDense: true,
         ),
         items: [
-          const DropdownMenuItem<String?>(
+          const DropdownMenuItem<int?>(
             value: null,
             child: Text('Semua Kategori'),
           ),
-          ...kategori.map((k) => DropdownMenuItem<String?>(
-                value: k.key,
-                child: Text('${k.label} (${k.jumlah})'),
-              )),
+          ..._daftarKategori.map((k) {
+            final id = (k['id'] as num?)?.toInt();
+            final nama = '${k['nama'] ?? ''}'.trim();
+            return DropdownMenuItem<int?>(
+              value: id,
+              child: Text(nama.isEmpty ? 'Kategori #$id' : nama),
+            );
+          }),
         ],
-        onChanged: _ubahKategoriProduk,
+        onChanged: (id) {
+          setStateIfMounted(() {
+            _kategoriTerpilihId = id;
+          });
+          _muatHalaman(resetHalaman: true);
+        },
       ),
     );
   }
@@ -2234,10 +2361,10 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
           SizedBox(
             width: 48,
             child: Tooltip(
-              message: 'Pilih Semua (${terfilter.length})',
+              message: 'Pilih Semua di Halaman Ini (${_daftarProdukHalaman.length})',
               child: Checkbox(
                 value: semuaTercentang,
-                onChanged: (v) => _pilihSemua(v ?? false),
+                onChanged: (v) => _pilihSemuaHalamanIni(v ?? false),
               ),
             ),
           ),
@@ -2301,13 +2428,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
     final harga = _formatRupiah(p['hargaJual'] as num?);
 
     return InkWell(
-      onTap: () => setStateIfMounted(() {
-        if (terpilih) {
-          _idTerpilih.remove(id);
-        } else {
-          _idTerpilih.add(id);
-        }
-      }),
+      onTap: () => _togglePilihProduk(p),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: BoxDecoration(
@@ -2361,8 +2482,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
               child: Center(
                 child: Checkbox(
                   value: terpilih,
-                  onChanged: (v) => setStateIfMounted(() =>
-                      v == true ? _idTerpilih.add(id) : _idTerpilih.remove(id)),
+                  onChanged: (v) => _togglePilihProduk(p),
                 ),
               ),
             ),
@@ -2387,8 +2507,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
             hintText: 'Cari nama/kode/barcode produk...',
             scanProduk: true,
             focusNode: _fokusCari,
-            debounce: Duration.zero,
-            onChanged: (_) => setStateIfMounted(() {}),
+            debounce: const Duration(milliseconds: 350),
+            onChanged: _onCariChanged,
             onSubmitted: _submitCariProduk,
           ),
         ),
@@ -2450,12 +2570,16 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
           ),
         ],
         _headerTabelProduk(terfilter, semuaTercentang),
+        if (_memuat) ...[
+          const LinearProgressIndicator(minHeight: 2),
+          const SizedBox(height: 2),
+        ],
         Expanded(
           child: tampil.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text(
-                    'Tidak ada produk.',
-                    style: TextStyle(color: AppColors.textSecondary),
+                    _memuat ? 'Memuat data produk...' : 'Tidak ada produk.',
+                    style: const TextStyle(color: AppColors.textSecondary),
                   ),
                 )
               : ListView.builder(
@@ -2463,6 +2587,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
                   itemBuilder: (context, i) => _barisTabelProduk(tampil[i], i),
                 ),
         ),
+        _bilahPaginasi(),
       ],
     );
   }
@@ -3987,6 +4112,84 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
           : child,
     );
   }
+
+  Widget _bilahPaginasi() {
+    final awal = _totalProduk == 0 ? 0 : (_halaman * _itemPerHalaman) + 1;
+    final akhir = min((_halaman + 1) * _itemPerHalaman, _totalProduk);
+    final bolehSebelumnya = _halaman > 0 && !_memuat;
+    final bolehSelanjutnya = _halaman < _totalHalaman - 1 && !_memuat;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.pageBg,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            _totalProduk == 0
+                ? '0 barang'
+                : '$awal - $akhir dari $_totalProduk barang',
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          const SizedBox(width: 8),
+          if (_idTerpilih.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Terpilih: ${_idTerpilih.length} item ($_totalTagTerpilih label)',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  InkWell(
+                    onTap: _bersihkanSemuaPilihan,
+                    borderRadius: BorderRadius.circular(10),
+                    child: Icon(Icons.close, size: 14, color: AppColors.danger),
+                  ),
+                ],
+              ),
+            ),
+          const Spacer(),
+          IconButton(
+            icon: const Icon(Icons.chevron_left),
+            tooltip: 'Halaman Sebelumnya',
+            onPressed: bolehSebelumnya
+                ? () {
+                    setStateIfMounted(() => _halaman--);
+                    _muatHalaman();
+                  }
+                : null,
+          ),
+          Text(
+            '${_halaman + 1} / $_totalHalaman',
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right),
+            tooltip: 'Halaman Selanjutnya',
+            onPressed: bolehSelanjutnya
+                ? () {
+                    setStateIfMounted(() => _halaman++);
+                    _muatHalaman();
+                  }
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _PreviewBarcode extends StatelessWidget {
@@ -4025,6 +4228,8 @@ class _PreviewBarcode extends StatelessWidget {
       ),
     );
   }
+
+
 }
 
 class _PriceTagPdfBuilder {
