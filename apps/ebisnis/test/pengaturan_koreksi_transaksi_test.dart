@@ -58,7 +58,13 @@ void main() {
 
     expect(source, contains('bool _caraBayarDiubah = false'));
     expect(source, contains('_caraBayarDiubah = true'));
-    expect(source, contains('if (widget.modeBaru || _caraBayarDiubah)'));
+    expect(
+        source, contains('final caraBayarDiubahEfektif = _caraBayarDiubah ||'));
+    expect(
+        source,
+        contains(
+            '(widget.caraBayarId != null && _caraBayarId != widget.caraBayarId)'));
+    expect(source, contains('if (widget.modeBaru || caraBayarDiubahEfektif)'));
     expect(source, contains("if (hasilEdit.containsKey('cara_bayar'))"));
   });
 
