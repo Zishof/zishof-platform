@@ -14,7 +14,6 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../app_variant.dart';
 import '../api_client.dart';
-import '../models.dart';
 import '../services/pengaturan_price_tag.dart';
 import '../services/pengaturan_struk.dart';
 import '../sesi.dart';
@@ -776,9 +775,6 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
       final katalog = await ApiClient.instance.aksi('katalog');
       final produkJson =
           ((katalog['produk'] as List?) ?? []).cast<Map<String, dynamic>>();
-      await CoreDb.instance.replaceProdukCache(
-        produkJson.map(Produk.baseKeCacheRow).toList(),
-      );
       _gabungMetadataProduk(produk, produkJson);
     } catch (_) {
       // Fallback katalog gagal/offline -- biarkan daftar tampil dengan data
@@ -1765,10 +1761,10 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
   void _pilihSemua(bool centang) {
     setStateIfMounted(() {
       if (centang) {
-        _idTerpilih.addAll(_terfilter.map((p) => p['id'] as int));
+        _idTerpilih.addAll(_terfilter.map(_idProduk).where((id) => id > 0));
       } else {
         for (final p in _terfilter) {
-          _idTerpilih.remove(p['id'] as int);
+          _idTerpilih.remove(_idProduk(p));
         }
       }
     });
@@ -1776,7 +1772,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
 
   Future<void> _cetak() async {
     final terpilih = _semuaProduk
-        .where((p) => _idTerpilih.contains(p['id'] as int))
+        .where((p) => _idTerpilih.contains(_idProduk(p)))
         .toList();
     if (terpilih.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -3964,8 +3960,16 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
       return const SizedBox.shrink();
     }
     final Widget logo = path != null
-        ? Image.file(File(path), fit: BoxFit.contain)
-        : Image.asset(AppVariant.logoAsset, fit: BoxFit.contain);
+        ? Image.file(
+            File(path),
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+          )
+        : Image.asset(
+            AppVariant.logoAsset,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+          );
     final child = SizedBox(height: maxHeight, child: logo);
     return Padding(
       padding: EdgeInsets.only(bottom: bottom),

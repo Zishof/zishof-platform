@@ -330,12 +330,7 @@ class _GerbangAwalState extends State<_GerbangAwal> {
               ? hasil.urlApk != null
               : (hasil.urlExe != null || hasil.urlPaketWindows != null));
       if (mounted && tersediaUntukPerangkat) {
-        final dipasang = await PengaturanUpdate.instance
-            .cobaPasangOtomatis(hasil)
-            .catchError((_) => false);
-        if (!dipasang && mounted) {
-          setStateIfMounted(() => _infoUpdate = hasil);
-        }
+        setStateIfMounted(() => _infoUpdate = hasil);
       }
     } catch (_) {
       // Gagal cek (offline/rate-limit) -- diam saja, bukan alasan mengganggu.
@@ -345,9 +340,20 @@ class _GerbangAwalState extends State<_GerbangAwal> {
   Future<void> _bukaUnduhan() async {
     final info = _infoUpdate;
     if (info == null) return;
+    if (defaultTargetPlatform == TargetPlatform.windows &&
+        info.urlPaketWindows != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Mengunduh dan menyiapkan pembaruan POS...')),
+      );
+      final dipasang = await PengaturanUpdate.instance
+          .cobaPasangOtomatis(info)
+          .catchError((_) => false);
+      if (dipasang) return;
+    }
     final url = defaultTargetPlatform == TargetPlatform.android
         ? info.urlApk
-        : info.urlExe;
+        : (info.urlExe ?? info.urlPaketWindows);
     if (url == null) return;
     await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   }
