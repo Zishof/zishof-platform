@@ -300,10 +300,11 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
     final member = await pilihMemberPos(context);
     if (member == null || !mounted) return;
     final versi = ++_versiMember;
+    final idSaatIni = _caraBayarId ??
+        (_splitBayar.isNotEmpty ? _splitBayar.first.caraBayar.id : null);
     setState(() {
       _memberPemulihan = member;
       _metodeMember = [];
-      _caraBayarId = null;
       _memuatMember = true;
       _metodeMemberTerkunci = false;
       _pesan = null;
@@ -325,7 +326,7 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
           'pemulihan:metode:${jsonEncode(konteks)}', onData: (hasil) {
         if (!mounted || versi != _versiMember) return;
         final metode = metodePemulihanMember(hasil);
-        final lama = _caraBayarId;
+        final lama = idSaatIni ?? _caraBayarId;
         setState(() {
           _metodeMember = metode;
           _metodeMemberTerkunci = hasil['caraBayarTerkunci'] == true;
@@ -337,6 +338,12 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
             final id = (hasil['caraBayarDefaultId'] as num?)?.toInt();
             if (id != null && metode.any((m) => m.id == id)) {
               _caraBayarId = id;
+            }
+          }
+          if (_caraBayarId != null && _splitBayar.isNotEmpty) {
+            final caraBaru = _caraBayarDari(_caraBayarId, '');
+            if (caraBaru != null && _splitBayar.length == 1) {
+              _splitBayar.first = SlotBayar(caraBaru, _totalSetelahKoreksi);
             }
           }
           _pesan = metode.isEmpty
@@ -438,6 +445,12 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
               }
             }
           }
+          if (_caraBayarId != null && _splitBayar.isNotEmpty) {
+            final caraBaru = _caraBayarDari(_caraBayarId, '');
+            if (caraBaru != null && _splitBayar.length == 1) {
+              _splitBayar.first = SlotBayar(caraBaru, _totalSetelahKoreksi);
+            }
+          }
           _pesan = metode.isEmpty
               ? 'Tidak ada metode yang diizinkan untuk member ini.'
               : (hasil['offline'] == true
@@ -517,6 +530,10 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
 
   String get _ringkasanPembayaran {
     if (_splitBayar.isNotEmpty) {
+      if (_splitBayar.length == 1 &&
+          _splitBayar.first.nominal != _totalSetelahKoreksi) {
+        _splitBayar.first.nominal = _totalSetelahKoreksi;
+      }
       return _splitBayar
           .map((slot) =>
               '${slot.caraBayar.nama} ${_formatRupiah.format(slot.nominal)}')
@@ -702,6 +719,9 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
       caraBayarEfektif =
           widget.caraBayarId ?? _idCaraBayarDariNama(widget.caraBayarNama);
     }
+    if (caraBayarEfektif == null && _metodeTersedia.isNotEmpty) {
+      caraBayarEfektif = _metodeTersedia.first.id;
+    }
     if (caraBayarEfektif == null && Sesi.instance.caraBayar.isNotEmpty) {
       caraBayarEfektif = Sesi.instance.caraBayar.first.id;
     }
@@ -711,11 +731,13 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
     }
     _caraBayarId = caraBayarEfektif;
 
+    final caraBayarDiubahEfektif = _caraBayarDiubah ||
+        (widget.caraBayarId != null && _caraBayarId != widget.caraBayarId);
     final caraSaatIni = _metodeTersedia.where((m) => m.id == _caraBayarId);
     final metodeWajibMember =
         caraSaatIni.isNotEmpty && caraSaatIni.first.wajibPilihMember;
-    if (widget.modeBaru || _caraBayarDiubah || metodeWajibMember) {
-      if (widget.modeBaru || _caraBayarDiubah) {
+    if (widget.modeBaru || caraBayarDiubahEfektif || metodeWajibMember) {
+      if (widget.modeBaru || caraBayarDiubahEfektif) {
         final galat = validasiMemberPemulihan(
             _metodeTersedia, _caraBayarId, _memberPemulihan?.id,
             memuat: _memuatMember);
@@ -737,7 +759,7 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
         }
       }
     }
-    if (_caraBayarDiubah && _splitBayar.length >= 2) {
+    if (caraBayarDiubahEfektif && _splitBayar.length >= 2) {
       final galat =
           validasiAlokasiPembayaran(_splitBayar, _totalSetelahKoreksi);
       if (galat != null) {
@@ -781,14 +803,14 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
         'cara_bayar_nama': namaMetode,
       'item': item,
       'waktu': _waktu.toIso8601String(),
-      if (_caraBayarDiubah && _splitBayar.length >= 2)
+      if (caraBayarDiubahEfektif && _splitBayar.length >= 2)
         'pembayaran': _splitBayar
             .map((slot) => {
                   'cara_bayar': slot.caraBayar.id,
                   'nominal': slot.nominal,
                 })
             .toList()
-      else if (widget.modeBaru || _caraBayarDiubah)
+      else if (widget.modeBaru || caraBayarDiubahEfektif)
         'cara_bayar': _caraBayarId,
       if (_kasirUserId.isNotEmpty) 'kasir_user_id': _kasirUserId,
     });
