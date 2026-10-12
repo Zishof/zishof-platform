@@ -26,11 +26,8 @@ void main() {
     expect(source, contains('if (daftarLokal.isEmpty)'));
   });
 
-  test('metadata price tag tidak meminta seluruh katalog tanpa pagination', () {
-    final awal = source.indexOf('Future<void> _lengkapiMetadataProduk(');
-    final akhir = source.indexOf('void _gabungMetadataProduk(', awal);
-    expect(awal, greaterThanOrEqualTo(0));
-    expect(akhir, greaterThan(awal));
-    expect(source.substring(awal, akhir), isNot(contains("aksi('katalog'")));
+  test('price tag tidak membaca seluruh cache katalog untuk metadata halaman', () {
+    expect(source, isNot(contains('CoreDb.instance.produkCache()')));
+    expect(source, isNot(contains('_lengkapiMetadataProduk(')));
   });
 }

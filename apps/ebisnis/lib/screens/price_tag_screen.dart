@@ -850,8 +850,6 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
             arr.map((e) => Map<String, dynamic>.from(e as Map)).toList();
         final totalServer =
             (hasilServer['total'] as num?)?.toInt() ?? daftarServer.length;
-        await _lengkapiMetadataProduk(daftarServer);
-
         if (!mounted || generasi != _generasiMuat) return;
 
         setStateIfMounted(() {
@@ -918,56 +916,6 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
       _idTerpilih.clear();
       _produkTerpilihMap.clear();
     });
-  }
-
-  /// Lengkapi metadata dari cache lokal. Jangan meminta endpoint katalog tanpa
-  /// batas di sini: katalog besar harus tetap diproses per halaman.
-  Future<void> _lengkapiMetadataProduk(
-      List<Map<String, dynamic>> produk) async {
-    try {
-      final cache = await CoreDb.instance.produkCache();
-      _gabungMetadataProduk(produk, cache);
-    } catch (_) {
-      // Cache lokal gagal dibaca (mis. belum pernah sinkron). Lanjut fallback
-      // ke data minimal dari endpoint price tag; halaman tetap terbatas.
-    }
-  }
-
-  void _gabungMetadataProduk(
-    List<Map<String, dynamic>> produk,
-    List<Map<String, dynamic>> sumber,
-  ) {
-    final byId = <int, Map<String, dynamic>>{};
-    final byKode = <String, Map<String, dynamic>>{};
-    for (final row in sumber) {
-      final id = (row['id'] as num?)?.toInt();
-      if (id != null) byId[id] = row;
-      final kode = '${row['kode'] ?? ''}'.trim().toLowerCase();
-      if (kode.isNotEmpty) byKode[kode] = row;
-    }
-    if (byId.isEmpty && byKode.isEmpty) return;
-
-    for (final p in produk) {
-      final id = (p['id'] as num?)?.toInt();
-      final kode = '${p['kode'] ?? ''}'.trim().toLowerCase();
-      final sumber = (id == null ? null : byId[id]) ?? byKode[kode];
-      if (sumber == null) continue;
-
-      if ('${p['barcode'] ?? ''}'.trim().isEmpty) {
-        final barcode = '${sumber['barcode'] ?? ''}'.trim();
-        if (barcode.isNotEmpty) p['barcode'] = barcode;
-      }
-
-      p['kategoriId'] ??= sumber['kategoriId'] ?? sumber['kategori_id'];
-      final kategoriNama = _nilaiStringPertama(sumber, const [
-        'kategoriNama',
-        'kategori_nama',
-        'kategori',
-      ]);
-      if (_kategoriNamaProduk(p).isEmpty && kategoriNama.isNotEmpty) {
-        p['kategoriNama'] = kategoriNama;
-      }
-    }
   }
 
   String _nilaiStringPertama(Map<String, dynamic> p, List<String> keys) {
