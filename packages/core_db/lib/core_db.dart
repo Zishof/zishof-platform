@@ -2352,7 +2352,7 @@ class CoreDb {
       {String? tingkat,
       String? sumber,
       String? kataKunci,
-      int limit = 100,
+      int? limit = 100,
       int offset = 0}) async {
     final database = await db;
     final klausa = <String>[];

@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:core_db/core_db.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -197,6 +199,246 @@ class _LogErrorScreenState extends State<LogErrorScreen> with JejakGalat {
           content: Text('${_data.length} baris disalin ke clipboard.')));
   }
 
+  String _csvEscape(String? text) {
+    if (text == null) return '""';
+    final s = text.replaceAll('"', '""');
+    return '"$s"';
+  }
+
+  String _bangunCsv(List<Map<String, dynamic>> items) {
+    final sb = StringBuffer();
+    // UTF-8 BOM agar Excel di Windows mengenali karakter dan format otomatis
+    sb.write('\uFEFF');
+    sb.writeln('"No","Waktu","Tingkat","Sumber","Pesan","Detail"');
+    for (int i = 0; i < items.length; i++) {
+      final e = items[i];
+      final no = i + 1;
+      final waktu = _formatWaktu(e['waktu'] as String? ?? '');
+      final tingkat = e['tingkat']?.toString() ?? '';
+      final sumber = e['sumber']?.toString() ?? '';
+      final pesan = e['pesan']?.toString() ?? '';
+      final detail = e['detail']?.toString() ?? '';
+      sb.writeln(
+          '$no,${_csvEscape(waktu)},${_csvEscape(tingkat)},${_csvEscape(sumber)},${_csvEscape(pesan)},${_csvEscape(detail)}');
+    }
+    return sb.toString();
+  }
+
+  String _bangunTxt(List<Map<String, dynamic>> items) {
+    final sb = StringBuffer();
+    final stempel = DateFormat('dd-MM-yyyy HH:mm:ss').format(DateTime.now());
+    sb.writeln('================================================================================');
+    sb.writeln('LOG ERROR - APLIKASI KASIR POS');
+    sb.writeln('Waktu Ekspor : $stempel');
+    sb.writeln('Total Catatan: ${items.length} baris');
+    sb.writeln('================================================================================\n');
+
+    for (int i = 0; i < items.length; i++) {
+      final e = items[i];
+      final no = i + 1;
+      final waktu = _formatWaktu(e['waktu'] as String? ?? '');
+      final tingkat = e['tingkat']?.toString() ?? '-';
+      final sumber = e['sumber']?.toString() ?? '-';
+      final pesan = e['pesan']?.toString() ?? '-';
+      final detail = (e['detail'] as String?) ?? '';
+
+      sb.writeln('[$no] $waktu | $tingkat | Sumber: $sumber');
+      sb.writeln('Pesan : $pesan');
+      if (detail.isNotEmpty) {
+        sb.writeln('Detail:');
+        sb.writeln(detail);
+      }
+      sb.writeln('--------------------------------------------------------------------------------\n');
+    }
+    return sb.toString();
+  }
+
+  Future<void> _simpanBerkas({
+    required String namaFileDefault,
+    required String konten,
+    required String ekstensi,
+  }) async {
+    final bytes = utf8.encode(konten);
+    final path = await FilePicker.platform.saveFile(
+      dialogTitle: 'Simpan Log Error',
+      fileName: namaFileDefault,
+      bytes: bytes,
+      type: FileType.custom,
+      allowedExtensions: [ekstensi],
+    );
+    if (path == null) return;
+    try {
+      final file = File(path);
+      await file.writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Log error berhasil disimpan: $path')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal menyimpan berkas: $e')),
+      );
+    }
+  }
+
+  Future<void> _unduhLogError() async {
+    String formatDipilih = 'csv';
+    String cakupanDipilih =
+        (_tingkat != null || _kataKunci.isNotEmpty) ? 'filter' : 'semua';
+
+    final konfirmasi = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.download_outlined, color: AppColors.primary),
+              const SizedBox(width: 8),
+              const Text('Unduh Log Error'),
+            ],
+          ),
+          content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Pilih format berkas:',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  RadioListTile<String>(
+                    title: const Text('Excel / CSV (.csv)'),
+                    subtitle: const Text(
+                        'Dapat dibuka di Microsoft Excel, Google Sheets, atau LibreOffice'),
+                    value: 'csv',
+                    groupValue: formatDipilih,
+                    dense: true,
+                    onChanged: (v) => setDialogState(() => formatDipilih = v!),
+                  ),
+                  RadioListTile<String>(
+                    title: const Text('Dokumen Teks (.txt)'),
+                    subtitle: const Text(
+                        'Format teks lengkap beserta rincian pesan error'),
+                    value: 'txt',
+                    groupValue: formatDipilih,
+                    dense: true,
+                    onChanged: (v) => setDialogState(() => formatDipilih = v!),
+                  ),
+                  const Divider(height: 24),
+                  const Text('Pilih data yang akan diunduh:',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  RadioListTile<String>(
+                    title: Text('Semua Log ($_totalSemua baris)'),
+                    value: 'semua',
+                    groupValue: cakupanDipilih,
+                    dense: true,
+                    onChanged: (v) => setDialogState(() => cakupanDipilih = v!),
+                  ),
+                  if (_tingkat != null || _kataKunci.isNotEmpty)
+                    RadioListTile<String>(
+                      title: Text('Sesuai Filter & Pencarian ($_total baris)'),
+                      value: 'filter',
+                      groupValue: cakupanDipilih,
+                      dense: true,
+                      onChanged: (v) =>
+                          setDialogState(() => cakupanDipilih = v!),
+                    ),
+                  RadioListTile<String>(
+                    title: Text('Halaman Ini Saja (${_data.length} baris)'),
+                    value: 'halaman',
+                    groupValue: cakupanDipilih,
+                    dense: true,
+                    onChanged: (v) => setDialogState(() => cakupanDipilih = v!),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Batal'),
+            ),
+            FilledButton.icon(
+              icon: const Icon(Icons.download),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              label: const Text('Unduh'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (konfirmasi != true) return;
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox.square(
+                dimension: 16,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white)),
+            SizedBox(width: 12),
+            Text('Sedang menyiapkan berkas log error...'),
+          ],
+        ),
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    try {
+      List<Map<String, dynamic>> items;
+      if (cakupanDipilih == 'halaman') {
+        items = _data;
+      } else if (cakupanDipilih == 'filter') {
+        final raw = await CoreDb.instance.listErrorLog(
+          tingkat: _tingkat,
+          kataKunci: _kataKunci.isEmpty ? null : _kataKunci,
+          limit: null,
+          offset: 0,
+        );
+        items = raw.cast<Map<String, dynamic>>();
+      } else {
+        final raw = await CoreDb.instance.listErrorLog(
+          limit: null,
+          offset: 0,
+        );
+        items = raw.cast<Map<String, dynamic>>();
+      }
+
+      if (items.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Tidak ada data log yang dapat diunduh.')),
+        );
+        return;
+      }
+
+      final stempelWaktu =
+          DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      final namaFile = 'log_error_$stempelWaktu.$formatDipilih';
+      final konten =
+          formatDipilih == 'csv' ? _bangunCsv(items) : _bangunTxt(items);
+
+      await _simpanBerkas(
+        namaFileDefault: namaFile,
+        konten: konten,
+        ekstensi: formatDipilih,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal mengekspor log error: $e')),
+      );
+    }
+  }
+
   Future<void> _laporkanKeGithub(Map<String, dynamic> e) async {
     final judul = Uri.encodeComponent('[Error Log] ${e['pesan']}');
     final body = Uri.encodeComponent(_teksSatuError(e));
@@ -274,6 +516,10 @@ class _LogErrorScreenState extends State<LogErrorScreen> with JejakGalat {
       scrollable: false,
       actionsAppBar: [
         IconButton(
+            icon: const Icon(Icons.download_outlined),
+            onPressed: _totalSemua == 0 ? null : _unduhLogError,
+            tooltip: 'Unduh Log Error'),
+        IconButton(
             icon: const Icon(Icons.monitor_heart_outlined),
             onPressed: _memuatHealth ? null : _muatHealth,
             tooltip: 'Muat Kesehatan Server'),
@@ -287,6 +533,10 @@ class _LogErrorScreenState extends State<LogErrorScreen> with JejakGalat {
             tooltip: 'Bersihkan Semua'),
       ],
       aksiHeader: Row(mainAxisSize: MainAxisSize.min, children: [
+        IconButton(
+            icon: const Icon(Icons.download_outlined),
+            onPressed: _totalSemua == 0 ? null : _unduhLogError,
+            tooltip: 'Unduh Log Error'),
         IconButton(
             icon: const Icon(Icons.monitor_heart_outlined),
             onPressed: _memuatHealth ? null : _muatHealth,
@@ -402,24 +652,37 @@ class _LogErrorScreenState extends State<LogErrorScreen> with JejakGalat {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 6,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      ChoiceChip(
-                          label: const Text('Semua'),
-                          selected: _tingkat == null,
-                          onSelected: (_) {
-                            _tingkat = null;
-                            _terapkanFilter();
-                          }),
-                      ..._tingkatOpsi.map((t) => ChoiceChip(
-                            label: Text(t),
-                            selected: _tingkat == t,
-                            onSelected: (_) {
-                              _tingkat = t;
-                              _terapkanFilter();
-                            },
-                          )),
+                      Expanded(
+                        child: Wrap(
+                          spacing: 6,
+                          children: [
+                            ChoiceChip(
+                                label: const Text('Semua'),
+                                selected: _tingkat == null,
+                                onSelected: (_) {
+                                  _tingkat = null;
+                                  _terapkanFilter();
+                                }),
+                            ..._tingkatOpsi.map((t) => ChoiceChip(
+                                  label: Text(t),
+                                  selected: _tingkat == t,
+                                  onSelected: (_) {
+                                    _tingkat = t;
+                                    _terapkanFilter();
+                                  },
+                                )),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton.tonalIcon(
+                        icon: const Icon(Icons.download_outlined, size: 18),
+                        label: const Text('Unduh Log Error'),
+                        onPressed: _totalSemua == 0 ? null : _unduhLogError,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
