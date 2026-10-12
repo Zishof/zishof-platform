@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -73,13 +74,16 @@ class CoreDb {
   Future<List<Map<String, Object?>>>? _sesiKasPendingRead;
   Future<Map<String, Object?>?>? _sesiKasAktifRead;
   Future<void> _errorLogTail = Future.value();
+  Timer? _timerCadanganDatabase;
+  Future<List<String>>? _cadanganDatabaseBerjalan;
+  DateTime? _cadanganDatabaseTerakhir;
   String? _lastErrorLogKey;
   DateTime? _lastErrorLogAt;
 
   static const MethodChannel _backupChannel =
       MethodChannel('id.zishof.ebisnis/persistent_transaction_backup');
   static String get _namaFileBackup =>
-      'transaksi-pos-${_storageNamespace}-backup.jsonl';
+      'transaksi-pos-$_storageNamespace-backup.jsonl';
 
   Future<Database> get db async {
     final currentDb = _db;
@@ -89,6 +93,7 @@ class CoreDb {
     final openingDb = _openingDb ??= _buka();
     try {
       _db = await openingDb;
+      _mulaiCadanganDatabaseOtomatis();
       return _db!;
     } finally {
       _openingDb = null;
@@ -103,18 +108,18 @@ class CoreDb {
       sqfliteFfiInit();
       factory = databaseFactoryFfi;
       final dir = await getApplicationSupportDirectory();
-      path = p.join(dir.path, 'ebisnis_${_storageNamespace}.db');
+      path = p.join(dir.path, 'ebisnis_$_storageNamespace.db');
       _pathDb = path;
     } else {
       factory = databaseFactory;
-      path =
-          p.join(await getDatabasesPath(), 'ebisnis_${_storageNamespace}.db');
+      path = p.join(await getDatabasesPath(), 'ebisnis_$_storageNamespace.db');
       _pathDb = path;
     }
     try {
       return await _bukaDanVerifikasi(factory, path);
     } catch (e) {
       if (kesalahanPemakaianSqlite(e)) rethrow;
+      if (!_perluArsipKorupsi(e)) rethrow;
       // Gap-closure "app tidak bisa dibuka lagi stlh mati listrik": file DB
       // (atau sidecar -wal/-shm-nya) korup krn proses tulis terputus paksa
       // tidak akan pernah bisa dibuka lagi TANPA campur tangan -- sebelum
@@ -127,6 +132,16 @@ class CoreDb {
       await _cadangkanFileKorup(path, alasan: e.toString());
       return _bukaDanVerifikasi(factory, path);
     }
+  }
+
+  static bool _perluArsipKorupsi(Object error) {
+    final teks = error.toString().toLowerCase();
+    return (error is StateError && teks.contains('pragma quick_check gagal')) ||
+        teks.contains('sqlite_corrupt') ||
+        teks.contains('sqlite_notadb') ||
+        RegExp(r'sqliteexception\((11|26)[),:]|sqlite_error:\s*(11|26)\b')
+            .hasMatch(teks) ||
+        teks.contains('file is not a database');
   }
 
   Future<Database> _bukaDanVerifikasi(
@@ -166,12 +181,11 @@ class CoreDb {
         file.renameSync(
             '$path$akhiran.corrupt-${DateTime.now().millisecondsSinceEpoch}');
       } catch (_) {
-        // Rename gagal (mis. file terkunci proses lain) -- coba hapus
-        // langsung spy percobaan buka berikutnya minimal tak nyangkut di
-        // file yg sama; kalau ini pun gagal, itu di luar kendali kita.
-        try {
-          file.deleteSync();
-        } catch (_) {}
+        // Jangan pernah menghapus data jika pengarsipan gagal. Membuka DB
+        // kosong setelah kehilangan berkas lama dapat menyamarkan transaksi
+        // lokal yang belum sempat tersalin ke server.
+        throw StateError(
+            'Berkas database lama tidak berhasil diamankan; pemulihan otomatis dibatalkan.');
       }
     }
     if (kDebugMode) {
@@ -188,12 +202,161 @@ class CoreDb {
     // bekerja konsisten di Android maupun desktop.
     await db.rawQuery('PRAGMA busy_timeout = 5000');
     await db.rawQuery('PRAGMA journal_mode = WAL');
+    // WAL + FULL memastikan commit yang telah dikonfirmasi menjalankan sync
+    // ke media penyimpanan; membantu menjaga transaksi terakhir saat listrik
+    // atau sistem operasi berhenti mendadak.
+    await db.rawQuery('PRAGMA synchronous = FULL');
+  }
+
+  static const Duration _jedaCadanganDatabase = Duration(minutes: 15);
+  static const int _jumlahCadanganDatabase = 7;
+
+  void _mulaiCadanganDatabaseOtomatis() {
+    if (!Platform.isWindows || _timerCadanganDatabase != null) return;
+    // Cadangan pertama dibuat setelah skema dan pemulihan arsip transaksi
+    // selesai. Kegagalan tidak menghentikan kasir; dicatat dan dicoba ulang.
+    unawaited(_cadanganDatabaseOtomatis());
+    _timerCadanganDatabase = Timer.periodic(_jedaCadanganDatabase, (_) {
+      unawaited(_cadanganDatabaseOtomatis());
+    });
+  }
+
+  Future<void> _cadanganDatabaseOtomatis() async {
+    try {
+      await cadangkanDatabasePenuh();
+    } catch (error) {
+      await catatErrorLog(
+        sumber: 'cadangan_database_penuh',
+        tingkat: 'WARNING',
+        pesan: 'Cadangan database di dua lokasi belum berhasil.',
+        detail: error.toString(),
+      );
+    }
+  }
+
+  /// Membuat snapshot SQLite konsisten saat aplikasi berjalan, lalu menyimpan
+  /// salinannya di dua direktori terpisah. Tidak menyalin DB aktif beserta WAL
+  /// secara mentah. Retensi menjaga tujuh snapshot terakhir di setiap lokasi.
+  /// Hanya Windows yang dijadwalkan otomatis; Android tetap memakai arsip
+  /// transaksi yang sudah ada.
+  Future<List<String>> cadangkanDatabasePenuh({bool paksa = false}) async {
+    if (!Platform.isWindows) return const <String>[];
+    final berjalan = _cadanganDatabaseBerjalan;
+    if (berjalan != null) return berjalan;
+    final terakhir = _cadanganDatabaseTerakhir;
+    if (!paksa &&
+        terakhir != null &&
+        DateTime.now().difference(terakhir) < _jedaCadanganDatabase) {
+      return const <String>[];
+    }
+    final future = _buatCadanganDatabasePenuh();
+    _cadanganDatabaseBerjalan = future;
+    try {
+      final hasil = await future;
+      _cadanganDatabaseTerakhir = DateTime.now();
+      return hasil;
+    } finally {
+      _cadanganDatabaseBerjalan = null;
+    }
+  }
+
+  Future<List<String>> _buatCadanganDatabasePenuh() async {
+    final database = await db;
+    final factory = databaseFactoryFfi;
+    final support = await getApplicationSupportDirectory();
+    final documents = await getApplicationDocumentsDirectory();
+    final folderPertama = Directory(
+        p.join(support.path, 'eBisnis', _storageNamespace, 'BackupDatabase'));
+    final folderKedua = Directory(
+        p.join(documents.path, 'eBisnis', _storageNamespace, 'BackupDatabase'));
+    if (p.equals(
+        p.normalize(folderPertama.path), p.normalize(folderKedua.path))) {
+      throw StateError('Dua lokasi cadangan mengarah ke folder yang sama.');
+    }
+    await folderPertama.create(recursive: true);
+    await folderKedua.create(recursive: true);
+
+    final cap = DateTime.now()
+        .toIso8601String()
+        .replaceAll(':', '-')
+        .replaceAll('.', '-');
+    final nama = 'ebisnis_${_storageNamespace}_$cap.db';
+    final sementaraPertama = File(p.join(folderPertama.path, '.$nama.partial'));
+    final tujuanPertama = File(p.join(folderPertama.path, nama));
+    final sementaraKedua = File(p.join(folderKedua.path, '.$nama.partial'));
+    final tujuanKedua = File(p.join(folderKedua.path, nama));
+    try {
+      await database.execute('VACUUM INTO ?', <Object?>[sementaraPertama.path]);
+      await _verifikasiSnapshot(factory, sementaraPertama.path);
+      final tersimpanPertama =
+          await sementaraPertama.rename(tujuanPertama.path);
+
+      await tersimpanPertama.copy(sementaraKedua.path);
+      await _verifikasiSnapshot(factory, sementaraKedua.path);
+      final tersimpanKedua = await sementaraKedua.rename(tujuanKedua.path);
+      await _hapusCadanganLama(folderPertama, pertahankan: tujuanPertama.path);
+      await _hapusCadanganLama(folderKedua, pertahankan: tersimpanKedua.path);
+      return <String>[tersimpanPertama.path, tersimpanKedua.path];
+    } catch (_) {
+      // Hanya berkas sementara yang dibuat proses ini yang boleh dibersihkan.
+      for (final file in <File>[sementaraPertama, sementaraKedua]) {
+        try {
+          if (await file.exists()) await file.delete();
+        } catch (_) {}
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _verifikasiSnapshot(DatabaseFactory factory, String path) async {
+    final snapshot = await factory.openDatabase(
+      path,
+      options: OpenDatabaseOptions(readOnly: true, singleInstance: false),
+    );
+    try {
+      final hasil = await snapshot.rawQuery('PRAGMA quick_check');
+      final status =
+          hasil.isNotEmpty ? hasil.first.values.first?.toString() : null;
+      if (status != 'ok') {
+        throw StateError('Snapshot database gagal diperiksa: $status');
+      }
+    } finally {
+      await snapshot.close();
+    }
+  }
+
+  Future<void> _hapusCadanganLama(Directory folder,
+      {required String pertahankan}) async {
+    final berkas = await folder
+        .list()
+        .where((entry) =>
+            entry is File &&
+            p
+                .basename(entry.path)
+                .startsWith('ebisnis_${_storageNamespace}_') &&
+            entry.path.toLowerCase().endsWith('.db'))
+        .cast<File>()
+        .toList();
+    berkas.sort((a, b) => b.path.compareTo(a.path));
+    var dipertahankan = 0;
+    for (final file in berkas) {
+      if (p.equals(file.path, pertahankan) ||
+          dipertahankan < _jumlahCadanganDatabase) {
+        dipertahankan++;
+        continue;
+      }
+      try {
+        await file.delete();
+      } catch (_) {
+        // Retensi bersifat best-effort; kegagalan menghapus tidak mengganggu POS.
+      }
+    }
   }
 
   /// Menulis snapshot append-only di lokasi kedua di luar database utama.
   /// Pada Android 10+ native side memakai MediaStore/Downloads/eBisnis,
   /// sehingga file tetap ada setelah aplikasi diperbarui maupun dihapus.
-  /// Pada desktop file berada di Documents/eBisnis/<varian>/Backup. Snapshot tidak
+  /// Pada desktop file berada di `Documents/eBisnis/<varian>/Backup`. Snapshot tidak
   /// memuat token/sandi; isinya hanya payload transaksi operasional yang
   /// memang diperlukan untuk membangun ulang arsip lokal.
   Future<void> _cadangkanTransaksiPersisten(
@@ -821,6 +984,8 @@ class CoreDb {
   ///
   /// Pembukaan berikutnya terjadi dengan sendirinya pada akses pertama.
   Future<void> tutup() async {
+    _timerCadanganDatabase?.cancel();
+    _timerCadanganDatabase = null;
     final terbuka = _db;
     _db = null;
     _openingDb = null;
@@ -841,6 +1006,8 @@ class CoreDb {
   /// ternyata ada yang salah, datanya masih dapat diperiksa. Mengembalikan
   /// jalur arsipnya, atau null bila tidak ada yang perlu diarsipkan.
   Future<String?> lepaskanDanArsipkan() async {
+    _timerCadanganDatabase?.cancel();
+    _timerCadanganDatabase = null;
     final path = _pathDb;
     final terbuka = _db;
     if (terbuka != null && terbuka.isOpen) {
