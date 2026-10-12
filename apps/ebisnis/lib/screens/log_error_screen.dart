@@ -191,12 +191,116 @@ class _LogErrorScreenState extends State<LogErrorScreen> with JejakGalat {
   String _teksSatuError(Map<String, dynamic> e) =>
       '[${e['tingkat']}] ${_formatWaktu(e['waktu'] as String)} · ${e['sumber'] ?? '-'}\n${e['pesan']}${(e['detail'] as String?)?.isNotEmpty == true ? '\n${e['detail']}' : ''}';
 
-  Future<void> _salinSemua() async {
-    final teks = _data.map(_teksSatuError).join('\n\n---\n\n');
-    await Clipboard.setData(ClipboardData(text: teks));
-    if (mounted)
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('${_data.length} baris disalin ke clipboard.')));
+  Future<void> _copyError() async {
+    String cakupanDipilih =
+        (_tingkat != null || _kataKunci.isNotEmpty) ? 'filter' : 'halaman';
+
+    final cakupan = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Copy Error'),
+          content: SizedBox(
+            width: 460,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Pilih catatan yang akan disalin untuk dianalisis.'),
+                const SizedBox(height: 8),
+                RadioListTile<String>(
+                  title: Text('Semua Log ($_totalSemua baris)'),
+                  value: 'semua',
+                  groupValue: cakupanDipilih,
+                  dense: true,
+                  onChanged: (v) => setDialogState(() => cakupanDipilih = v!),
+                ),
+                if (_tingkat != null || _kataKunci.isNotEmpty)
+                  RadioListTile<String>(
+                    title: const Text('Sesuai Filter & Pencarian'),
+                    value: 'filter',
+                    groupValue: cakupanDipilih,
+                    dense: true,
+                    onChanged: (v) => setDialogState(() => cakupanDipilih = v!),
+                  ),
+                RadioListTile<String>(
+                  title: Text('Halaman Ini Saja (${_data.length} baris)'),
+                  value: 'halaman',
+                  groupValue: cakupanDipilih,
+                  dense: true,
+                  onChanged: (v) => setDialogState(() => cakupanDipilih = v!),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Catatan error dapat memuat informasi sensitif. Periksa isinya sebelum ditempelkan ke layanan AI.',
+                  style: TextStyle(color: AppColors.warning),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Batal'),
+            ),
+            FilledButton.icon(
+              icon: const Icon(Icons.copy_outlined),
+              onPressed: () => Navigator.of(dialogContext).pop(cakupanDipilih),
+              label: const Text('Copy Error'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (cakupan == null) return;
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Sedang menyiapkan catatan error...')),
+    );
+
+    try {
+      List<Map<String, dynamic>> items;
+      if (cakupan == 'halaman') {
+        items = _data;
+      } else if (cakupan == 'filter') {
+        final raw = await CoreDb.instance.listErrorLog(
+          tingkat: _tingkat,
+          kataKunci: _kataKunci.isEmpty ? null : _kataKunci,
+          limit: null,
+          offset: 0,
+        );
+        items = raw.cast<Map<String, dynamic>>();
+      } else {
+        final raw = await CoreDb.instance.listErrorLog(limit: null, offset: 0);
+        items = raw.cast<Map<String, dynamic>>();
+      }
+
+      if (items.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Tidak ada catatan error untuk disalin.')),
+        );
+        return;
+      }
+
+      final teks = _bangunTxt(items);
+      await Clipboard.setData(ClipboardData(text: teks));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${items.length} catatan disalin. Periksa informasi sensitif sebelum dibagikan.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal menyalin catatan error: $e')),
+      );
+    }
   }
 
   String _csvEscape(String? text) {
@@ -227,11 +331,13 @@ class _LogErrorScreenState extends State<LogErrorScreen> with JejakGalat {
   String _bangunTxt(List<Map<String, dynamic>> items) {
     final sb = StringBuffer();
     final stempel = DateFormat('dd-MM-yyyy HH:mm:ss').format(DateTime.now());
-    sb.writeln('================================================================================');
+    sb.writeln(
+        '================================================================================');
     sb.writeln('LOG ERROR - APLIKASI KASIR POS');
     sb.writeln('Waktu Ekspor : $stempel');
     sb.writeln('Total Catatan: ${items.length} baris');
-    sb.writeln('================================================================================\n');
+    sb.writeln(
+        '================================================================================\n');
 
     for (int i = 0; i < items.length; i++) {
       final e = items[i];
@@ -248,7 +354,8 @@ class _LogErrorScreenState extends State<LogErrorScreen> with JejakGalat {
         sb.writeln('Detail:');
         sb.writeln(detail);
       }
-      sb.writeln('--------------------------------------------------------------------------------\n');
+      sb.writeln(
+          '--------------------------------------------------------------------------------\n');
     }
     return sb.toString();
   }
@@ -295,7 +402,7 @@ class _LogErrorScreenState extends State<LogErrorScreen> with JejakGalat {
             children: [
               Icon(Icons.download_outlined, color: AppColors.primary),
               const SizedBox(width: 8),
-              const Text('Unduh Log Error'),
+              const Text('Download Error'),
             ],
           ),
           content: SizedBox(
@@ -420,8 +527,7 @@ class _LogErrorScreenState extends State<LogErrorScreen> with JejakGalat {
         return;
       }
 
-      final stempelWaktu =
-          DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      final stempelWaktu = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
       final namaFile = 'log_error_$stempelWaktu.$formatDipilih';
       final konten =
           formatDipilih == 'csv' ? _bangunCsv(items) : _bangunTxt(items);
@@ -480,9 +586,10 @@ class _LogErrorScreenState extends State<LogErrorScreen> with JejakGalat {
               onTap: () async {
                 Navigator.of(context).pop();
                 await Clipboard.setData(ClipboardData(text: _teksSatuError(e)));
-                if (mounted)
+                if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Disalin ke clipboard.')));
+                }
               },
             ),
             ListTile(
@@ -518,15 +625,15 @@ class _LogErrorScreenState extends State<LogErrorScreen> with JejakGalat {
         IconButton(
             icon: const Icon(Icons.download_outlined),
             onPressed: _totalSemua == 0 ? null : _unduhLogError,
-            tooltip: 'Unduh Log Error'),
+            tooltip: 'Download Error'),
         IconButton(
             icon: const Icon(Icons.monitor_heart_outlined),
             onPressed: _memuatHealth ? null : _muatHealth,
             tooltip: 'Muat Kesehatan Server'),
         IconButton(
             icon: const Icon(Icons.copy_all_outlined),
-            onPressed: _data.isEmpty ? null : _salinSemua,
-            tooltip: 'Salin Semua Error'),
+            onPressed: _totalSemua == 0 ? null : _copyError,
+            tooltip: 'Copy Error'),
         IconButton(
             icon: const Icon(Icons.delete_sweep_outlined),
             onPressed: _data.isEmpty ? null : _bersihkanSemua,
@@ -536,15 +643,15 @@ class _LogErrorScreenState extends State<LogErrorScreen> with JejakGalat {
         IconButton(
             icon: const Icon(Icons.download_outlined),
             onPressed: _totalSemua == 0 ? null : _unduhLogError,
-            tooltip: 'Unduh Log Error'),
+            tooltip: 'Download Error'),
         IconButton(
             icon: const Icon(Icons.monitor_heart_outlined),
             onPressed: _memuatHealth ? null : _muatHealth,
             tooltip: 'Muat Kesehatan Server'),
         IconButton(
             icon: const Icon(Icons.copy_all_outlined),
-            onPressed: _data.isEmpty ? null : _salinSemua,
-            tooltip: 'Salin Semua Error'),
+            onPressed: _totalSemua == 0 ? null : _copyError,
+            tooltip: 'Copy Error'),
         IconButton(
             icon: const Icon(Icons.delete_sweep_outlined),
             onPressed: _data.isEmpty ? null : _bersihkanSemua,
@@ -652,36 +759,40 @@ class _LogErrorScreenState extends State<LogErrorScreen> with JejakGalat {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
-                      Expanded(
-                        child: Wrap(
-                          spacing: 6,
-                          children: [
-                            ChoiceChip(
-                                label: const Text('Semua'),
-                                selected: _tingkat == null,
+                      Wrap(
+                        spacing: 6,
+                        children: [
+                          ChoiceChip(
+                              label: const Text('Semua'),
+                              selected: _tingkat == null,
+                              onSelected: (_) {
+                                _tingkat = null;
+                                _terapkanFilter();
+                              }),
+                          ..._tingkatOpsi.map((t) => ChoiceChip(
+                                label: Text(t),
+                                selected: _tingkat == t,
                                 onSelected: (_) {
-                                  _tingkat = null;
+                                  _tingkat = t;
                                   _terapkanFilter();
-                                }),
-                            ..._tingkatOpsi.map((t) => ChoiceChip(
-                                  label: Text(t),
-                                  selected: _tingkat == t,
-                                  onSelected: (_) {
-                                    _tingkat = t;
-                                    _terapkanFilter();
-                                  },
-                                )),
-                          ],
-                        ),
+                                },
+                              )),
+                        ],
                       ),
-                      const SizedBox(width: 8),
                       FilledButton.tonalIcon(
                         icon: const Icon(Icons.download_outlined, size: 18),
-                        label: const Text('Unduh Log Error'),
+                        label: const Text('Download Error'),
                         onPressed: _totalSemua == 0 ? null : _unduhLogError,
+                      ),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.copy_outlined, size: 18),
+                        label: const Text('Copy Error'),
+                        onPressed: _totalSemua == 0 ? null : _copyError,
                       ),
                     ],
                   ),
