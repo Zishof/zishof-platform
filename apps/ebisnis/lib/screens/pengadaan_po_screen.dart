@@ -14,6 +14,8 @@ import '../widgets/riwayat_data_dialog.dart';
 import '../widgets/safe_state.dart';
 
 import 'pengadaan_bulk_entry_screen.dart';
+import 'pengajuan_anda_detail_screen.dart';
+import 'pengajuan_baru_screen.dart';
 import '../widgets/aksi_baris_menu.dart';
 
 /// Layar "Pemesanan Pembelian (PO)" -- tahap 2 modul Pengadaan POS.
@@ -561,6 +563,38 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen>
         label: 'Lihat / ubah',
         onTap: () => _form(awal: po),
       ),
+      if (po['disposisiSopId'] == null)
+        AksiBaris(
+          ikon: Icons.send_outlined,
+          label: 'Ajukan SOP',
+          onTap: () async {
+            final hasil = await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => PengajuanBaruScreen(
+                  entityClass: 'ais.database.model.PemesananPengadaanMasterAsset',
+                  entityId: '${po['id']}',
+                  entityKode: '${po['kode'] ?? ''}',
+                  entityNama: '${po['keterangan'] ?? po['nama'] ?? ''}',
+                ),
+              ),
+            );
+            if (hasil != null && mounted) {
+              _muat();
+            }
+          },
+        ),
+      if (po['disposisiSopId'] != null)
+        AksiBaris(
+          ikon: Icons.assignment_outlined,
+          label: 'Lihat SOP',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => PengajuanAndaDetailScreen(
+                disposisiSopId: '${po['disposisiSopId']}',
+              ),
+            ),
+          ),
+        ),
       AksiBaris(
         ikon: Icons.check_circle_outline,
         label: 'Setujui',

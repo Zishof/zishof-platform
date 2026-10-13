@@ -35,7 +35,20 @@ import '../widgets/safe_state.dart';
 /// bergantung pada hak akses dan definisi alur saat itu juga, dan lampirannya
 /// sudah lebih dulu berada di server.
 class PengajuanBaruScreen extends StatefulWidget {
-  const PengajuanBaruScreen({super.key});
+  final String? entityClass;
+  final String? entityId;
+  final String? entityKode;
+  final String? entityNama;
+  final String? targetSopId;
+
+  const PengajuanBaruScreen({
+    super.key,
+    this.entityClass,
+    this.entityId,
+    this.entityKode,
+    this.entityNama,
+    this.targetSopId,
+  });
 
   @override
   State<PengajuanBaruScreen> createState() => _PengajuanBaruScreenState();
@@ -60,6 +73,53 @@ class _PengajuanBaruScreenState extends State<PengajuanBaruScreen> {
       _galat = null;
     });
     try {
+      if (widget.entityClass != null && widget.entityId != null) {
+        final r = await ApiClient.instance.aksi('sop_mulai_untuk_data', {
+          'entityClass': widget.entityClass,
+          'entityId': widget.entityId,
+          if (widget.targetSopId != null) 'sopId': widget.targetSopId,
+        });
+        if (!mounted) return;
+        if (r['sudahAdaSop'] == true) {
+          setStateIfMounted(() {
+            _galat = '${r['description'] ?? 'Data ini sudah memiliki pengajuan SOP.'}';
+            _memuat = false;
+          });
+          return;
+        }
+        final list = ((r['listSop'] as List?) ?? const [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+        final mulaiInfo = r['mulaiInfo'] != null
+            ? Map<String, dynamic>.from(r['mulaiInfo'] as Map)
+            : null;
+        setStateIfMounted(() {
+          _jenis = list;
+          if (list.isEmpty) {
+            _galat = 'Tidak ada SOP yang dapat diajukan untuk data ini.';
+          }
+          _memuat = false;
+        });
+        if (mulaiInfo != null && (widget.targetSopId != null || list.length == 1)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            if (!mounted) return;
+            final hasil = await Navigator.of(context).push<Map<String, dynamic>>(
+              MaterialPageRoute(
+                builder: (_) => _FormPengajuanBaru(
+                  info: mulaiInfo,
+                  entityClass: widget.entityClass,
+                  entityId: widget.entityId,
+                  entityKode: widget.entityKode,
+                  entityNama: widget.entityNama,
+                ),
+              ),
+            );
+            if (hasil != null && mounted) Navigator.of(context).pop(hasil);
+          });
+        }
+        return;
+      }
+
       final r = await ApiClient.instance.aksi('sop_jenis', const {});
       if (!mounted) return;
       final list = ((r['list'] as List?) ?? const [])
@@ -96,7 +156,15 @@ class _PengajuanBaruScreenState extends State<PengajuanBaruScreen> {
       final info = Map<String, dynamic>.from((r['data'] as Map?) ?? const {});
       if (!mounted) return;
       final hasil = await Navigator.of(context).push<Map<String, dynamic>>(
-        MaterialPageRoute(builder: (_) => _FormPengajuanBaru(info: info)),
+        MaterialPageRoute(
+          builder: (_) => _FormPengajuanBaru(
+            info: info,
+            entityClass: widget.entityClass,
+            entityId: widget.entityId,
+            entityKode: widget.entityKode,
+            entityNama: widget.entityNama,
+          ),
+        ),
       );
       if (hasil != null && mounted) Navigator.of(context).pop(hasil);
     } catch (e) {
@@ -269,7 +337,18 @@ class _PengajuanBaruScreenState extends State<PengajuanBaruScreen> {
 
 class _FormPengajuanBaru extends StatefulWidget {
   final Map<String, dynamic> info;
-  const _FormPengajuanBaru({required this.info});
+  final String? entityClass;
+  final String? entityId;
+  final String? entityKode;
+  final String? entityNama;
+
+  const _FormPengajuanBaru({
+    required this.info,
+    this.entityClass,
+    this.entityId,
+    this.entityKode,
+    this.entityNama,
+  });
 
   @override
   State<_FormPengajuanBaru> createState() => _FormPengajuanBaruState();
@@ -484,6 +563,8 @@ class _FormPengajuanBaruState extends State<_FormPengajuanBaru> {
       'sopId': '${widget.info['sopId']}',
       'refSementara': _ref,
       'keterangan': _keterangan.text.trim(),
+      if (widget.entityClass != null) 'entityClass': widget.entityClass,
+      if (widget.entityId != null) 'entityId': widget.entityId,
       // Dikirim sebagai ANGKA: server membacanya dengan JSONArray.getLong.
       if (_alurDipilih.isNotEmpty)
         'alurSopIds': [
@@ -546,6 +627,7 @@ class _FormPengajuanBaruState extends State<_FormPengajuanBaru> {
           ListView(
             padding: const EdgeInsets.all(14),
             children: [
+              if (widget.entityClass != null) _kotakEntity(),
               _kotakTahap(),
               if (_galat != null) ...[
                 const SizedBox(height: 12),
@@ -681,6 +763,48 @@ class _FormPengajuanBaruState extends State<_FormPengajuanBaru> {
             Container(
               color: Colors.black26,
               child: const Center(child: CircularProgressIndicator()),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _kotakEntity() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.latarLembut(AppColors.primary),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.link, size: 16, color: AppColors.primary),
+              const SizedBox(width: 6),
+              Text(
+                'Data Terkait SOP',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${widget.entityKode != null && widget.entityKode!.isNotEmpty ? '${widget.entityKode} - ' : ''}${widget.entityNama ?? widget.entityClass ?? ''}',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+          if (widget.entityId != null)
+            Text(
+              'ID Data: ${widget.entityId}',
+              style: TextStyle(fontSize: 10, color: Colors.grey[600]),
             ),
         ],
       ),
