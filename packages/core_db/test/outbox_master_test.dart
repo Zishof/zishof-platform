@@ -61,6 +61,25 @@ void main() {
     expect(await db.outboxMasterDenganId(-999999), isNull);
   });
 
+  test('stok opname berulang tanpa kunci mempertahankan tiap kejadian',
+      () async {
+    final db = CoreDb.instance;
+    await db.outboxMasterTambah(
+        'so_simpan', null, '{"produk_id":731,"stok_fisik":5}');
+    await db.outboxMasterTambah(
+        'so_simpan', null, '{"produk_id":731,"stok_fisik":4}');
+
+    final opname = (await db.outboxMasterPending())
+        .where((r) => r['aksi'] == 'so_simpan')
+        .toList();
+    expect(opname, hasLength(2),
+        reason: 'hasil hitung berulang adalah dua catatan audit, bukan edit');
+    expect(opname.map((r) => r['payload_json']).toList(), [
+      '{"produk_id":731,"stok_fisik":5}',
+      '{"produk_id":731,"stok_fisik":4}',
+    ]);
+  });
+
   test('transisi status: sukses & gagal keluar dari antrean pending', () async {
     final db = CoreDb.instance;
     final pending = await db.outboxMasterPending();

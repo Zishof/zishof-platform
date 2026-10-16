@@ -1399,7 +1399,9 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
           'stok_fisik': stokFisik,
           'keterangan': _keteranganController.text.trim(),
         },
-        kunci: 'so:${p['produkId']}',
+        // Opname adalah catatan kejadian append-only, bukan edit atas satu
+        // record per produk. Tanpa kunci coalesce, dua hasil hitung produk
+        // yang sama saat offline tetap menjadi dua baris audit di antrean.
       );
       final offline = hasil['offline'] == true;
       final selisih = (hasil['selisih'] as num?)?.toDouble() ??
@@ -1898,7 +1900,8 @@ class _TabSoByScanState extends State<_TabSoByScan>
             'stok_fisik': stok,
             'keterangan': a.keterangan.text.trim(),
           },
-          kunci: 'so:${a.produk['produkId']}',
+          // Setiap hasil hitung adalah kejadian tersendiri. Jangan gabungkan
+          // antrean per produk karena dapat menghilangkan audit opname awal.
         );
         if (r['offline'] == true) {
           await CoreDb.instance.produkCachePerbaruiStok(
