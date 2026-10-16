@@ -1635,7 +1635,7 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
 
   @override
   Widget build(BuildContext context) {
-    if (!Sesi.instance.bolehKelola) {
+    if (!Sesi.instance.bolehAksiPos('stokopname', 'create')) {
       return ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -1654,7 +1654,7 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
                 const SizedBox(width: 10),
                 Expanded(
                     child: Text(
-                        'Hanya admin/manager atau supervisor toko yang bisa mencatat hasil Stok Opname.',
+                        'Akun ini belum mendapat izin untuk mencatat hasil Stok Opname. Minta admin toko memeriksa izin Stok Opname: Buat.',
                         style: TextStyle(
                             fontSize: 12,
                             color: AppColors.textPrimaryOf(context)))),
@@ -1930,11 +1930,11 @@ class _TabSoByScanState extends State<_TabSoByScan>
 
   @override
   Widget build(BuildContext context) {
-    if (!Sesi.instance.bolehKelola) {
+    if (!Sesi.instance.bolehAksiPos('stokopname', 'create')) {
       return Padding(
         padding: const EdgeInsets.all(16),
         child: Text(
-          'Hanya admin/manager atau supervisor toko yang bisa mencatat hasil Stok Opname.',
+          'Akun ini belum mendapat izin untuk mencatat hasil Stok Opname. Minta admin toko memeriksa izin Stok Opname: Buat.',
           style: TextStyle(
               fontSize: 12, color: AppColors.textSecondaryOf(context)),
         ),
