@@ -21,6 +21,7 @@ import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/aksi_baris_menu.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/penanda_data_tersimpan.dart';
 import '../widgets/pencarian_produk_banbox.dart';
@@ -208,36 +209,33 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
 
   @override
   Widget build(BuildContext context) {
-    final tombolAksi = <Widget>[
-      if (Sesi.instance.bolehKelola) ...[
-        HeaderActionButton(
-          icon: Icons.download_outlined,
-          label: 'Unduh Excel',
-          onPressed: _eksporExcel,
-        ),
-        HeaderActionButton(
-          icon: Icons.upload_file_outlined,
-          label: 'Unggah Excel',
-          onPressed: _unggahExcel,
-        ),
-        HeaderActionButton(
-          icon: Icons.picture_as_pdf_outlined,
-          label: 'Cetak PDF',
-          onPressed: _cetakPdf,
-        ),
-      ],
-    ];
+    final bolehKelola = Sesi.instance.bolehKelola;
+    final aksiHeader = bolehKelola
+        ? [
+            AksiBaris(
+                ikon: Icons.download_outlined,
+                label: 'Unduh Excel',
+                onTap: _eksporExcel),
+            AksiBaris(
+                ikon: Icons.upload_file_outlined,
+                label: 'Unggah Excel',
+                onTap: _unggahExcel),
+            AksiBaris(
+                ikon: Icons.picture_as_pdf_outlined,
+                label: 'Cetak PDF',
+                onTap: _cetakPdf),
+          ]
+        : const <AksiBaris>[];
     return AppShell(
       menuAktif: MenuEBisnis.stokOpname,
       judul: 'Stok Opname',
       subjudul: 'Kartu mutasi stok & input hasil hitung fisik',
-      aksiHeader: tombolAksi.isEmpty
+      aksiHeader: aksiHeader.isEmpty
           ? null
-          : Wrap(
-              alignment: WrapAlignment.end,
-              runSpacing: 8,
-              children: tombolAksi),
-      actionsAppBar: tombolAksi.isEmpty ? null : tombolAksi,
+          : AksiBarisMenu(aksi: aksiHeader, tooltip: 'Aksi stok opname'),
+      actionsAppBar: aksiHeader.isEmpty
+          ? null
+          : [AksiBarisMenu(aksi: aksiHeader, tooltip: 'Aksi stok opname')],
       scrollable: false,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -330,7 +328,10 @@ class _TabMutasiStokState extends State<_TabMutasiStok> with JejakGalat {
               Text(_pesanError!, textAlign: TextAlign.center),
               AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
               const SizedBox(height: 16),
-              ElevatedButton(onPressed: _muat, child: const Text('Coba Lagi')),
+              AksiBarisMenu(aksi: [
+                AksiBaris(
+                    ikon: Icons.refresh, label: 'Coba Lagi', onTap: _muat),
+              ]),
             ],
           ),
         ),
@@ -638,8 +639,10 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> with JejakGalat {
                 children: [
                   Text(_pesanError!, textAlign: TextAlign.center),
                   const SizedBox(height: 12),
-                  ElevatedButton(
-                      onPressed: _muat, child: const Text('Coba Lagi')),
+                  AksiBarisMenu(aksi: [
+                    AksiBaris(
+                        ikon: Icons.refresh, label: 'Coba Lagi', onTap: _muat),
+                  ]),
                 ],
               ),
             )
@@ -745,15 +748,12 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> with JejakGalat {
             if (_adaLagi) ...[
               const SizedBox(height: 12),
               Center(
-                child: OutlinedButton(
-                  onPressed: _memuatLagi ? null : _muatLebihBanyak,
-                  child: _memuatLagi
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Muat Lebih Banyak'),
-                ),
+                child: AksiBarisMenu(aksi: [
+                  AksiBaris(
+                      ikon: Icons.expand_more,
+                      label: 'Muat Lebih Banyak',
+                      onTap: _memuatLagi ? null : _muatLebihBanyak),
+                ]),
               ),
             ],
           ],
@@ -970,17 +970,18 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Batal'),
-            ),
-            FilledButton.icon(
-              onPressed: gagal == 0 && siap > 0
-                  ? () => Navigator.pop(dialogContext, true)
-                  : null,
-              icon: const Icon(Icons.upload_file_outlined),
-              label: Text('Simpan $siap Baris'),
-            ),
+            AksiBarisMenu(aksi: [
+              AksiBaris(
+                  ikon: Icons.close,
+                  label: 'Batal',
+                  onTap: () => Navigator.pop(dialogContext, false)),
+              AksiBaris(
+                  ikon: Icons.upload_file_outlined,
+                  label: 'Simpan $siap Baris',
+                  onTap: gagal == 0 && siap > 0
+                      ? () => Navigator.pop(dialogContext, true)
+                      : null),
+            ]),
           ],
         ),
       );
@@ -1078,45 +1079,31 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
       padding: const EdgeInsets.all(16),
       children: [
         PenandaDataTersimpan(tampil: _dariCache),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            OutlinedButton.icon(
-              onPressed: _pilihTanggal,
-              icon: const Icon(Icons.calendar_today_outlined),
-              label: Text(DateFormat('dd MMMM yyyy', 'id_ID').format(_tanggal)),
-            ),
-            OutlinedButton.icon(
-              onPressed: _memuat ? null : _muat,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Muat Ulang'),
-            ),
-            FilledButton.tonalIcon(
-              onPressed: _mengunduh ? null : _unduhExcel,
-              icon: _mengunduh
-                  ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.download_outlined),
-              label: const Text('Unduh Excel'),
-            ),
-            FilledButton.tonalIcon(
-              onPressed: _mengunggah ? null : _unggahExcel,
-              icon: _mengunggah
-                  ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.upload_file_outlined),
-              label: const Text('Unggah Excel'),
-            ),
-            OutlinedButton.icon(
-              onPressed: _data.isEmpty ? null : _cetakPdf,
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              label: const Text('Cetak PDF'),
-            ),
-          ],
+        Align(
+          alignment: Alignment.centerRight,
+          child: AksiBarisMenu(tooltip: 'Aksi SO Harian', aksi: [
+            AksiBaris(
+                ikon: Icons.calendar_today_outlined,
+                label:
+                    'Pilih tanggal · ${DateFormat('dd MMM yyyy', 'id_ID').format(_tanggal)}',
+                onTap: _pilihTanggal),
+            AksiBaris(
+                ikon: Icons.refresh,
+                label: 'Muat Ulang',
+                onTap: _memuat ? null : _muat),
+            AksiBaris(
+                ikon: Icons.download_outlined,
+                label: 'Unduh Excel',
+                onTap: _mengunduh ? null : _unduhExcel),
+            AksiBaris(
+                ikon: Icons.upload_file_outlined,
+                label: 'Unggah Excel',
+                onTap: _mengunggah ? null : _unggahExcel),
+            AksiBaris(
+                ikon: Icons.picture_as_pdf_outlined,
+                label: 'Cetak PDF',
+                onTap: _data.isEmpty ? null : _cetakPdf),
+          ]),
         ),
         const SizedBox(height: 12),
         Container(
@@ -1535,13 +1522,15 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
                           fontWeight: FontWeight.w700,
                           fontSize: 12),
                     )
-                  : TextButton.icon(
-                      onPressed: Sesi.instance.bolehKelola
-                          ? () => _batalkanOpname(k)
-                          : null,
-                      icon: const Icon(Icons.undo, size: 16),
-                      label: const Text('Batalkan'),
-                    ),
+                  : AksiBarisMenu(aksi: [
+                      AksiBaris(
+                          ikon: Icons.undo,
+                          label: 'Batalkan',
+                          onTap: Sesi.instance.bolehKelola
+                              ? () => _batalkanOpname(k)
+                              : null,
+                          merusak: true),
+                    ]),
             ),
           ],
         );
@@ -1579,17 +1568,27 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
           ],
         ),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Kembali')),
-          FilledButton.icon(
-            onPressed: () {
-              if (alasan.text.trim().length < 5) return;
-              Navigator.pop(dialogContext, true);
-            },
-            icon: const Icon(Icons.undo),
-            label: const Text('Buat Jurnal Pembatalan'),
-          ),
+          AksiBarisMenu(aksi: [
+            AksiBaris(
+                ikon: Icons.arrow_back,
+                label: 'Kembali',
+                onTap: () => Navigator.pop(dialogContext, false)),
+            AksiBaris(
+                ikon: Icons.undo,
+                label: 'Buat Jurnal Pembatalan',
+                onTap: () {
+                  if (alasan.text.trim().length < 5) {
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                      const SnackBar(
+                        content: Text('Alasan pembatalan minimal 5 karakter.'),
+                      ),
+                    );
+                    return;
+                  }
+                  Navigator.pop(dialogContext, true);
+                },
+                merusak: true),
+          ]),
         ],
       ),
     );
@@ -1684,11 +1683,12 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
               ),
             ),
             const SizedBox(width: 8),
-            IconButton.filled(
-              onPressed: _scanKamera,
-              icon: const Icon(Icons.qr_code_scanner),
-              tooltip: 'Scan pakai kamera',
-            ),
+            AksiBarisMenu(aksi: [
+              AksiBaris(
+                  ikon: Icons.qr_code_scanner,
+                  label: 'Scan pakai kamera',
+                  onTap: _scanKamera),
+            ]),
           ],
         ),
         const SizedBox(height: 12),
@@ -1733,17 +1733,14 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
                         border: OutlineInputBorder()),
                   ),
                   const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _menyimpan ? null : _simpanOpname,
-                      child: _menyimpan
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Text('Simpan Hasil Opname'),
-                    ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: AksiBarisMenu(aksi: [
+                      AksiBaris(
+                          ikon: Icons.save_outlined,
+                          label: 'Simpan Hasil Opname',
+                          onTap: _menyimpan ? null : _simpanOpname),
+                    ]),
                   ),
                 ],
               ),
@@ -1959,10 +1956,12 @@ class _TabSoByScanState extends State<_TabSoByScan>
                 ),
               ),
               const SizedBox(width: 8),
-              IconButton.filled(
-                  onPressed: _mencari ? null : _scanKamera,
-                  icon: const Icon(Icons.camera_alt),
-                  tooltip: 'Scan pakai kamera'),
+              AksiBarisMenu(aksi: [
+                AksiBaris(
+                    ikon: Icons.camera_alt,
+                    label: 'Scan pakai kamera',
+                    onTap: _mencari ? null : _scanKamera),
+              ]),
             ],
           ),
         ),
@@ -2001,9 +2000,13 @@ class _TabSoByScanState extends State<_TabSoByScan>
                                           fontSize: 13)),
                                 ),
                                 if (!sukses)
-                                  IconButton(
-                                      icon: const Icon(Icons.close, size: 18),
-                                      onPressed: () => _hapusDariAntrean(a)),
+                                  AksiBarisMenu(aksi: [
+                                    AksiBaris(
+                                        ikon: Icons.remove_circle_outline,
+                                        label: 'Hapus dari antrean',
+                                        onTap: () => _hapusDariAntrean(a),
+                                        merusak: true),
+                                  ]),
                               ],
                             ),
                             if (a.statusKirim != null && !sukses)
@@ -2047,14 +2050,14 @@ class _TabSoByScanState extends State<_TabSoByScan>
             padding: const EdgeInsets.all(16),
             child: SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _mengirim ? null : _simpanSemua,
-                child: _mengirim
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : Text('Simpan Semua (${_antrean.length})'),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: AksiBarisMenu(aksi: [
+                  AksiBaris(
+                      ikon: Icons.save_outlined,
+                      label: 'Simpan Semua (${_antrean.length})',
+                      onTap: _mengirim ? null : _simpanSemua),
+                ]),
               ),
             ),
           ),

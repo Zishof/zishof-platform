@@ -9,11 +9,14 @@ void main() {
         .readAsStringSync()
         .replaceAll(RegExp(r'\s+'), ' ');
 
-    expect(source,
-        contains("Sesi.instance.bolehAksiPos('stokopname', 'create')"));
+    expect(
+        source, contains("Sesi.instance.bolehAksiPos('stokopname', 'create')"));
     expect(source, isNot(contains('if (!Sesi.instance.bolehKelola)')));
     expect(source, contains('Stok Opname: Buat'));
-    expect(source,
-        contains('onPressed: Sesi.instance.bolehKelola ? () => _batalkanOpname(k) : null'));
+    expect(
+        source,
+        contains(
+            'onTap: Sesi.instance.bolehKelola ? () => _batalkanOpname(k) : null'));
+    expect(source, contains('AksiBarisMenu'));
   });
 }
