@@ -11,6 +11,7 @@ import 'package:printing/printing.dart';
 
 import '../api_client.dart';
 import '../services/accurate_jurnal_xlsx.dart';
+import '../services/jurnal_kas_bank.dart';
 import '../services/master_offline.dart';
 import '../sesi.dart';
 import '../widgets/proses_simpan_master.dart';
@@ -224,6 +225,25 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
         tanggalClosing: _tanggalClosing,
         kepala: kepala,
         barisAwal: barisAwal,
+      ),
+    );
+    if (tersimpan == true) await _muat();
+  }
+
+  Future<void> _bukaEditorKasBank({required bool pengeluaran}) async {
+    if (_akun.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Bagan akun belum termuat. Coba muat ulang halaman.')));
+      return;
+    }
+    final tersimpan = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _EditorKasBank(
+        akun: _akun,
+        jenisTransaksi: _jenisTransaksi,
+        tanggalClosing: _tanggalClosing,
+        pengeluaran: pengeluaran,
       ),
     );
     if (tersimpan == true) await _muat();
@@ -1716,10 +1736,36 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
       judul: 'Jurnal Umum',
       subjudul: 'Jurnal manual: koreksi, penyesuaian, biaya, dan saldo awal',
       scrollable: false,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _sibuk || !_boleh('create') ? null : () => _bukaEditor(),
-        icon: const Icon(Icons.post_add),
-        label: const Text('Jurnal Baru'),
+      floatingActionButton: PopupMenuButton<String>(
+        tooltip: 'Buat jurnal',
+        enabled: !_sibuk && _boleh('create'),
+        onSelected: (pilihan) {
+          if (pilihan == 'umum') _bukaEditor();
+          if (pilihan == 'keluar') _bukaEditorKasBank(pengeluaran: true);
+          if (pilihan == 'masuk') _bukaEditorKasBank(pengeluaran: false);
+        },
+        itemBuilder: (context) => const [
+          PopupMenuItem(
+              value: 'keluar',
+              child: ListTile(
+                  leading: Icon(Icons.call_made),
+                  title: Text('Jurnal Pengeluaran'))),
+          PopupMenuItem(
+              value: 'masuk',
+              child: ListTile(
+                  leading: Icon(Icons.call_received),
+                  title: Text('Jurnal Pemasukan'))),
+          PopupMenuDivider(),
+          PopupMenuItem(
+              value: 'umum',
+              child: ListTile(
+                  leading: Icon(Icons.post_add), title: Text('Jurnal Umum'))),
+        ],
+        child: const FloatingActionButton.extended(
+          onPressed: null,
+          icon: Icon(Icons.more_horiz),
+          label: Text('Jurnal Baru'),
+        ),
       ),
       body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Wrap(
@@ -1955,6 +2001,277 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
                     ),
         ),
       ]),
+    );
+  }
+}
+
+/// Form sederhana untuk kas/bank. Akun lawan tetap dipilih secara eksplisit:
+/// daftar akun yang tersedia belum memberi klasifikasi kas/bank atau pemetaan
+/// otomatis akun biaya/sumber penerimaan.
+class _EditorKasBank extends StatefulWidget {
+  const _EditorKasBank({
+    required this.akun,
+    required this.jenisTransaksi,
+    required this.tanggalClosing,
+    required this.pengeluaran,
+  });
+
+  final List<Map<String, dynamic>> akun;
+  final List<Map<String, dynamic>> jenisTransaksi;
+  final String tanggalClosing;
+  final bool pengeluaran;
+
+  @override
+  State<_EditorKasBank> createState() => _EditorKasBankState();
+}
+
+class _EditorKasBankState extends State<_EditorKasBank> {
+  final _ket = TextEditingController();
+  final _penerima = TextEditingController();
+  final _nominal = TextEditingController();
+  final _fmtTanggal = DateFormat('yyyy-MM-dd');
+  final _fmtAngka = NumberFormat.decimalPattern('id');
+  DateTime _tanggal = DateTime.now();
+  int? _akunKasBank;
+  int? _akunLawan;
+  int? _jenisId;
+  bool _menyimpan = false;
+  String? _pesan;
+
+  @override
+  void dispose() {
+    _ket.dispose();
+    _penerima.dispose();
+    _nominal.dispose();
+    super.dispose();
+  }
+
+  double get _nilai {
+    final t = _nominal.text
+        .replaceAll(RegExp(r'[^0-9,.-]'), '')
+        .replaceAll('.', '')
+        .replaceAll(',', '.');
+    return double.tryParse(t) ?? 0;
+  }
+
+  Future<void> _simpan() async {
+    if (_akunKasBank == null || _akunLawan == null) {
+      setStateIfMounted(() => _pesan =
+          'Pilih rekening kas/bank dan akun biaya atau sumber penerimaan.');
+      return;
+    }
+    if (_ket.text.trim().isEmpty || _nilai <= 0 || !_nilai.isFinite) {
+      setStateIfMounted(() =>
+          _pesan = 'Isi keterangan dan nominal yang lebih besar dari nol.');
+      return;
+    }
+    setStateIfMounted(() {
+      _menyimpan = true;
+      _pesan = null;
+    });
+    try {
+      final uraian = _ket.text.trim();
+      final penerima = _penerima.text.trim();
+      final ketFinal =
+          penerima.isEmpty ? uraian : '$uraian (Penerima: $penerima)';
+      final baris = JurnalKasBankDraft.buat(
+        pengeluaran: widget.pengeluaran,
+        akunKasBank: _akunKasBank!,
+        akunPasangan: _akunLawan!,
+        nominal: _nilai,
+        keterangan: uraian,
+      );
+      final hasil = await prosesSimpanMaster(
+        context,
+        aksi: 'jurnal_umum_simpan',
+        kunci: 'jurnal_umum:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: 'master:jurnal_umum',
+        rowLokal: {
+          'tanggal': _fmtTanggal.format(_tanggal),
+          'keterangan': ketFinal,
+        },
+        body: {
+          'tanggal': _fmtTanggal.format(_tanggal),
+          'keterangan': ketFinal,
+          'jenisTransaksiId': _jenisId ?? 0,
+          'baris': baris,
+        },
+      );
+      if (!mounted) return;
+      if (!ApiClient.statusResponsSukses(hasil['status'])) {
+        setStateIfMounted(
+            () => _pesan = '${hasil['message'] ?? 'Gagal menyimpan draf.'}');
+        return;
+      }
+      final messenger = ScaffoldMessenger.of(context);
+      Navigator.of(context).pop(true);
+      messenger.showSnackBar(SnackBar(
+          content: Text(
+              '${hasil['message'] ?? 'Draf jurnal tersimpan.'} Periksa draf sebelum diposting.')));
+    } catch (e) {
+      setStateIfMounted(() => _pesan = 'Draf belum dapat disimpan: $e');
+    } finally {
+      setStateIfMounted(() => _menyimpan = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final keluar = widget.pengeluaran;
+    final simpanAktif = !_menyimpan &&
+        _akunKasBank != null &&
+        _akunLawan != null &&
+        _akunKasBank != _akunLawan &&
+        _ket.text.trim().isNotEmpty &&
+        _nilai > 0;
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 680),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Row(children: [
+              Expanded(
+                  child: Text(
+                      keluar ? 'Jurnal Pengeluaran' : 'Jurnal Pemasukan',
+                      style: Theme.of(context).textTheme.titleLarge)),
+            ]),
+            const SizedBox(height: 12),
+            Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                    keluar
+                        ? 'Pilih rekening kas/bank yang berkurang dan akun biaya/tujuan.'
+                        : 'Pilih rekening kas/bank yang bertambah dan akun sumber penerimaan.',
+                    style: Theme.of(context).textTheme.bodyMedium)),
+            if (widget.tanggalClosing.isNotEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                      'Buku ditutup sampai ${widget.tanggalClosing}. Tanggal dalam periode tertutup akan ditolak saat penyimpanan.'),
+                ),
+              ),
+            const SizedBox(height: 12),
+            Wrap(spacing: 12, runSpacing: 12, children: [
+              AksiBarisMenu(aksi: [
+                AksiBaris(
+                  ikon: Icons.event,
+                  label: 'Ubah tanggal jurnal',
+                  onTap: _menyimpan
+                      ? null
+                      : () async {
+                          final p = await showDatePicker(
+                              context: context,
+                              initialDate: _tanggal,
+                              firstDate: DateTime(2015),
+                              lastDate: DateTime(2100));
+                          if (p != null) setStateIfMounted(() => _tanggal = p);
+                        },
+                ),
+              ]),
+              Text('Tanggal ${_fmtTanggal.format(_tanggal)}'),
+              SizedBox(
+                width: 280,
+                child: DropdownButtonFormField<int?>(
+                  value: _jenisId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                      labelText: 'Jenis transaksi (penomoran)', isDense: true),
+                  items: [
+                    const DropdownMenuItem<int?>(
+                        value: null, child: Text('Otomatis')),
+                    ...widget.jenisTransaksi.map((j) => DropdownMenuItem<int?>(
+                        value: (j['id'] as num?)?.toInt(),
+                        child: Text('${j['kode'] ?? ''} ${j['nama'] ?? ''}',
+                            overflow: TextOverflow.ellipsis))),
+                  ],
+                  onChanged: _menyimpan
+                      ? null
+                      : (v) => setStateIfMounted(() => _jenisId = v),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 12),
+            PemilihAkunField(
+              label: 'Rekening kas/bank',
+              daftar: widget.akun,
+              nilai: _akunKasBank,
+              helperText: 'Pilih akun kas atau bank yang sesuai.',
+              allowClear: false,
+              onChanged: (v) => setStateIfMounted(() => _akunKasBank = v),
+            ),
+            const SizedBox(height: 10),
+            PemilihAkunField(
+              label: keluar ? 'Akun biaya / tujuan' : 'Akun sumber penerimaan',
+              daftar: widget.akun,
+              nilai: _akunLawan,
+              helperText: keluar
+                  ? 'Contoh: biaya atau beban yang dibayar.'
+                  : 'Pilih akun yang menjadi asal penerimaan ini.',
+              allowClear: false,
+              onChanged: (v) => setStateIfMounted(() => _akunLawan = v),
+            ),
+            if (_akunKasBank != null && _akunKasBank == _akunLawan)
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: EdgeInsets.only(top: 6),
+                  child: Text('Pilih dua akun yang berbeda.'),
+                ),
+              ),
+            const SizedBox(height: 10),
+            TextField(
+                controller: _nominal,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                    labelText: 'Nominal *', prefixText: 'Rp ', isDense: true),
+                onChanged: (_) => setStateIfMounted(() {})),
+            const SizedBox(height: 10),
+            TextField(
+                controller: _ket,
+                decoration: const InputDecoration(
+                    labelText: 'Keterangan *', isDense: true),
+                onChanged: (_) => setStateIfMounted(() {})),
+            const SizedBox(height: 10),
+            TextField(
+                controller: _penerima,
+                decoration: InputDecoration(
+                    labelText: keluar
+                        ? 'Dibayarkan kepada (opsional)'
+                        : 'Diterima dari (opsional)',
+                    isDense: true)),
+            const SizedBox(height: 12),
+            Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                    'Nominal jurnal: Rp ${_fmtAngka.format(_nilai.round())}')),
+            if (_pesan != null)
+              Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(_pesan!,
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.error))),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: AksiBarisMenu(aksi: [
+                AksiBaris(
+                    ikon: Icons.save_outlined,
+                    label: _menyimpan ? 'Menyimpan…' : 'Simpan Draf',
+                    onTap: simpanAktif ? _simpan : null),
+                AksiBaris(
+                    ikon: Icons.close,
+                    label: 'Batal',
+                    onTap: _menyimpan
+                        ? null
+                        : () => Navigator.of(context).pop(false)),
+              ]),
+            ),
+          ]),
+        ),
+      ),
     );
   }
 }

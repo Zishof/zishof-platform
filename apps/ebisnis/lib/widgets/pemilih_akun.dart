@@ -26,6 +26,7 @@ class PemilihAkunField extends StatelessWidget {
     required this.nilai,
     required this.onChanged,
     this.helperText,
+    this.allowClear = true,
   });
 
   final String label;
@@ -33,6 +34,7 @@ class PemilihAkunField extends StatelessWidget {
   final int? nilai;
   final ValueChanged<int?> onChanged;
   final String? helperText;
+  final bool allowClear;
 
   Map<String, dynamic>? get _terpilih {
     for (final a in daftar) {
@@ -69,13 +71,13 @@ class PemilihAkunField extends StatelessWidget {
           context,
           labelText: label,
           helperText: helperText,
-          suffixIcon: adaPilihan
+          suffixIcon: adaPilihan && allowClear
               ? IconButton(
                   tooltip: 'Kosongkan',
                   icon: const Icon(Icons.close, size: 18),
                   onPressed: () => onChanged(null),
                 )
-              : const Icon(Icons.search),
+              : Icon(adaPilihan ? Icons.check_circle_outline : Icons.search),
         ),
         child: Text(
           adaPilihan ? teksAkun(a) : '-- Tidak dipilih --',
