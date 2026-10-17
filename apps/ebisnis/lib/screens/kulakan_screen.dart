@@ -130,6 +130,8 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
   static const _pageSize = 15;
 
   // ==== Header faktur (diisi SEKALI, diikuti banyak baris produk) ====
+  int? _fakturIdDiedit;
+  String? _nomorFakturAsliDiedit;
   final _fakturController = TextEditingController();
   final _totalManualController = TextEditingController();
   final _keteranganController = TextEditingController();
@@ -397,6 +399,20 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
     if (dipilih != null) _setStateEntri(() => _supplierTerpilih = dipilih);
   }
 
+  void _batalEditFaktur() {
+    _setStateEntri(() {
+      _fakturIdDiedit = null;
+      _nomorFakturAsliDiedit = null;
+      _fakturController.clear();
+      _totalManualController.clear();
+      _keteranganController.clear();
+      _supplierTerpilih = null;
+      _tanggalFaktur = DateTime.now();
+      _itemsFaktur.clear();
+      _errorForm = null;
+    });
+  }
+
   Future<void> _simpanFaktur({bool tutupSetelahSimpan = false}) async {
     final nomorFaktur = _fakturController.text.trim();
     if (nomorFaktur.isEmpty) {
@@ -413,21 +429,29 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
       _errorForm = null;
     });
     try {
+      final sedangEdit = _fakturIdDiedit != null;
+      final idFakturEdit = _fakturIdDiedit;
+      final kunciOutbox = sedangEdit
+          ? 'kulakan_faktur:edit:$idFakturEdit'
+          : 'kulakan_faktur:baru:${DateTime.now().microsecondsSinceEpoch}';
       // LOKAL DULU: faktur ditulis ke antrean + snapshot riwayat sebelum menyentuh
       // jaringan, baru dikirim. Supplier yang baru dibuat offline dirujuk lewat id
       // sementara dan ditukar otomatis saat antreannya terkirim.
       final hasil = await prosesSimpanMaster(
         context,
         aksi: 'kulakan_faktur_simpan',
-        kunci: 'kulakan_faktur:baru:${DateTime.now().microsecondsSinceEpoch}',
+        kunci: kunciOutbox,
         cacheKey: 'master:kulakan_faktur',
         rowLokal: {
+          if (sedangEdit) 'id': idFakturEdit,
+          if (sedangEdit) 'fakturId': idFakturEdit,
           'nomorFaktur': nomorFaktur,
           'tanggalFaktur': _tanggalFaktur.toIso8601String(),
           'supplierNama': '${_supplierTerpilih?['nama'] ?? ''}',
           'jumlahItem': _itemsFaktur.length,
         },
         body: {
+          if (sedangEdit) 'faktur_id': idFakturEdit,
           'nomor_faktur': nomorFaktur,
           'tanggal_faktur': _tanggalFaktur.toIso8601String(),
           if (_supplierTerpilih != null)
@@ -454,23 +478,22 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
       );
       final diskon = (hasil['diskon'] as num?)?.toDouble() ?? 0;
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(hasil['offline'] == true
-                ? 'Faktur tersimpan di perangkat (${_itemsFaktur.length} item) dan akan '
-                    'dikirim otomatis. Stok baru bertambah setelah terkirim.'
-                : diskon > 0
-                    ? 'Faktur tersimpan (${_itemsFaktur.length} item). Diskon/potongan: ${_formatRupiah.format(diskon)}.'
-                    : 'Faktur tersimpan (${_itemsFaktur.length} item).')));
+        final pesan = hasil['offline'] == true
+            ? (sedangEdit
+                ? 'Perubahan faktur tersimpan di perangkat dan akan dikirim otomatis.'
+                : 'Faktur tersimpan di perangkat (${_itemsFaktur.length} item) dan akan '
+                    'dikirim otomatis. Stok baru bertambah setelah terkirim.')
+            : diskon > 0
+                ? (sedangEdit
+                    ? 'Faktur $nomorFaktur berhasil diperbarui. Diskon/potongan: ${_formatRupiah.format(diskon)}.'
+                    : 'Faktur tersimpan (${_itemsFaktur.length} item). Diskon/potongan: ${_formatRupiah.format(diskon)}.')
+                : (sedangEdit
+                    ? 'Faktur $nomorFaktur berhasil diperbarui.'
+                    : 'Faktur tersimpan (${_itemsFaktur.length} item).');
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(pesan)));
       }
       if (!mounted) return;
-      _setStateEntri(() {
-        _fakturController.clear();
-        _totalManualController.clear();
-        _keteranganController.clear();
-        _supplierTerpilih = null;
-        _tanggalFaktur = DateTime.now();
-        _itemsFaktur.clear();
-      });
+      _batalEditFaktur();
       _halaman = 1;
       await _muatRiwayat();
       if (tutupSetelahSimpan && mounted && Navigator.of(context).canPop()) {
@@ -500,10 +523,55 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (_fakturIdDiedit != null)
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.amber.shade400),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.edit_note, color: Colors.amber.shade900, size: 28),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Mengedit Faktur: ${_nomorFakturAsliDiedit ?? ''}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.amber.shade900,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Perubahan akan langsung memperbarui faktur ini secara aman tanpa membuat faktur baru.',
+                        style: TextStyle(color: Colors.amber.shade900, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _batalEditFaktur,
+                  icon: const Icon(Icons.close, size: 16),
+                  label: const Text('Batal Edit'),
+                  style: TextButton.styleFrom(foregroundColor: Colors.amber.shade900),
+                ),
+              ],
+            ),
+          ),
         AppFormSection(
-          judul: 'Faktur Baru',
-          deskripsi:
-              'Isi info faktur sekali, lalu tambahkan barang-barang di faktur ini di bawah.',
+          judul: _fakturIdDiedit != null
+              ? 'Edit Faktur #${_nomorFakturAsliDiedit ?? ''}'
+              : 'Faktur Baru',
+          deskripsi: _fakturIdDiedit != null
+              ? 'Periksa dan sesuaikan nomor, tanggal, supplier, serta daftar barang di bawah ini.'
+              : 'Isi info faktur sekali, lalu tambahkan barang-barang di faktur ini di bawah.',
           children: [
             Row(
               children: [
@@ -783,8 +851,8 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.save_outlined, size: 18),
-                  label: const Text('Simpan Faktur'),
+                      : Icon(_fakturIdDiedit != null ? Icons.save_as_outlined : Icons.save_outlined, size: 18),
+                  label: Text(_fakturIdDiedit != null ? 'Simpan Perubahan Faktur' : 'Simpan Faktur'),
                   style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.success,
                       foregroundColor: Colors.white,
@@ -863,103 +931,63 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
     }
   }
 
-  /// Perbaiki faktur yang sudah terlanjur diinput.
+  /// Perbaiki faktur yang sudah tersimpan.
   ///
-  /// Server tidak punya aksi "ubah faktur" — dan memang tidak sepele, karena satu faktur sudah
-  /// terlanjur menambah stok, membentuk batch, serta memperbarui harga beli. Karena itu Edit di
-  /// sini dijalankan sebagai koreksi yang jujur dan memakai jalur yang sudah teruji:
-  /// **faktur lama DIBATALKAN** (stok & batch dikembalikan oleh server, jejaknya tetap tersimpan
-  /// sebagai faktur batal), lalu form Entri Faktur dibuka sudah TERISI data lama supaya pengguna
-  /// tinggal membetulkan bagian yang salah dan menyimpannya kembali.
-  ///
-  /// Konsekuensinya disampaikan lebih dulu di dialog konfirmasi, termasuk risiko bila pengguna
-  /// menutup form sebelum menyimpan: faktur lama sudah terlanjur batal dan harus dientri ulang.
+  /// Mode Edit mengisi ulang form Entri Faktur dengan data faktur yang dipilih.
+  /// Saat disimpan, server memperbarui faktur tersebut (menyesuaikan item dan stok
+  /// secara atomik dalam satu transaksi) tanpa membentuk faktur baru ganda.
+  /// Bila pengguna menutup form tanpa menyimpan, data faktur lama tetap aman.
   Future<void> _editFaktur(Map<String, dynamic> f, Map<String, dynamic> header,
       List<Map<String, dynamic>> items) async {
     final nomor = '${header['nomorFaktur'] ?? ''}';
-    final setuju = await showDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Edit Faktur'),
-        content: Text(
-            'Faktur $nomor akan DIBATALKAN lebih dulu (stok dan batch yang pernah masuk '
-            'dikembalikan), lalu datanya dimuat ke form Entri Faktur agar dapat diperbaiki '
-            'dan disimpan kembali.\n\n'
-            'Perhatian: bila form ditutup sebelum disimpan, faktur lama tetap dalam keadaan '
-            'batal dan perlu dientri ulang.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(c, false),
-              child: const Text('Batal')),
-          FilledButton.icon(
-            onPressed: () => Navigator.pop(c, true),
-            icon: const Icon(Icons.edit_outlined, size: 18),
-            label: const Text('Lanjut Edit'),
-          ),
-        ],
-      ),
-    );
-    if (setuju != true) return;
-    if (!mounted) return;
-
-    try {
-      // Alur "Edit Faktur" = batalkan lama lalu entri ulang. Keduanya kini lokal-dulu
-      // dan antrean bersifat urut, jadi server menerima pembatalan SEBELUM faktur
-      // penggantinya. Yang tetap perlu diketahui pengguna: bila pembatalan akhirnya
-      // DITOLAK server (mis. stoknya sudah terpakai), faktur pengganti tetap terkirim
-      // sehingga bisa muncul dua faktur -- baris antrean yang gagal terlihat di
-      // indikator sinkronisasi supaya bisa ditindak.
-      final res = await prosesSimpanMaster(
-        context,
-        aksi: 'kulakan_faktur_batal',
-        body: {'faktur_id': f['fakturId']},
-        kunci: 'kulakan_faktur:${f['fakturId']}',
-        cacheKey: 'master:kulakan_faktur',
-        rowLokal: {'id': f['fakturId'], 'fakturId': f['fakturId']},
-        hapusLokal: true,
-      );
-      if (res['offline'] != true && '${res['status']}' != '00') {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(
-                'Faktur tidak dapat dibatalkan: ${res['description'] ?? res['status']}')));
-        return;
-      }
-    } catch (e) {
-      if (!mounted) return;
+    final fakturId = ((f['fakturId'] ?? header['id']) as num?)?.toInt();
+    if (fakturId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal membatalkan faktur: $e')));
+          const SnackBar(content: Text('ID faktur tidak valid.')));
       return;
     }
 
-    if (!mounted) return;
-    // Isi ulang form entri dengan data faktur lama.
-    _fakturController.text = nomor;
-    final tglTeks = '${header['tanggalFaktur'] ?? ''}';
-    _tanggalFaktur = DateTime.tryParse(tglTeks) ?? _tanggalFaktur;
-    final idSupplier = header['supplierId'];
-    _supplierTerpilih = idSupplier == null
-        ? null
-        : {'id': idSupplier, 'nama': '${header['namaSupplier'] ?? ''}'};
-    _keteranganController.text = '${header['keterangan'] ?? ''}';
-    _itemsFaktur
-      ..clear()
-      ..addAll(items.map((it) => _ItemFaktur(
-            produkId: ((it['produkId'] as num?) ?? 0).toInt(),
-            nama: '${it['namaProduk'] ?? ''}',
-            kode: '${it['kodeProduk'] ?? ''}',
-            qty: ((it['qty'] as num?) ?? 0).toDouble(),
-            harga: ((it['hargaBeliSatuan'] as num?) ?? 0).toDouble(),
-          )));
-    setStateIfMounted(() {});
+    _setStateEntri(() {
+      _fakturIdDiedit = fakturId;
+      _nomorFakturAsliDiedit = nomor;
+      _fakturController.text = nomor;
+      final tglTeks = '${header['tanggalFaktur'] ?? ''}';
+      _tanggalFaktur = DateTime.tryParse(tglTeks) ?? _tanggalFaktur;
+      final idSupplier = header['supplierId'];
+      _supplierTerpilih = idSupplier == null
+          ? null
+          : {'id': idSupplier, 'nama': '${header['namaSupplier'] ?? ''}'};
+      _keteranganController.text = '${header['keterangan'] ?? ''}';
+      final totalManualVal = (header['totalFakturManual'] as num?)?.toDouble();
+      if (totalManualVal != null && totalManualVal > 0) {
+        _totalManualController.text = totalManualVal.toStringAsFixed(0);
+      } else {
+        _totalManualController.clear();
+      }
+      _itemsFaktur
+        ..clear()
+        ..addAll(items.map((it) => _ItemFaktur(
+              produkId: ((it['produkId'] as num?) ?? 0).toInt(),
+              nama: '${it['namaProduk'] ?? ''}',
+              kode: '${it['kodeProduk'] ?? ''}',
+              qty: ((it['qty'] as num?) ?? 0).toDouble(),
+              harga: ((it['hargaBeliSatuan'] as num?) ?? 0).toDouble(),
+              nomorBatch: it['nomorBatch']?.toString(),
+              tanggalProduksi: it['tanggalProduksi'] != null
+                  ? DateTime.tryParse('${it['tanggalProduksi']}')
+                  : null,
+              tanggalExpired: it['tanggalExpired'] != null
+                  ? DateTime.tryParse('${it['tanggalExpired']}')
+                  : null,
+            )));
+    });
 
-    Navigator.of(context).pop(); // tutup dialog detail.
-    await _muatRiwayat();
+    Navigator.of(context).pop(); // tutup dialog detail
+    await _bukaEntriFaktur();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Faktur $nomor dibatalkan. Perbaiki datanya lalu simpan '
-            'kembali sebagai faktur pengganti.')));
-    await _bukaEntriFaktur();
+        content: Text(
+            'Mode Edit Faktur $nomor aktif. Sesuaikan isian lalu simpan.')));
   }
 
   Future<void> _lihatDetailFaktur(Map<String, dynamic> f) async {
@@ -994,11 +1022,10 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
               icon: const Icon(Icons.block_outlined, size: 18),
               label: const Text('Batalkan'),
             ),
-          // Perbaikan faktur yang sudah terlanjur diinput. Butuh hak HAPUS (faktur
-          // lama dibatalkan) sekaligus hak TAMBAH (faktur pengganti disimpan).
+          // Perbaikan faktur: pemegang hak akses UBAH atau TAMBAH kulakan
           if ((Sesi.instance.bolehKelola ||
-                  (Sesi.instance.bolehAksiPos('kulakan', 'delete') &&
-                      Sesi.instance.bolehAksiPos('kulakan', 'create'))) &&
+                  Sesi.instance.bolehAksiPos('kulakan', 'update') ||
+                  Sesi.instance.bolehAksiPos('kulakan', 'create')) &&
               referensiMasterLengkap)
             OutlinedButton.icon(
               onPressed: () => _editFaktur(f, header, items),
