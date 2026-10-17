@@ -1851,6 +1851,8 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
       _omzetTotal = 0;
     });
     final payload = {
+      if (Sesi.instance.tokoId != null) 'tokoId': Sesi.instance.tokoId,
+      if (Sesi.instance.tokoId != null) 'idToko': Sesi.instance.tokoId,
       if (_mulai != null) 'tglMulai': _formatTanggalServer.format(_mulai!),
       if (_sampai != null) 'tglSampai': _formatTanggalServer.format(_sampai!),
       if (_cariPembeli.isNotEmpty) 'keyword': _cariPembeli,
