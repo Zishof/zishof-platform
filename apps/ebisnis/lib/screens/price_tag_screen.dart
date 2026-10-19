@@ -194,26 +194,35 @@ const _kategoriKertasBesar = 'Kertas Cetak Besar';
 
 const _ukuranRak = [
   _UkuranTag(
+      id: 'rak_58x38',
+      label: 'Rak Gondola Minimarket',
+      detail: '58 x 38 mm - Pas Mika Rel Gondola & Pasti 3 Kolom A4',
+      kategori: _kategoriRakUtama,
+      lebarMm: 58,
+      tinggiMm: 38,
+      populer: true),
+  _UkuranTag(
+      id: 'rak_60x40',
+      label: 'Rak Gondola 4 cm (Sedang)',
+      detail: '60 x 40 mm - Pas Mika Rel 4 cm (3 Kolom pd A4 Margin 10 mm)',
+      kategori: _kategoriRakUtama,
+      lebarMm: 60,
+      tinggiMm: 40,
+      populer: true),
+  _UkuranTag(
+      id: 'rak_50x30',
+      label: 'Rak Gondola Kecil / Keranjang',
+      detail: '50 x 30 mm - Untuk Rel Mika Kecil 3 cm / Keranjang',
+      kategori: _kategoriRakUtama,
+      lebarMm: 50,
+      tinggiMm: 30),
+  _UkuranTag(
       id: 'rak_30x20',
       label: 'Rak Sempit',
       detail: '30 x 20 mm',
       kategori: _kategoriRakUtama,
       lebarMm: 30,
       tinggiMm: 20),
-  _UkuranTag(
-      id: 'rak_50x30',
-      label: 'Rak Gondola',
-      detail: '50 x 30 mm',
-      kategori: _kategoriRakUtama,
-      lebarMm: 50,
-      tinggiMm: 30),
-  _UkuranTag(
-      id: 'rak_60x40',
-      label: 'Rak Sedang',
-      detail: '60 x 40 mm',
-      kategori: _kategoriRakUtama,
-      lebarMm: 60,
-      tinggiMm: 40),
   _UkuranTag(
       id: 'rak_80x50',
       label: 'Endcap Promo',
@@ -2678,6 +2687,53 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
                 _fieldMm('Bawah', _controllerMarginBawah),
               ],
             ),
+            if (_kertasCetak == KertasCetak.a4 &&
+                !_kertasLandscape &&
+                _ukuranAktif.lebarMm >= 58 &&
+                (_marginKiriMm + _marginKananMm) > 22) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.amber.shade400),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 18, color: Colors.amber.shade800),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Margin tepi saat ini (${_marginKiriMm.toInt()}+${_marginKananMm.toInt()} mm) membuat label ${_ukuranAktif.lebarMm.toInt()} mm hanya muat 2 kolom di A4. Atur margin ke 10 mm agar muat 3 kolom penuh.',
+                        style: TextStyle(fontSize: 11.5, color: Colors.amber.shade900),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        backgroundColor: Colors.amber.shade300,
+                        foregroundColor: Colors.black87,
+                        elevation: 0,
+                      ),
+                      onPressed: () {
+                        setStateIfMounted(() {
+                          _controllerMarginKiri.text = '10';
+                          _controllerMarginAtas.text = '10';
+                          _controllerMarginKanan.text = '10';
+                          _controllerMarginBawah.text = '10';
+                        });
+                        unawaited(_simpanPengaturanModel(_model));
+                      },
+                      child: const Text('Atur 10 mm (3 Kolom)',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ],
         if (_modelBolehMarginIndependen) ...[
