@@ -229,7 +229,7 @@ class _KasirScreenState extends State<KasirScreen> {
         const Duration(minutes: 1), (_) => _periksaJadwalTutupOtomatis());
     _perbaruiStatusJaringan();
     _timerStatusJaringan = Timer.periodic(
-        const Duration(seconds: 15), (_) => _perbaruiStatusJaringan());
+        const Duration(seconds: 45), (_) => _perbaruiStatusJaringan());
     TransaksiOutboxService.instance.mulai();
     MasterOffline.revisiBaris.addListener(_saatStokLokalBerubah);
     SinkronStokOpname.mulai();

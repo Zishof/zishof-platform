@@ -1229,8 +1229,18 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
 
   Future<bool> _pastikanJaringanOnlineSebelumBayar() async {
     if (!_pembayaranWajibOnline) return true;
-    final hasil = await StatusJaringan.instance.periksaSekarang();
+    var hasil = await StatusJaringan.instance.periksaSekarang();
     if (hasil.online) return true;
+
+    // Jika status tidakStabil (misalnya latensi sebelumnya agak tinggi tapi server
+    // terbukti merespons), lakukan konfirmasi cepat (probe paksa). Jika server tetap
+    // merespons (online maupun tidakStabil) dan bukan offline, izinkan transaksi lanjut.
+    if (hasil.status == StatusJaringanPos.tidakStabil) {
+      hasil = await StatusJaringan.instance.periksaSekarang(paksa: true);
+      if (hasil.bisaTransaksiOnline) {
+        return true;
+      }
+    }
 
     await CoreDb.instance.catatErrorLog(
       sumber: 'checkout-jaringan-preflight',
