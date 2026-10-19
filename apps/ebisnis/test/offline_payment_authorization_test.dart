@@ -270,7 +270,7 @@ void main() {
     test('kasir menampilkan status jaringan realtime di toolbar POS', () {
       final source = File('lib/screens/kasir_screen.dart').readAsStringSync();
       final rapat = source.replaceAll(RegExp(r'\s+'), '');
-      expect(rapat, contains('Timer.periodic(constDuration(seconds:15)'));
+      expect(rapat, contains('Timer.periodic(constDuration(seconds:45)'));
       expect(source, contains('StatusJaringan.instance.periksaSekarang()'));
       expect(source, contains('Status jaringan POS'));
       expect(source, contains('Icons.wifi'));
