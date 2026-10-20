@@ -486,8 +486,18 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> with JejakGalat {
   List<Map<String, dynamic>> _data = [];
   bool _adaLagi = false;
   int _hari = 30;
+  DateTimeRange? _rentangTanggal;
   final _cariController = TextEditingController();
   String _kataKunci = '';
+  String _tanggalTeks(DateTime tanggal) =>
+      DateFormat('yyyy-MM-dd').format(tanggal);
+
+  Map<String, dynamic> get _filterTanggal => _rentangTanggal == null
+      ? {'hari': _hari}
+      : {
+          'tanggalMulai': _tanggalTeks(_rentangTanggal!.start),
+          'tanggalSampai': _tanggalTeks(_rentangTanggal!.end),
+        };
   // Diff emisi baca lokal-dulu (daftarCacheDulu) -- menggerakkan kilau baris
   // + banner "pembaruan dari server" (mutasi dari kasir/gudang lain).
   final DiffDaftarLokal _diff = DiffDaftarLokal();
@@ -531,8 +541,9 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> with JejakGalat {
       // yang punya snapshot lokal.
       await MasterOffline.daftarCacheDulu(
           'stok_mutasi_ledger',
-          {'toko_id': tokoId, 'hari': _hari, 'limit': 100, 'offset': 0},
-          'master:stok_mutasi_ledger:$tokoId:$_hari', onData: (hasil) {
+          {'toko_id': tokoId, ..._filterTanggal, 'limit': 100, 'offset': 0},
+          'master:stok_mutasi_ledger:$tokoId:${_rentangTanggal == null ? _hari : '${_tanggalTeks(_rentangTanggal!.start)}:${_tanggalTeks(_rentangTanggal!.end)}'}',
+          onData: (hasil) {
         if (!mounted) return;
         setStateIfMounted(() {
           _data = _diff.terapkan(hasil);
@@ -562,7 +573,7 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> with JejakGalat {
     try {
       final hasil = await ApiClient.instance.aksi('stok_mutasi_ledger', {
         'toko_id': tokoId,
-        'hari': _hari,
+        ..._filterTanggal,
         'limit': 100,
         'offset': _data.length
       });
@@ -579,6 +590,34 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> with JejakGalat {
     } finally {
       if (mounted) setStateIfMounted(() => _memuatLagi = false);
     }
+  }
+
+  Future<void> _pilihRentangTanggal() async {
+    final sekarang = DateTime.now();
+    final awal = _rentangTanggal ??
+        DateTimeRange(
+          start: sekarang.subtract(Duration(days: _hari - 1)),
+          end: sekarang,
+        );
+    final pilihan = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(sekarang.year + 1),
+      initialDateRange: awal,
+      helpText: 'Pilih rentang mutasi (maksimal 365 hari)',
+      saveText: 'Terapkan',
+    );
+    if (pilihan == null) return;
+    if (pilihan.end.difference(pilihan.start).inDays > 364) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Rentang tanggal maksimal 365 hari.'),
+        ));
+      }
+      return;
+    }
+    setStateIfMounted(() => _rentangTanggal = pilihan);
+    await _muat();
   }
 
   List<Map<String, dynamic>> get _tersaring {
@@ -611,7 +650,8 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> with JejakGalat {
               ),
               const SizedBox(width: 10),
               DropdownButton<int>(
-                value: _hari,
+                value: _rentangTanggal == null ? _hari : null,
+                hint: const Text('Rentang tanggal'),
                 items: const [
                   DropdownMenuItem(value: 7, child: Text('7 hari')),
                   DropdownMenuItem(value: 30, child: Text('30 hari')),
@@ -620,12 +660,31 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> with JejakGalat {
                 ],
                 onChanged: (v) {
                   if (v == null) return;
-                  setStateIfMounted(() => _hari = v);
+                  setStateIfMounted(() {
+                    _hari = v;
+                    _rentangTanggal = null;
+                  });
                   _muat();
                 },
               ),
+              AksiBarisMenu(aksi: [
+                AksiBaris(
+                  ikon: Icons.date_range,
+                  label: 'Pilih rentang tanggal mutasi',
+                  onTap: _pilihRentangTanggal,
+                ),
+              ]),
             ],
           ),
+          if (_rentangTanggal != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Rentang: ${DateFormat('dd MMM yyyy', 'id_ID').format(_rentangTanggal!.start)} – ${DateFormat('dd MMM yyyy', 'id_ID').format(_rentangTanggal!.end)}',
+                style: TextStyle(
+                    fontSize: 12, color: AppColors.textSecondaryOf(context)),
+              ),
+            ),
           const SizedBox(height: 12),
           if (_memuat)
             const Padding(
@@ -1252,6 +1311,9 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
   String? _pesanError;
   Map<String, dynamic>? _produkDitemukan;
   List<Map<String, dynamic>> _riwayatHariIni = [];
+  DateTime _tanggalRiwayat = DateTime.now();
+  String get _tanggalRiwayatTeks =>
+      DateFormat('yyyy-MM-dd').format(_tanggalRiwayat);
   // Diff emisi baca lokal-dulu (daftarCacheDulu) -- menggerakkan kilau baris
   // + banner "pembaruan dari server" (opname yang dicatat petugas lain).
   final Map<Object, double?> _hpp = {};
@@ -1316,7 +1378,9 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
       // seketika, hasil server menyusul + diff utk kilau baris. Jalur SIMPAN
       // opname TETAP online-only lewat ApiClient (transaksional).
       await MasterOffline.daftarCacheDulu(
-          'so_riwayat', {'limit': 30}, 'master:so_riwayat', onData: (hasil) {
+          'so_riwayat',
+          {'limit': 30, 'tanggal': _tanggalRiwayatTeks},
+          'master:so_riwayat:$_tanggalRiwayatTeks', onData: (hasil) {
         if (!mounted) return;
         setStateIfMounted(() => _riwayatHariIni = _diff.terapkan(hasil));
         unawaited(_muatHpp());
@@ -1324,6 +1388,19 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
     } catch (_) {
       // riwayat gagal dimuat bukan blocker utk input baru.
     }
+  }
+
+  Future<void> _pilihTanggalRiwayat() async {
+    final pilihan = await showDatePicker(
+      context: context,
+      initialDate: _tanggalRiwayat,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+      helpText: 'Pilih tanggal riwayat opname',
+    );
+    if (pilihan == null || !mounted) return;
+    setStateIfMounted(() => _tanggalRiwayat = pilihan);
+    await _muatRiwayat();
   }
 
   Future<void> _cariProduk(String barcode) async {
@@ -1748,8 +1825,33 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
           ),
           const SizedBox(height: 16),
         ],
-        const Text('Riwayat Hari Ini',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Riwayat Opname · ${DateFormat('dd MMM yyyy', 'id_ID').format(_tanggalRiwayat)}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            AksiBarisMenu(aksi: [
+              AksiBaris(
+                ikon: Icons.calendar_month,
+                label: 'Pilih tanggal riwayat opname',
+                onTap: _pilihTanggalRiwayat,
+              ),
+              if (_tanggalRiwayatTeks !=
+                  DateFormat('yyyy-MM-dd').format(DateTime.now()))
+                AksiBaris(
+                  ikon: Icons.today,
+                  label: 'Kembali ke hari ini',
+                  onTap: () async {
+                    setStateIfMounted(() => _tanggalRiwayat = DateTime.now());
+                    await _muatRiwayat();
+                  },
+                ),
+            ]),
+          ],
+        ),
         const SizedBox(height: 8),
         _riwayatTable(),
       ],

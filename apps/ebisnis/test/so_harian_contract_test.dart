@@ -23,11 +23,11 @@ void main() {
     expect(source, contains('MasterOffline.objekDenganCache('));
     expect(source, contains('PenandaDataTersimpan(tampil: _dariCache)'));
     expect(source, contains('SharedPreferences.getInstance()'));
-    expect(source, contains("label: const Text('Unduh Excel')"));
-    expect(source, contains("label: const Text('Unggah Excel')"));
+    expect(source, contains("label: 'Unduh Excel'"));
+    expect(source, contains("label: 'Unggah Excel'"));
     expect(source, contains('Pratinjau Unggah SO Harian'));
     expect(source, contains('Penyimpanan bersifat satu batch'));
-    expect(source, contains("label: const Text('Cetak PDF')"));
+    expect(source, contains("label: 'Cetak PDF'"));
     expect(source, contains("AppTableColumn('Terjual'"));
     expect(source, contains("AppTableColumn('Sisa Stok Saat Ini'"));
     expect(source, contains("'Sisa Stok Saat Ini',"));
