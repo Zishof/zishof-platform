@@ -439,6 +439,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
                       helperText:
                           'Kosongkan untuk memakai kop lembaga bawaan. Nama kustom tidak memakai logo kampus.',
                       helperMaxLines: 2,
+                      counterText: '',
                     ),
                   ),
                   if (_pilihanMode.isNotEmpty) ...[
@@ -2070,24 +2071,48 @@ Uint8List buildLaporanDetailXlsx(
   final sheetXml = StringBuffer()
     ..write('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>')
     ..write(
-        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">')
-    ..write('<sheetData>');
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">');
+
+  sheetXml.write('<cols>');
+  for (var i = 0; i < kolom.length; i++) {
+    final colNum = i + 1;
+    final label = (kolom[i]['l'] as String?)?.toLowerCase() ?? '';
+    var width = 16.0;
+    if (label.contains('cabang') || label.contains('toko') || label.contains('nama')) {
+      width = 24.0;
+    } else if (label.contains('tanggal') || label.contains('tgl')) {
+      width = 15.0;
+    } else if (label.contains('transaksi') || label.contains('kategori')) {
+      width = 18.0;
+    } else if (label.contains('penjualan') || label.contains('bpp') || label.contains('laba') || label.contains('omzet') || label.contains('total')) {
+      width = 17.0;
+    }
+    sheetXml.write('<col min="$colNum" max="$colNum" width="$width" customWidth="1"/>');
+  }
+  sheetXml.write('</cols>');
+
+  sheetXml.write('<sheetData>');
   for (var m = 0; m < metadata.length; m++) {
     final row = m + 1;
+    final style = m == 0 ? '1' : (m == 1 ? '2' : '3');
     sheetXml.write(
-        '<row r="$row"><c r="A$row" t="inlineStr" s="1"><is><t>${_escapeXml(metadata[m])}</t></is></c></row>');
+        '<row r="$row"><c r="A$row" t="inlineStr" s="$style"><is><t>${_escapeXml(metadata[m])}</t></is></c></row>');
   }
   sheetXml.write('<row r="$headerRow">');
   for (var i = 0; i < kolom.length; i++) {
     final label = _escapeXml((kolom[i]['l'] as String?) ?? '');
     sheetXml.write(
-        '<c r="${_kolomExcel(i)}$headerRow" t="inlineStr" s="1"><is><t xml:space="preserve">$label</t></is></c>');
+        '<c r="${_kolomExcel(i)}$headerRow" t="inlineStr" s="4"><is><t xml:space="preserve">$label</t></is></c>');
   }
   sheetXml.write('</row>');
 
   for (var r = 0; r < baris.length; r++) {
     final row = baris[r];
     final excelRow = r + headerRow + 1;
+    final isTotal = row.isNotEmpty &&
+        row[0] != null &&
+        row[0].toString().toLowerCase().contains('total');
+
     sheetXml.write('<row r="$excelRow">');
     for (var i = 0; i < kolom.length; i++) {
       final v = i < row.length ? row[i] : null;
@@ -2095,11 +2120,20 @@ Uint8List buildLaporanDetailXlsx(
       final ref = '${_kolomExcel(i)}$excelRow';
       final tipe = kolom[i]['t'] as String? ?? 'text';
       if (tipe == 'num' && v is num) {
-        sheetXml.write('<c r="$ref"><v>$v</v></c>');
+        final s = isTotal ? '9' : '7';
+        sheetXml.write('<c r="$ref" s="$s"><v>$v</v></c>');
       } else {
-        final teks = _escapeXml(v.toString());
+        var teks = v.toString();
+        if (tipe == 'tgl' && RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(teks.trim())) {
+          final dt = DateTime.tryParse(teks.trim().substring(0, 10));
+          if (dt != null) {
+            teks = DateFormat('dd MMM yyyy').format(dt);
+          }
+        }
+        final escaped = _escapeXml(teks);
+        final s = isTotal ? '8' : (tipe == 'tgl' ? '6' : '5');
         sheetXml.write(
-            '<c r="$ref" t="inlineStr"><is><t xml:space="preserve">$teks</t></is></c>');
+            '<c r="$ref" t="inlineStr" s="$s"><is><t xml:space="preserve">$escaped</t></is></c>');
       }
     }
     sheetXml.write('</row>');
@@ -2136,14 +2170,36 @@ Uint8List buildLaporanDetailXlsx(
 
   const stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
       '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-      '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>'
-      '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'
-      '<fills count="1"><fill><patternFill patternType="none"/></fill></fills>'
-      '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+      '<numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0"/></numFmts>'
+      '<fonts count="4">'
+      '<font><sz val="10"/><name val="Calibri"/></font>'
+      '<font><b/><sz val="10"/><name val="Calibri"/></font>'
+      '<font><b/><sz val="12"/><color rgb="FF800000"/><name val="Calibri"/></font>'
+      '<font><i/><sz val="9"/><color rgb="FF555555"/><name val="Calibri"/></font>'
+      '</fonts>'
+      '<fills count="4">'
+      '<fill><patternFill patternType="none"/></fill>'
+      '<fill><patternFill patternType="gray125"/></fill>'
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFB4C6E7"/></patternFill></fill>'
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFD9E1F2"/></patternFill></fill>'
+      '</fills>'
+      '<borders count="3">'
+      '<border><left/><right/><top/><bottom/><diagonal/></border>'
+      '<border><left style="thin"><color rgb="FFA6A6A6"/></left><right style="thin"><color rgb="FFA6A6A6"/></right><top style="thin"><color rgb="FFA6A6A6"/></top><bottom style="thin"><color rgb="FFA6A6A6"/></bottom></border>'
+      '<border><left style="thin"><color rgb="FFA6A6A6"/></left><right style="thin"><color rgb="FFA6A6A6"/></right><top style="thin"><color rgb="FFA6A6A6"/></top><bottom style="double"><color rgb="FF000000"/></bottom></border>'
+      '</borders>'
       '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-      '<cellXfs count="2">'
+      '<cellXfs count="10">'
       '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
       '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
+      '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
+      '<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
+      '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>'
+      '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>'
+      '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>'
+      '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyFont="1" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>'
+      '<xf numFmtId="0" fontId="1" fillId="3" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>'
+      '<xf numFmtId="164" fontId="1" fillId="3" borderId="2" xfId="0" applyFont="1" applyNumberFormat="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>'
       '</cellXfs>'
       '</styleSheet>';
 
