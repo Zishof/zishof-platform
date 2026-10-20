@@ -38,6 +38,25 @@ void main() {
     expect(padat, contains(_rapat("'TOTAL (\$labelKolom)'")));
   });
 
+  test('retur penjualan membuka rincian retur khusus sebelum aturan penjualan', () {
+    final idRetur = "['retur','fin_laba_rugi_rincian_retur']";
+    final idPenjualan = "['penjualan','fin_laba_rugi_rincian_penjualan']";
+    final posisiRetur = padat.indexOf(idRetur);
+    final posisiPenjualan = padat.indexOf(idPenjualan);
+    expect(posisiRetur, greaterThanOrEqualTo(0),
+        reason: 'baris retur dapat salah dipetakan sebagai penjualan');
+    expect(posisiPenjualan, greaterThan(posisiRetur),
+        reason: 'aturan retur harus didahulukan dari pencocokan penjualan');
+
+    final jsp = File(
+        r'C:\opt\AIS\ais\src\main\webapp\WEB-INF\baru\modul\kantin\laporan_laporan.jsp');
+    if (jsp.existsSync()) {
+      final jspPadat = _rapat(jsp.readAsStringSync());
+      expect(jspPadat,
+          contains('["Retur","fin_laba_rugi_rincian_retur"]'));
+    }
+  });
+
   test('kanal ZKoss memakai penyusun yang sama untuk angka agregat', () {
     final zk = File(r'C:\opt\AIS\ais\src\main\src\ais\action\master\koperasi'
         r'\helper\LaporanKantinZkPanel.java');
