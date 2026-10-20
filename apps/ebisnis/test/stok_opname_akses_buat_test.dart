@@ -16,7 +16,9 @@ void main() {
     expect(
         source,
         contains(
-            'onTap: Sesi.instance.bolehKelola ? () => _batalkanOpname(k) : null'));
+            "Sesi.instance.bolehAksiPos('stokopname', 'delete')"));
+    expect(source, contains('final bolehUnggah ='));
+    expect(source, contains("bolehAksiPos('stokopname', 'create')"));
     expect(source, contains('AksiBarisMenu'));
   });
 }
