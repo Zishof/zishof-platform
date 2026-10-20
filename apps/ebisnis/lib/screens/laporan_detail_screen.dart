@@ -2461,6 +2461,7 @@ class _RincianTransaksi extends StatelessWidget {
 
 const Map<String, List<List<String>>> _petaRincianLaporan = {
   'fin_laba_rugi': [
+    ['retur', 'retur_barang'],
     ['hpp', 'fin_laba_rugi_rincian_hpp'],
     ['penjualan', 'fin_laba_rugi_rincian_penjualan'],
     ['pendapatan bersih', 'fin_laba_rugi_rincian_penjualan'],
