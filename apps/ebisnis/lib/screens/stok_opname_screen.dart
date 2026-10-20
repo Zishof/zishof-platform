@@ -210,22 +210,23 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
   @override
   Widget build(BuildContext context) {
     final bolehKelola = Sesi.instance.bolehKelola;
-    final aksiHeader = bolehKelola
-        ? [
-            AksiBaris(
-                ikon: Icons.download_outlined,
-                label: 'Unduh Excel',
-                onTap: _eksporExcel),
-            AksiBaris(
-                ikon: Icons.upload_file_outlined,
-                label: 'Unggah Excel',
-                onTap: _unggahExcel),
-            AksiBaris(
-                ikon: Icons.picture_as_pdf_outlined,
-                label: 'Cetak PDF',
-                onTap: _cetakPdf),
-          ]
-        : const <AksiBaris>[];
+    final bolehUnggah =
+        bolehKelola || Sesi.instance.bolehAksiPos('stokopname', 'create');
+    final aksiHeader = [
+      AksiBaris(
+          ikon: Icons.download_outlined,
+          label: 'Unduh Excel',
+          onTap: _eksporExcel),
+      if (bolehUnggah)
+        AksiBaris(
+            ikon: Icons.upload_file_outlined,
+            label: 'Unggah Excel',
+            onTap: _unggahExcel),
+      AksiBaris(
+          ikon: Icons.picture_as_pdf_outlined,
+          label: 'Cetak PDF',
+          onTap: _cetakPdf),
+    ];
     return AppShell(
       menuAktif: MenuEBisnis.stokOpname,
       judul: 'Stok Opname',
@@ -1603,7 +1604,8 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
                       AksiBaris(
                           ikon: Icons.undo,
                           label: 'Batalkan',
-                          onTap: Sesi.instance.bolehKelola
+                          onTap: (Sesi.instance.bolehKelola ||
+                                  Sesi.instance.bolehAksiPos('stokopname', 'delete'))
                               ? () => _batalkanOpname(k)
                               : null,
                           merusak: true),
