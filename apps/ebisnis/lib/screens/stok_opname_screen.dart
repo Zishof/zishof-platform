@@ -11,6 +11,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'pergerakan_stok_tab.dart';
 import '../api_client.dart';
 import '../app_variant.dart';
 import '../services/hpp_opname.dart';
@@ -57,7 +58,7 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 5, vsync: this);
+    _tab = TabController(length: 6, vsync: this);
     _tab.addListener(_saatTabBerubah);
   }
 
@@ -250,6 +251,7 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
             tabAlignment: TabAlignment.start,
             tabs: const [
               Tab(text: 'Kartu Mutasi Stok'),
+              Tab(text: 'Pergerakan Stok'),
               Tab(text: 'Monitor Keluar/Masuk'),
               Tab(text: 'SO Harian'),
               Tab(text: 'Input Opname'),
@@ -259,10 +261,11 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
           Expanded(
             child: TabBarView(controller: _tab, children: [
               const _TabMutasiStok(),
+              const TabPergerakanStok(),
               const _TabMonitorBarang(),
               const _TabSoHarian(),
               const _TabInputOpname(),
-              _TabSoByScan(aktif: _tab.index == 4),
+              _TabSoByScan(aktif: _tab.index == 5),
             ]),
           ),
         ],
