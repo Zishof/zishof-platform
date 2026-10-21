@@ -1226,6 +1226,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     String nomorTagihan = 'Sedang membuat nomor tagihan...';
     String statusPesan = 'Menunggu konfirmasi pembayaran BMT...';
     int? kodePembayaranOnlineId;
+    bool cekStatusBerjalan = false;
 
     await showDialog<void>(
       context: context,
@@ -1234,7 +1235,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         return StatefulBuilder(
           builder: (ctx, setModalState) {
             Future<void> cekStatus() async {
-              if (!dialogAktif || kodePembayaranOnlineId != null) return;
+              if (!dialogAktif ||
+                  kodePembayaranOnlineId != null ||
+                  cekStatusBerjalan) return;
+              cekStatusBerjalan = true;
               try {
                 final res = await ApiClient.instance.aksi('checkBayar', {
                   'kodeUnik': kodeUnik,
@@ -1282,6 +1286,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                     }
                   }
                 }
+              } finally {
+                cekStatusBerjalan = false;
               }
             }
 
