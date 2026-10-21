@@ -32,6 +32,7 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _daftar = [];
+  List<Map<String, dynamic>> _kanalPembayaranList = [];
   int _halaman = 1;
   int _total = 0;
   String _kataKunci = '';
@@ -68,8 +69,10 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
         final data =
             ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         final dariServer = hasil['dariServer'] == true;
+        final kanalList = ((hasil['kanalPembayaranList'] as List?) ?? []).cast<Map<String, dynamic>>();
         setStateIfMounted(() {
           _daftar = data;
+          if (kanalList.isNotEmpty) _kanalPembayaranList = kanalList;
           _total = dariServer
               ? (hasil['total'] as num?)?.toInt() ?? data.length
               : data.length;
@@ -113,7 +116,7 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
     final tersimpan = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _FormCaraBayar(cara: cara),
+      builder: (_) => _FormCaraBayar(cara: cara, kanalPembayaranList: _kanalPembayaranList),
     );
     if (tersimpan == true) await _muatDaftar();
   }
@@ -391,7 +394,8 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
 
 class _FormCaraBayar extends StatefulWidget {
   final Map<String, dynamic>? cara;
-  const _FormCaraBayar({required this.cara});
+  final List<Map<String, dynamic>> kanalPembayaranList;
+  const _FormCaraBayar({required this.cara, this.kanalPembayaranList = const []});
 
   @override
   State<_FormCaraBayar> createState() => _FormCaraBayarState();
@@ -432,6 +436,7 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
   /// Akun Kas/Bank metode ini -- menempel di master Cara Pembayaran, dipakai jurnal
   /// penjualan tunai, pembayaran hutang, dan penerimaan piutang.
   int? _akunId;
+  int? _kanalPembayaranId;
   List<Map<String, dynamic>> _akun = [];
   bool _adaKembalian = false;
   bool _aktif = true;
@@ -460,6 +465,7 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
             ? null
             : c['wajibPilihMember'] == true;
     _akunId = (c?['akunId'] as num?)?.toInt();
+    _kanalPembayaranId = (c?['kanalPembayaranId'] as num?)?.toInt();
     _muatAkun();
     if (c == null) {
       _adaKembalian =
@@ -509,6 +515,7 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
         'masukSebagaiHutang': _metodeKasbon ? true : _masukSebagaiHutang,
         'wajibPilihMember': _metodeKasbon ? true : _wajibPilihMember,
         'akunId': _akunId ?? 0,
+        'kanalPembayaranId': _kanalPembayaranId ?? 0,
         'adaKembalian': _adaKembalian,
         'aktif': _aktif,
       };
@@ -605,8 +612,26 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
                       onChanged: (v) => setStateIfMounted(() => _manual = v)),
                   AppFormSwitchTile(
                       title: 'Pembayaran Online',
+                      subtitle: 'Aktifkan untuk pembayaran/top-up online seperti Online BMT.',
                       value: _online,
                       onChanged: (v) => setStateIfMounted(() => _online = v)),
+                  if (_online && widget.kanalPembayaranList.isNotEmpty)
+                    DropdownButtonFormField<int?>(
+                      value: widget.kanalPembayaranList.any((k) => (k['id'] as num?)?.toInt() == _kanalPembayaranId) ? _kanalPembayaranId : null,
+                      decoration: const InputDecoration(
+                        labelText: 'Kanal Pembayaran Online (Online BMT / Gateway)',
+                        helperText: 'Pilih kanal pembayaran BMT/gateway yang digunakan metode ini.',
+                      ),
+                      isExpanded: true,
+                      items: [
+                        const DropdownMenuItem<int?>(value: null, child: Text('- Pilih Kanal Pembayaran -')),
+                        ...widget.kanalPembayaranList.map((k) => DropdownMenuItem<int?>(
+                              value: (k['id'] as num?)?.toInt(),
+                              child: Text('${k['nama'] ?? ''}', overflow: TextOverflow.ellipsis),
+                            )),
+                      ],
+                      onChanged: (v) => setStateIfMounted(() => _kanalPembayaranId = v),
+                    ),
                   AppFormSwitchTile(
                       title: 'Memotong Deposit',
                       subtitle:

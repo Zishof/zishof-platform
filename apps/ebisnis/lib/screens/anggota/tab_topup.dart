@@ -1402,6 +1402,10 @@ class _FormTopupOnlineState extends State<_FormTopupOnline> {
     final va = '${hasil['va'] ?? ''}'.trim();
     final link = '${hasil['link'] ?? ''}'.trim();
     final vaBankLain = '${hasil['va_bank_lain'] ?? ''}'.trim();
+    final gateway = '${hasil['gateway'] ?? ''}'.trim().toLowerCase();
+    final isOnlineBmt = gateway == 'online_bmt' ||
+        va.toUpperCase().startsWith('BMT') ||
+        '${hasil['channel'] ?? ''}'.toUpperCase() == 'ONLINE_BMT';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1411,14 +1415,16 @@ class _FormTopupOnlineState extends State<_FormTopupOnline> {
             color: AppColors.latarLembut(AppColors.warning),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Row(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.schedule_outlined, color: AppColors.warning),
-              SizedBox(width: 10),
+              const Icon(Icons.schedule_outlined, color: AppColors.warning),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Tagihan online berhasil dibuat dan masih menunggu pembayaran. Saldo member belum bertambah. Saldo akan masuk otomatis hanya setelah bank/gateway mengonfirmasi pembayaran berhasil.',
+                  isOnlineBmt
+                      ? 'Nomor Invoice Online BMT berhasil diterbitkan dan menunggu pembayaran. Saldo member belum bertambah dan akan otomatis masuk begitu pembayaran melalui Mobile Banking BMT, Petugas/Agen BMT, atau Teller BMT berhasil dikonfirmasi.'
+                      : 'Tagihan online berhasil dibuat dan masih menunggu pembayaran. Saldo member belum bertambah. Saldo akan masuk otomatis hanya setelah bank/gateway mengonfirmasi pembayaran berhasil.',
                 ),
               ),
             ],
@@ -1426,14 +1432,34 @@ class _FormTopupOnlineState extends State<_FormTopupOnline> {
         ),
         const SizedBox(height: 12),
         AppFormSection(
-          judul: 'Rincian Tagihan Online',
+          judul: isOnlineBmt
+              ? 'Rincian Invoice Online BMT'
+              : 'Rincian Tagihan Online',
           children: [
             _barisHasil('Member', '${hasil['member'] ?? _namaMember ?? '-'}'),
             _barisHasil('Nominal topup', _formatRupiah.format(nominal)),
             _barisHasil('Biaya admin', _formatRupiah.format(admin)),
             _barisHasil('Total bayar', _formatRupiah.format(total)),
             _barisHasil('Berlaku sampai', '${hasil['billExpired'] ?? '-'}'),
-            _barisHasil('Nomor VA', va, dapatDisalin: true),
+            _barisHasil(
+              isOnlineBmt ? 'Nomor Invoice BMT' : 'Nomor VA',
+              va,
+              dapatDisalin: true,
+            ),
+            if (isOnlineBmt && va.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.latarLembut(AppColors.primary),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'Cara bayar: salin atau berikan Nomor Invoice BMT di atas kepada Member/Teller BMT untuk dibayar melalui aplikasi Mobile BMT Al-Bahjah, Teller BMT, atau Virtual Account BMT.',
+                  style: TextStyle(fontSize: 12.5),
+                ),
+              ),
+            ],
             if (vaBankLain.isNotEmpty)
               _barisHasil('Prefix bank lain', vaBankLain, dapatDisalin: true),
             if (link.isNotEmpty) ...[
