@@ -19,6 +19,7 @@ import 'keranjang_screen.dart' show pilihMemberPos;
 import '../services/master_offline.dart';
 import '../services/pemulihan_member.dart';
 import 'riwayat_penjualan_analisis_screen.dart';
+import 'rekap_penjualan_item_dialog.dart';
 import 'riwayat_audit_screen.dart';
 import '../widgets/safe_state.dart';
 import '../services/transaksi_outbox_service.dart';
@@ -3386,6 +3387,11 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                         builder: (_) => const RiwayatPenjualanAnalisisScreen(),
                       ),
                     ),
+                  ),
+                  FilledButton.icon(
+                    icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                    label: const Text('Rekap Penjualan Item'),
+                    onPressed: () => RekapPenjualanItemDialog.tampilkan(context),
                   ),
                 ],
               ),

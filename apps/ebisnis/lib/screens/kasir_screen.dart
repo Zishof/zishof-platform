@@ -39,6 +39,7 @@ import 'keranjang_screen.dart';
 import 'bantuan_screen.dart';
 import 'akun_saya_screen.dart';
 import 'laporan_tutup_kas_dialog.dart';
+import 'rekap_penjualan_item_dialog.dart';
 import '../widgets/safe_state.dart';
 
 final _formatRupiah =
@@ -95,7 +96,7 @@ class KasirScreen extends StatefulWidget {
   State<KasirScreen> createState() => _KasirScreenState();
 }
 
-enum _AksiKasirMobile { transaksiBaru, kas, sinkron, muatUlang, akun, keluar }
+enum _AksiKasirMobile { transaksiBaru, kas, rekapItem, sinkron, muatUlang, akun, keluar }
 
 class _KasirScreenState extends State<KasirScreen> {
   bool _memuat = true;
@@ -910,6 +911,10 @@ class _KasirScreenState extends State<KasirScreen> {
   /// klien tak pernah menghitung sendiri. Sukses -> tandai lokal tertutup,
   /// gerbang Buka Kas otomatis muncul lagi utk sesi berikutnya, lalu tampilkan
   /// modal "Produk Perlu Direstok" (stokMenipis) langsung tanpa langkah tambahan.
+  Future<void> _bukaRekapPenjualanItem() async {
+    await RekapPenjualanItemDialog.tampilkan(context);
+  }
+
   Future<void> _bukaDialogTutupKas() async {
     final tokoIdAktif = Sesi.instance.tokoId;
     if (tokoIdAktif == null) {
@@ -2018,6 +2023,9 @@ class _KasirScreenState extends State<KasirScreen> {
                   _bukaDialogBukaKas();
                 }
                 return;
+              case _AksiKasirMobile.rekapItem:
+                _bukaRekapPenjualanItem();
+                return;
               case _AksiKasirMobile.sinkron:
                 if (!_sinkronBerjalan) _sinkronkanSekarang();
                 return;
@@ -2050,6 +2058,14 @@ class _KasirScreenState extends State<KasirScreen> {
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.point_of_sale_outlined),
                 title: Text(_kasTerbuka == true ? 'Tutup Kas' : 'Buka Kas'),
+              ),
+            ),
+            const PopupMenuItem(
+              value: _AksiKasirMobile.rekapItem,
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.receipt_long_outlined),
+                title: Text('Rekap Penjualan Item'),
               ),
             ),
             PopupMenuItem(
@@ -2124,6 +2140,11 @@ class _KasirScreenState extends State<KasirScreen> {
               label: 'Transaksi Baru',
               onPressed: _aksiKasirAktif ? _transaksiBaru : null,
               tooltip: 'Mulai transaksi baru'),
+          _tombolToolbar(
+              icon: const Icon(Icons.receipt_long_outlined, size: 18),
+              label: 'Rekap Item',
+              onPressed: _bukaRekapPenjualanItem,
+              tooltip: 'Rekap Penjualan Item Harian & Cetak Struk (F10)'),
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: OutlinedButton.icon(
@@ -2336,6 +2357,10 @@ class _KasirScreenState extends State<KasirScreen> {
     }
     if (event.logicalKey == LogicalKeyboardKey.f9) {
       _bukaLayarPelanggan();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.f10) {
+      _bukaRekapPenjualanItem();
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.f7) {
