@@ -1204,9 +1204,237 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         nama.contains('debit') ||
         nama.contains('kredit') ||
         nama.contains('edc') ||
+        caraBayar.online ||
+        caraBayar.onlineBmt ||
+        nama.contains('bmt') ||
         nama.contains('online') ||
         nama.contains('virtual account') ||
         nama.contains('va ');
+  }
+
+  /// Menampilkan dialog tunggu pembayaran untuk metode Online BMT / QRIS pada Kasir POS.
+  /// Memanggil aksi `checkBayar` ke backend AIS untuk membangkitkan Nomor Tagihan BMT (`BMT...`)
+  /// dan memantau status pelunasan setiap 2,5 detik. Mengembalikan ID `KodePembayaranOnline`
+  /// bila pembayaran diterima, atau `null` bila kasir membatalkan.
+  Future<int?> _tungguPembayaranOnlineBmt({
+    required String kodeUnik,
+    required CaraBayar caraBayar,
+    required double nominal,
+  }) async {
+    Timer? pollTimer;
+    bool dialogAktif = true;
+    String nomorTagihan = 'Sedang membuat nomor tagihan...';
+    String statusPesan = 'Menunggu konfirmasi pembayaran BMT...';
+    int? kodePembayaranOnlineId;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            Future<void> cekStatus() async {
+              if (!dialogAktif || kodePembayaranOnlineId != null) return;
+              try {
+                final res = await ApiClient.instance.aksi('checkBayar', {
+                  'kodeUnik': kodeUnik,
+                  'idToko': Sesi.instance.tokoId ?? 0,
+                  'caraBayar': caraBayar.id,
+                  'id_member': _memberTerpilih?.id ?? 0,
+                  'nominal': nominal,
+                });
+                if (!dialogAktif) return;
+                final nt = '${res['nomorTagihan'] ?? ''}'.trim();
+                if (nt.isNotEmpty && nt != nomorTagihan) {
+                  setModalState(() {
+                    nomorTagihan = nt;
+                  });
+                }
+                final statusAsli = '${res['statusAsli'] ?? res['status'] ?? ''}';
+                if (res['status'] == 'success' || statusAsli == '00') {
+                  pollTimer?.cancel();
+                  kodePembayaranOnlineId =
+                      (res['data'] as num?)?.toInt() ?? 0;
+                  setModalState(() {
+                    statusPesan = 'Pembayaran BMT diterima! Menyimpan transaksi...';
+                  });
+                  await Future<void>.delayed(const Duration(milliseconds: 500));
+                  if (dialogAktif && ctx.mounted) {
+                    dialogAktif = false;
+                    Navigator.of(ctx).pop();
+                  }
+                } else if (statusAsli == '02') {
+                  pollTimer?.cancel();
+                  setModalState(() {
+                    statusPesan = 'Kode pembayaran sudah digunakan pada transaksi lain.';
+                  });
+                }
+              } catch (err) {
+                if (err is ApiException) {
+                  final raw = err.info.teknis;
+                  final match = RegExp(r'(BMT[0-9A-Za-z]+)').firstMatch(raw);
+                  if (match != null && dialogAktif) {
+                    final kandidat = match.group(1)!;
+                    if (kandidat != nomorTagihan) {
+                      setModalState(() {
+                        nomorTagihan = kandidat;
+                      });
+                    }
+                  }
+                }
+              }
+            }
+
+            if (pollTimer == null) {
+              Future<void>.microtask(cekStatus);
+              pollTimer = Timer.periodic(
+                const Duration(milliseconds: 2500),
+                (_) => cekStatus(),
+              );
+            }
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Row(
+                children: [
+                  const Icon(Icons.account_balance_wallet,
+                      color: Color(0xFF1D4ED8)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Pembayaran ${caraBayar.nama}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFBFDBFE)),
+                      ),
+                      child: Column(
+                        children: [
+                          const Text(
+                            'NOMOR TAGIHAN / INVOICE BMT',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1D4ED8),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          SelectableText(
+                            nomorTagihan,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF1E3A8A),
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              Clipboard.setData(
+                                  ClipboardData(text: nomorTagihan));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content:
+                                      Text('Nomor Tagihan BMT berhasil disalin'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.copy, size: 15),
+                            label: const Text('Salin Nomor Tagihan'),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Masukkan Nomor Tagihan di atas pada aplikasi BMT Mobile atau Teller BMT',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF475569),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Total Tagihan: ${_formatRupiah.format(nominal)}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (kodePembayaranOnlineId == null)
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        else
+                          const Icon(Icons.check_circle,
+                              color: Color(0xFF16A34A), size: 18),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            statusPesan,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: kodePembayaranOnlineId != null
+                                  ? const Color(0xFF16A34A)
+                                  : const Color(0xFF475569),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    dialogAktif = false;
+                    pollTimer?.cancel();
+                    Navigator.of(ctx).pop();
+                  },
+                  child: const Text('Batal'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    pollTimer?.cancel();
+    dialogAktif = false;
+    return kodePembayaranOnlineId;
   }
 
   bool get _pembayaranWajibOnline {
@@ -2110,10 +2338,27 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       }
       if (kodeSesiKas.isNotEmpty) payload['kode_sesi_kas'] = kodeSesiKas;
 
+      final bool metodeOnlineBmtAktif = !_splitAktif &&
+          _caraBayarTerpilih != null &&
+          (_caraBayarTerpilih!.onlineBmt || _caraBayarTerpilih!.online);
+      if (metodeOnlineBmtAktif) {
+        final idPembayaranOnline = await _tungguPembayaranOnlineBmt(
+          kodeUnik: kodeUnik,
+          caraBayar: _caraBayarTerpilih!,
+          nominal: _total,
+        );
+        if (idPembayaranOnline == null || idPembayaranOnline <= 0) {
+          return;
+        }
+        payload['kodePembayaranOnline'] = idPembayaranOnline;
+      }
+
       final payloadPending = Map<String, dynamic>.from(payload);
       payloadPending['pengiriman_pending'] = true;
       Map<String, dynamic>? hasilServer;
-      if (_verifikasiMemberWajibServer || _memberMemilikiLimitTransaksi) {
+      if (_verifikasiMemberWajibServer ||
+          _memberMemilikiLimitTransaksi ||
+          metodeOnlineBmtAktif) {
         // Semua pembayaran yang memotong saldo pusat wajib menunggu ACK server.
         // Saldo dapat berubah di perangkat/toko lain sehingga cache lokal tidak
         // boleh dipakai sebagai izin membelanjakan uang. Bukti biometrik juga

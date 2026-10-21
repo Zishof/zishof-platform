@@ -401,17 +401,19 @@ class CaraBayar {
   /// Lebih luas daripada [masukSebagaiHutang]: metode potong saldo juga wajib
   /// mempunyai pemilik. Semua Kasbon sendiri dinormalisasi menjadi piutang.
   final bool wajibPilihMember;
+  final bool online;
+  final bool onlineBmt;
 
   /// Aturan efektif yang sama dengan backend: metode non-manual memerlukan
   /// otorisasi saldo pusat, kecuali metode tersebut memang dicatat sebagai
-  /// piutang. Flag [memotongDeposit] tetap dihormati untuk konfigurasi manual
-  /// yang secara eksplisit memotong saldo.
+  /// piutang atau pembayaran online/BMT/QRIS. Flag [memotongDeposit] tetap
+  /// dihormati untuk konfigurasi manual yang secara eksplisit memotong saldo.
   ///
   /// Getter ini sengaja menjadi sumber tunggal untuk POS Desktop dan Android.
   /// Menebak hanya dari nama "saldo/deposit" pernah membuat metode seperti
   /// Voucher Pejuang lolos ke antrean offline lalu ditolak berulang oleh server.
   bool get memotongDepositEfektif =>
-      !masukSebagaiHutang && (!manual || memotongDeposit);
+      !masukSebagaiHutang && !online && !onlineBmt && (!manual || memotongDeposit);
   CaraBayar({
     required this.id,
     required this.nama,
@@ -419,10 +421,12 @@ class CaraBayar {
     this.memotongDeposit = false,
     this.wajibPin = false,
     this.masukSebagaiHutang = false,
+    this.online = false,
+    this.onlineBmt = false,
     bool? wajibPilihMember,
   }) : wajibPilihMember = wajibPilihMember ??
             (masukSebagaiHutang ||
-                (!masukSebagaiHutang && (!manual || memotongDeposit)));
+                (!masukSebagaiHutang && !online && !onlineBmt && (!manual || memotongDeposit)));
   factory CaraBayar.fromJson(Map<String, dynamic> j) {
     final nama = (j['nama'] ?? '') as String;
     final namaLower = nama.toLowerCase();
@@ -434,10 +438,19 @@ class CaraBayar {
     // wajib mempunyai member/PIC, termasuk respons server lama yang masih
     // membawa kedua flag dalam keadaan false.
     final metodeKasbon = identitasRingkas.contains('kasbon');
+    final onlineBmt = j['onlineBmt'] == true ||
+        j['online_bmt'] == true ||
+        namaLower.contains('bmt');
+    final online = j['online'] == true ||
+        onlineBmt ||
+        namaLower.contains('online') ||
+        namaLower.contains('qris');
     return CaraBayar(
       id: j['id'] as int,
       nama: nama,
       manual: j['manual'] == true,
+      online: online,
+      onlineBmt: onlineBmt,
       wajibPin: j['wajibPin'] == true || j['wajib_pin'] == true,
       masukSebagaiHutang: metodeKasbon ||
           j['masukSebagaiHutang'] == true ||
@@ -447,11 +460,14 @@ class CaraBayar {
       // klien baru + server lama tetap berperilaku seperti sebelumnya.
       wajibPilihMember: metodeKasbon
           ? true
-          : (j['wajibPilihMember'] ?? j['wajib_pilih_member']) == null
-              ? null
-              : (j['wajibPilihMember'] == true ||
-                  j['wajib_pilih_member'] == true),
+          : online
+              ? false
+              : (j['wajibPilihMember'] ?? j['wajib_pilih_member']) == null
+                  ? null
+                  : (j['wajibPilihMember'] == true ||
+                      j['wajib_pilih_member'] == true),
       memotongDeposit: () {
+        if (online) return false;
         final explicit = j['memotongDeposit'] ??
             j['memotong_deposit'] ??
             j['potongSaldo'] ??
