@@ -2,16 +2,20 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../api_client.dart';
+import '../app_variant.dart';
 import '../services/pengaturan_struk.dart';
 import '../services/print_util.dart';
 import '../services/rekap_penjualan_item_pdf.dart';
+import '../services/simple_xlsx.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/penanda_data_tersimpan.dart';
 
 final _formatRupiahDialog =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -24,7 +28,8 @@ class RekapPenjualanItemDialog extends StatefulWidget {
 
   const RekapPenjualanItemDialog({super.key, this.tanggalAwal});
 
-  static Future<void> tampilkan(BuildContext context, {DateTime? tanggal}) async {
+  static Future<void> tampilkan(BuildContext context,
+      {DateTime? tanggal}) async {
     await showDialog(
       context: context,
       barrierDismissible: true,
@@ -45,6 +50,8 @@ class _RekapPenjualanItemDialogState extends State<RekapPenjualanItemDialog> {
   bool _memuat = true;
   bool _sedangCetak = false;
   String? _pesanError;
+  bool _dariCache = false;
+  DateTime? _cacheDisimpanPada;
 
   Map<String, dynamic>? _laporan;
   List<Map<String, dynamic>> _daftarItem = [];
@@ -66,6 +73,7 @@ class _RekapPenjualanItemDialogState extends State<RekapPenjualanItemDialog> {
   String get _tglTampilan => DateFormat('dd/MM/yyyy').format(_tanggal);
 
   Future<void> _muatData() async {
+    var adaCache = false;
     setStateIfMounted(() {
       _memuat = true;
       _pesanError = null;
@@ -78,6 +86,40 @@ class _RekapPenjualanItemDialogState extends State<RekapPenjualanItemDialog> {
       };
       if (_hanyaKasirSaya) {
         payload['kasir'] = Sesi.instance.userId;
+      }
+
+      // Laporan adalah satu amplop agregat. Tampilkan salinan perangkat lebih
+      // dahulu; kunci memisahkan varian, tenant, akun, tanggal, kasir, dan kata
+      // pencarian agar laporan antar pengguna tidak pernah tercampur.
+      final cacheKey = kunciCacheRekapPenjualanItem(payload);
+      try {
+        final tersimpan = await CoreDb.instance.ambilCacheReferensi(cacheKey);
+        if (tersimpan != null) {
+          final lokal = jsonDecode(tersimpan) as Map<String, dynamic>;
+          adaCache = true;
+          final stempel = DateTime.tryParse('${lokal['_disimpanPada'] ?? ''}');
+          setStateIfMounted(() {
+            _laporan = lokal;
+            _daftarItem = ((lokal['data'] as List?) ?? const [])
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList();
+            _dariCache = true;
+            _cacheDisimpanPada = stempel;
+            _memuat = false;
+          });
+        }
+      } catch (_) {
+        // Kegagalan membaca salinan lokal tidak boleh menghalangi penyegaran.
+        adaCache = false;
+      }
+      if (!adaCache) {
+        setStateIfMounted(() {
+          _laporan = null;
+          _daftarItem = [];
+          _dariCache = false;
+          _cacheDisimpanPada = null;
+        });
       }
 
       final res =
@@ -93,12 +135,32 @@ class _RekapPenjualanItemDialogState extends State<RekapPenjualanItemDialog> {
             .map((e) => Map<String, dynamic>.from(e))
             .toList();
         _memuat = false;
+        _dariCache = false;
+        _cacheDisimpanPada = null;
       });
+      try {
+        await CoreDb.instance.simpanCacheReferensi(
+          cacheKey,
+          jsonEncode(
+              {...res, '_disimpanPada': DateTime.now().toIso8601String()}),
+        );
+      } catch (_) {
+        // Laporan yang sudah berhasil dimuat tetap tampil walau cache gagal.
+      }
     } catch (e) {
       if (!mounted) return;
+      if (e is ApiException && e.offline && adaCache) {
+        setStateIfMounted(() {
+          _memuat = false;
+          _dariCache = true;
+        });
+        return;
+      }
       setStateIfMounted(() {
         _memuat = false;
-        _pesanError = 'Gagal memuat rekap penjualan: $e';
+        _pesanError = e is ApiException && e.offline
+            ? 'Belum ada salinan laporan untuk tanggal ini. Sambungkan ke jaringan lalu muat kembali.'
+            : 'Gagal memuat rekap penjualan: $e';
       });
     }
   }
@@ -121,7 +183,8 @@ class _RekapPenjualanItemDialogState extends State<RekapPenjualanItemDialog> {
   Future<void> _cetakStrukThermal() async {
     if (_laporan == null || _daftarItem.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Tidak ada data penjualan untuk dicetak.')),
+        const SnackBar(
+            content: Text('Tidak ada data penjualan untuk dicetak.')),
       );
       return;
     }
@@ -163,7 +226,8 @@ class _RekapPenjualanItemDialogState extends State<RekapPenjualanItemDialog> {
   Future<void> _cetakLaporanPdf() async {
     if (_laporan == null || _daftarItem.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Tidak ada data penjualan untuk dicetak.')),
+        const SnackBar(
+            content: Text('Tidak ada data penjualan untuk dicetak.')),
       );
       return;
     }
@@ -187,24 +251,49 @@ class _RekapPenjualanItemDialogState extends State<RekapPenjualanItemDialog> {
 
   Future<void> _unduhExcel() async {
     try {
-      final payload = <String, dynamic>{
-        'tanggal': _tglFormatted,
-        'keyword': _cariController.text.trim(),
-      };
-      if (_hanyaKasirSaya) {
-        payload['kasir'] = Sesi.instance.userId;
+      final laporan = _laporan;
+      if (laporan == null) {
+        throw StateError('Muat laporan terlebih dahulu sebelum mengunduh.');
       }
-
-      final res = await ApiClient.instance
-          .aksi('penjualan_item_harian_ekspor_excel', payload);
-
-      final b64 = res['fileBase64'] as String?;
-      if (b64 == null || b64.isEmpty) {
-        throw Exception('Server tidak mengembalikan berkas.');
-      }
-      final bytes = base64Decode(b64);
-      final namaFile = (res['namaFile'] as String?) ??
-          'Rekap_Penjualan_Item_$_tglFormatted.xlsx';
+      final data = ((laporan['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      final rows = <List<Object?>>[
+        ['Tanggal', laporan['tanggal'] ?? _tglFormatted],
+        ['Toko', laporan['tokoNama'] ?? ''],
+        ['Kasir', laporan['kasirNama'] ?? ''],
+        [],
+        [
+          'Kode',
+          'Produk',
+          'Kategori',
+          'Satuan',
+          'Transaksi',
+          'Qty',
+          'Harga Rata-rata',
+          'Diskon',
+          'Total'
+        ],
+        ...data.map((item) => <Object?>[
+              item['kode'] ?? '',
+              item['nama'] ?? '',
+              item['kategori'] ?? '',
+              item['satuan'] ?? '',
+              item['jumlahTransaksi'] ?? 0,
+              item['qty'] ?? 0,
+              item['hargaRata'] ?? 0,
+              item['diskon'] ?? 0,
+              item['total'] ?? 0,
+            ]),
+      ];
+      final bytes = buildSimpleXlsxReport(
+        sheetName: 'Penjualan Item',
+        rows: rows,
+        boldRows: const {1, 2, 3, 5},
+        columnWidths: const [14, 34, 20, 12, 14, 12, 18, 16, 18],
+      );
+      final namaFile = 'Rekap_Penjualan_Item_$_tglFormatted.xlsx';
 
       final path = await FilePicker.platform.saveFile(
         dialogTitle: 'Simpan Rekap Penjualan Item Excel',
@@ -228,8 +317,8 @@ class _RekapPenjualanItemDialogState extends State<RekapPenjualanItemDialog> {
     }
   }
 
-  Widget _buildCardRingkasan(
-      String judul, num nilai, Color warna, {bool formatRupiah = false}) {
+  Widget _buildCardRingkasan(String judul, num nilai, Color warna,
+      {bool formatRupiah = false}) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
@@ -320,6 +409,8 @@ class _RekapPenjualanItemDialogState extends State<RekapPenjualanItemDialog> {
                 ],
               ),
               const SizedBox(height: 12),
+              PenandaDataTersimpan(
+                  tampil: _dariCache, diperbaruiPada: _cacheDisimpanPada),
 
               // Toolbar Filter & Tanggal
               Wrap(
@@ -509,19 +600,23 @@ class _RekapPenjualanItemDialogState extends State<RekapPenjualanItemDialog> {
                                                           FontWeight.bold,
                                                       color: Colors.indigo))),
                                         ],
-                                        rows: _daftarItem.asMap().entries.map((entry) {
+                                        rows: _daftarItem
+                                            .asMap()
+                                            .entries
+                                            .map((entry) {
                                           final idx = entry.key + 1;
                                           final item = entry.value;
                                           final qty = (item['qty'] as num?)
                                                   ?.toDouble() ??
                                               0;
-                                          final harga = (item['hargaRata']
-                                                      as num?)
-                                                  ?.toDouble() ??
-                                              0;
-                                          final diskon = (item['diskon'] as num?)
-                                                  ?.toDouble() ??
-                                              0;
+                                          final harga =
+                                              (item['hargaRata'] as num?)
+                                                      ?.toDouble() ??
+                                                  0;
+                                          final diskon =
+                                              (item['diskon'] as num?)
+                                                      ?.toDouble() ??
+                                                  0;
                                           final total = (item['total'] as num?)
                                                   ?.toDouble() ??
                                               0;
@@ -537,7 +632,8 @@ class _RekapPenjualanItemDialogState extends State<RekapPenjualanItemDialog> {
                                                       MainAxisAlignment.center,
                                                   children: [
                                                     Text(
-                                                      (item['nama'] as String?) ??
+                                                      (item['nama']
+                                                              as String?) ??
                                                           '-',
                                                       style: const TextStyle(
                                                           fontWeight:
@@ -551,29 +647,30 @@ class _RekapPenjualanItemDialogState extends State<RekapPenjualanItemDialog> {
                                                         'Kode: ${item['kode']}',
                                                         style: TextStyle(
                                                             fontSize: 11,
-                                                            color: Colors.grey
-                                                                .shade600),
+                                                            color: Colors
+                                                                .grey.shade600),
                                                       ),
                                                   ],
                                                 ),
                                               ),
-                                              DataCell(Text(
-                                                  (item['kategori']
-                                                          as String?) ??
-                                                      '-')),
+                                              DataCell(Text((item['kategori']
+                                                      as String?) ??
+                                                  '-')),
                                               DataCell(Text(
                                                 '${_formatAngkaDialog.format(qty)} ${(item['satuan'] as String?) ?? 'Pcs'}',
                                                 style: const TextStyle(
                                                     fontWeight: FontWeight.bold,
                                                     color: Colors.green),
                                               )),
-                                              DataCell(Text(
-                                                  _formatRupiahDialog.format(harga))),
+                                              DataCell(Text(_formatRupiahDialog
+                                                  .format(harga))),
                                               DataCell(Text(diskon > 0
-                                                  ? _formatRupiahDialog.format(diskon)
+                                                  ? _formatRupiahDialog
+                                                      .format(diskon)
                                                   : '-')),
                                               DataCell(Text(
-                                                _formatRupiahDialog.format(total),
+                                                _formatRupiahDialog
+                                                    .format(total),
                                                 style: const TextStyle(
                                                     fontWeight: FontWeight.bold,
                                                     color: Colors.indigo),
@@ -633,7 +730,8 @@ class _RekapPenjualanItemDialogState extends State<RekapPenjualanItemDialog> {
 
                   // Tombol Unduh Excel
                   OutlinedButton.icon(
-                    onPressed: (_memuat || _daftarItem.isEmpty) ? null : _unduhExcel,
+                    onPressed:
+                        (_memuat || _daftarItem.isEmpty) ? null : _unduhExcel,
                     icon: const Icon(Icons.file_download,
                         size: 18, color: Colors.green),
                     label: const Text('Unduh Excel',
@@ -665,4 +763,22 @@ class _RekapPenjualanItemDialogState extends State<RekapPenjualanItemDialog> {
       ),
     );
   }
+}
+
+@visibleForTesting
+String kunciCacheRekapPenjualanItem(Map<String, dynamic> parameter) {
+  final sesi = Sesi.instance;
+  final tenant = sesi.tenantId;
+  final akun = sesi.userId.trim().toLowerCase();
+  if (tenant == null || tenant <= 0 || akun.isEmpty) {
+    throw StateError('Konteks toko dan akun wajib aktif untuk membaca rekap.');
+  }
+  final urut = <String, dynamic>{};
+  for (final k in parameter.keys.toList()..sort()) {
+    urut[k] = parameter[k];
+  }
+  final encoded =
+      base64Url.encode(utf8.encode(jsonEncode(urut))).replaceAll('=', '');
+  return 'laporan:penjualan_item:${AppVariant.storageNamespace}:'
+      'tenant-$tenant:user-$akun:$encoded';
 }
