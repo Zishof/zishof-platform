@@ -438,11 +438,11 @@ class CaraBayar {
     // wajib mempunyai member/PIC, termasuk respons server lama yang masih
     // membawa kedua flag dalam keadaan false.
     final metodeKasbon = identitasRingkas.contains('kasbon');
-    // Status online/BMT WAJIB berasal dari flag server, bukan tebakan nama.
-    // Tebakan nama dulu membuat "QRIS BSI" (manual) dianggap Tagihan Online
-    // BMT sehingga kasir tertahan di dialog "Sedang membuat nomor tagihan".
-    final onlineBmt = j['onlineBmt'] == true || j['online_bmt'] == true;
-    final online = j['online'] == true || onlineBmt;
+    // Online BMT hanya untuk pengisian saldo dan biaya sekolah, bukan checkout
+    // POS. Abaikan flag lama/cache kanal BMT agar QRIS/EDC toko tidak dialihkan
+    // ke tagihan BMT. Status online metode toko tetap mengikuti flag umumnya.
+    const onlineBmt = false;
+    final online = j['online'] == true;
     return CaraBayar(
       id: j['id'] as int,
       nama: nama,

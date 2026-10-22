@@ -234,12 +234,12 @@ void main() {
       expect(source, contains('_saldoAkanDipotong ||'));
       expect(source, contains('_pinWajibUntukMetodeTerpilih ||'));
       expect(source, contains('_hutangAkanDipakai'));
-      final posisiGuard = source.indexOf(
-          'if (_verifikasiMemberWajibServer || _memberMemilikiLimitTransaksi)');
-      final posisiApi = source.indexOf(
+      final sourceRingkas = source.replaceAll(RegExp(r'\s+'), ' ');
+      final posisiGuard = sourceRingkas.indexOf(
+          'if (_verifikasiMemberWajibServer || _memberMemilikiLimitTransaksi || metodeOnlineBmtAktif)');
+      final posisiApi = sourceRingkas.indexOf(
           "ApiClient.instance.aksi('bayar', payload)", posisiGuard);
-      final posisiSimpan =
-          source.indexOf('simpanTransaksiPending(', posisiGuard);
+      final posisiSimpan = sourceRingkas.indexOf('simpanTransaksiPending(', posisiGuard);
       expect(posisiGuard, greaterThan(0));
       expect(posisiApi, greaterThan(posisiGuard));
       expect(posisiSimpan, greaterThan(posisiApi));
