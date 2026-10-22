@@ -2346,7 +2346,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
 
       final bool metodeOnlineBmtAktif = !_splitAktif &&
           _caraBayarTerpilih != null &&
-          (_caraBayarTerpilih!.onlineBmt || _caraBayarTerpilih!.online);
+          // Hanya metode yang DIKONFIRMASI server sebagai Online BMT (kanal BMT aktif)
+          // yang membuka dialog Nomor Tagihan BMT. Metode manual seperti QRIS BSI,
+          // QRIS BMT, Voucher BMT, atau EDC tetap dicatat langsung oleh kasir.
+          _caraBayarTerpilih!.onlineBmt;
       if (metodeOnlineBmtAktif) {
         final idPembayaranOnline = await _tungguPembayaranOnlineBmt(
           kodeUnik: kodeUnik,
