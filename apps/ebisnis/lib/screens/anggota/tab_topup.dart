@@ -49,6 +49,15 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
   bool _memprosesBerkas = false;
   static const _pageSize = 15;
 
+  // State untuk Tab Tagihan Online (Invoice / VA)
+  bool _tabTagihanOnline = false;
+  bool _memuatTagihanOnline = false;
+  String? _pesanErrorTagihanOnline;
+  List<Map<String, dynamic>> _daftarTagihanOnline = [];
+  int _halamanTagihanOnline = 1;
+  int _totalTagihanOnline = 0;
+  String _filterStatusTagihanOnline = 'SEMUA';
+
   @override
   void initState() {
     super.initState();
@@ -89,12 +98,74 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
     }
   }
 
+  Future<void> _muatDaftarTagihanOnline() async {
+    setStateIfMounted(() {
+      _memuatTagihanOnline = true;
+      _pesanErrorTagihanOnline = null;
+    });
+    try {
+      final hasil = await ApiClient.instance.aksi('tagihan_online_list', {
+        'keyword': _kataKunci.isEmpty ? null : _kataKunci,
+        'status': _filterStatusTagihanOnline,
+        'page': _halamanTagihanOnline,
+        'page_size': _pageSize,
+      });
+      if (!mounted) return;
+      final rawList = (hasil['data'] as List?) ?? [];
+      setStateIfMounted(() {
+        _daftarTagihanOnline =
+            rawList.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        _totalTagihanOnline =
+            (hasil['total_data'] as num?)?.toInt() ?? _daftarTagihanOnline.length;
+      });
+    } catch (e) {
+      if (mounted) {
+        setStateIfMounted(() => _pesanErrorTagihanOnline = terapkanGalat(e));
+      }
+    } finally {
+      if (mounted) setStateIfMounted(() => _memuatTagihanOnline = false);
+    }
+  }
+
+  Future<void> _cekStatusTagihanOnline(Map<String, dynamic> item) async {
+    try {
+      final hasil = await ApiClient.instance.aksi('tagihan_online_cek_status', {
+        'id': item['id'],
+        'no_invoice': item['no_invoice'],
+      });
+      final statusLabel = hasil['status_label'] ?? '-';
+      final statusTagihan = hasil['status_tagihan'] ?? '';
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Status Tagihan ${item['no_invoice']}: $statusLabel'),
+        backgroundColor:
+            statusTagihan == 'PAID' ? AppColors.success : AppColors.primary,
+        duration: const Duration(seconds: 4),
+      ));
+      await _muatDaftarTagihanOnline();
+      if (statusTagihan == 'PAID') {
+        await _muatDaftar();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Gagal mengecek status: $e'),
+        backgroundColor: Colors.red,
+      ));
+    }
+  }
+
   Future<void> _cariUlang(String v) async {
     setStateIfMounted(() {
       _kataKunci = v;
       _halaman = 1;
+      _halamanTagihanOnline = 1;
     });
-    await _muatDaftar();
+    if (_tabTagihanOnline) {
+      await _muatDaftarTagihanOnline();
+    } else {
+      await _muatDaftar();
+    }
   }
 
   Future<void> _pindahHalaman(int h) async {
@@ -507,10 +578,13 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
       isScrollControlled: true,
       builder: (_) => const _FormTopupOnline(),
     );
-    // Pembuatan VA belum merupakan topup. Daftar saldo sengaja tidak ditambah
-    // secara optimistis; Deposit baru tampil sesudah callback resmi bank atau
-    // gateway diterima server.
-    if (mounted) await _muatDaftar();
+    // Arahkan kasir langsung ke tab Tagihan Online agar nomor invoice
+    // yang baru dibuat langsung terlihat dan dapat dicek statusnya.
+    if (mounted) {
+      setStateIfMounted(() => _tabTagihanOnline = true);
+      await _muatDaftarTagihanOnline();
+      await _muatDaftar();
+    }
   }
 
   Future<void> _hapus(Map<String, dynamic> d) async {
@@ -550,6 +624,343 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
   }
 
   int get _totalHalaman => (_total / _pageSize).ceil().clamp(1, 999999);
+  int get _totalHalamanTagihanOnline =>
+      (_totalTagihanOnline / _pageSize).ceil().clamp(1, 999999);
+
+  Widget _bangunKontenTagihanOnline(bool bolehEdit) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(builder: (context, constraints) {
+          final sempit = constraints.maxWidth < 850;
+          final pencarian = AppSearchField(
+            hintText: 'Cari no. invoice BMT atau nama member...',
+            debounce: const Duration(milliseconds: 450),
+            onChanged: _cariUlang,
+          );
+          final filterDanAksi = Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              // Filter Status Tagihan
+              DropdownButton<String>(
+                value: _filterStatusTagihanOnline,
+                underline: const SizedBox.shrink(),
+                items: const [
+                  DropdownMenuItem(value: 'SEMUA', child: Text('Semua Status')),
+                  DropdownMenuItem(
+                      value: 'MENUNGGU', child: Text('Menunggu Pembayaran')),
+                  DropdownMenuItem(value: 'LUNAS', child: Text('Lunas')),
+                  DropdownMenuItem(
+                      value: 'KADALUARSA', child: Text('Kadaluarsa')),
+                ],
+                onChanged: (val) {
+                  if (val == null) return;
+                  setStateIfMounted(() {
+                    _filterStatusTagihanOnline = val;
+                    _halamanTagihanOnline = 1;
+                  });
+                  _muatDaftarTagihanOnline();
+                },
+              ),
+              OutlinedButton.icon(
+                onPressed: _memuatTagihanOnline ? null : _muatDaftarTagihanOnline,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Refresh'),
+              ),
+              if (bolehEdit)
+                ElevatedButton.icon(
+                  onPressed: _bukaTopupOnline,
+                  icon: const Icon(Icons.add_card_outlined, size: 18),
+                  label: const Text('Buat Tagihan Online'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+            ],
+          );
+          if (sempit) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                pencarian,
+                const SizedBox(height: 8),
+                filterDanAksi,
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: pencarian),
+              const SizedBox(width: 8),
+              Flexible(child: filterDanAksi),
+            ],
+          );
+        }),
+        if (_memuatTagihanOnline) ...[
+          const SizedBox(height: 8),
+          const LinearProgressIndicator(),
+        ],
+        if (_pesanErrorTagihanOnline != null) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.red.shade200),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _pesanErrorTagihanOnline!,
+                    style: const TextStyle(color: Colors.red, fontSize: 12.5),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _muatDaftarTagihanOnline,
+                  child: const Text('Coba Lagi'),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        AppDataTable(
+          minWidth: 950,
+          emptyText: 'Belum ada tagihan online (Invoice / VA) yang tercatat.',
+          columns: const [
+            AppTableColumn('No. Invoice / Tanggal', flex: 3),
+            AppTableColumn('Member', flex: 3),
+            AppTableColumn('Total Tagihan', flex: 2, align: TextAlign.right),
+            AppTableColumn('Kanal / Bank', flex: 2),
+            AppTableColumn('Status', flex: 2, align: TextAlign.center),
+            AppTableColumn('Aksi', width: 140, align: TextAlign.center),
+          ],
+          rows: _daftarTagihanOnline.map((item) {
+            final noInvoice = '${item['no_invoice'] ?? '-'}';
+            final status = '${item['status'] ?? ''}';
+            final statusLabel = '${item['status_label'] ?? status}';
+            final waktuDibuat = '${item['waktu_dibuat'] ?? '-'}';
+            final waktuKadaluarsa = '${item['waktu_kadaluarsa'] ?? '-'}';
+            final waktuBayar = '${item['waktu_bayar'] ?? ''}';
+            final total = (item['total'] as num?)?.toDouble() ?? 0.0;
+
+            Color statusColor;
+            Color statusBg;
+            IconData statusIcon;
+            if (status == 'PAID') {
+              statusColor = AppColors.success;
+              statusBg = AppColors.latarLembut(AppColors.success);
+              statusIcon = Icons.check_circle_outline;
+            } else if (status == 'EXPIRED') {
+              statusColor = Colors.grey.shade700;
+              statusBg = Colors.grey.shade200;
+              statusIcon = Icons.cancel_outlined;
+            } else {
+              statusColor = Colors.orange.shade800;
+              statusBg = Colors.orange.shade50;
+              statusIcon = Icons.pending_actions_outlined;
+            }
+
+            return AppTableRowData(
+              cells: [
+                AppTableCell(
+                  flex: 3,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SelectableText(
+                            noInvoice,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.copy, size: 14),
+                            tooltip: 'Salin nomor invoice',
+                            splashRadius: 16,
+                            padding: const EdgeInsets.all(4),
+                            constraints: const BoxConstraints(),
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: noInvoice));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Nomor invoice $noInvoice disalin!'),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                      Text(
+                        'Dibuat: $waktuDibuat',
+                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                      ),
+                      if (status != 'PAID' && waktuKadaluarsa != '-')
+                        Text(
+                          'Batas bayar: $waktuKadaluarsa',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.orange.shade800,
+                          ),
+                        ),
+                      if (waktuBayar.isNotEmpty)
+                        Text(
+                          'Dibayar: $waktuBayar',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.success,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                AppTableCell(
+                  flex: 3,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '${item['nama_member'] ?? '-'}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if ('${item['kode_member'] ?? ''}'.isNotEmpty)
+                        Text(
+                          'ID: ${item['kode_member']}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                AppTableCell.text(
+                  _formatRupiah.format(total),
+                  flex: 2,
+                  align: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: status == 'PAID' ? AppColors.success : AppColors.primary,
+                  ),
+                ),
+                AppTableCell(
+                  flex: 2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '${item['bank'] ?? 'Online BMT'}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if ('${item['channel'] ?? ''}'.isNotEmpty)
+                        Text(
+                          '${item['channel']}',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                AppTableCell(
+                  flex: 2,
+                  align: TextAlign.center,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusBg,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(statusIcon, size: 13, color: statusColor),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            statusLabel,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: statusColor,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                AppTableCell(
+                  width: 140,
+                  align: TextAlign.center,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _cekStatusTagihanOnline(item),
+                    icon: const Icon(Icons.sync, size: 14),
+                    label: const Text('Cek Status', style: TextStyle(fontSize: 11)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }).toList(),
+          pagination: AppTablePagination(
+            halaman: _halamanTagihanOnline,
+            totalHalaman: _totalHalamanTagihanOnline,
+            totalData: _totalTagihanOnline,
+            labelData: 'tagihan online',
+            onSebelumnya: _halamanTagihanOnline > 1
+                ? () {
+                    setStateIfMounted(
+                        () => _halamanTagihanOnline = _halamanTagihanOnline - 1);
+                    _muatDaftarTagihanOnline();
+                  }
+                : null,
+            onBerikutnya: _halamanTagihanOnline < _totalHalamanTagihanOnline
+                ? () {
+                    setStateIfMounted(
+                        () => _halamanTagihanOnline = _halamanTagihanOnline + 1);
+                    _muatDaftarTagihanOnline();
+                  }
+                : null,
+          ),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -575,10 +986,49 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
     }
     final bolehEdit = Sesi.instance.bolehEntryTopup;
     return RefreshIndicator(
-      onRefresh: _muatDaftar,
+      onRefresh: () async {
+        if (_tabTagihanOnline) {
+          await _muatDaftarTagihanOnline();
+        } else {
+          await _muatDaftar();
+        }
+      },
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         children: [
+          // Sub-Tab Switcher: Riwayat Saldo Masuk vs Tagihan Online (Invoice / VA)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(
+                    value: false,
+                    icon: Icon(Icons.account_balance_wallet_outlined, size: 18),
+                    label: Text('Riwayat Saldo Masuk'),
+                  ),
+                  ButtonSegment(
+                    value: true,
+                    icon: Icon(Icons.receipt_long_outlined, size: 18),
+                    label: Text('Tagihan Online (Invoice / VA)'),
+                  ),
+                ],
+                selected: {_tabTagihanOnline},
+                onSelectionChanged: (nilai) {
+                  setStateIfMounted(() {
+                    _tabTagihanOnline = nilai.first;
+                    _halamanTagihanOnline = 1;
+                  });
+                  if (_tabTagihanOnline) {
+                    _muatDaftarTagihanOnline();
+                  } else {
+                    _muatDaftar();
+                  }
+                },
+              ),
+            ),
+          ),
           if (!bolehEdit)
             Container(
               margin: const EdgeInsets.only(bottom: 12),
@@ -600,7 +1050,10 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
                 ],
               ),
             ),
-          LayoutBuilder(builder: (context, constraints) {
+          if (_tabTagihanOnline)
+            _bangunKontenTagihanOnline(bolehEdit)
+          else ...[
+            LayoutBuilder(builder: (context, constraints) {
             final sempit = constraints.maxWidth < 850;
             final pencarian = AppSearchField(
               hintText: 'Cari nama member...',
@@ -772,6 +1225,7 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
                   : null,
             ),
           ),
+          ],
         ],
       ),
     );
@@ -1455,7 +1909,7 @@ class _FormTopupOnlineState extends State<_FormTopupOnline> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Text(
-                  'Cara bayar: salin atau berikan Nomor Invoice BMT di atas kepada Member/Teller BMT untuk dibayar melalui aplikasi Mobile BMT Al-Bahjah, Teller BMT, atau Virtual Account BMT.',
+                  'Cara bayar: salin atau berikan Nomor Invoice BMT di atas kepada Member/Teller BMT untuk dibayar melalui aplikasi Mobile BMT Al-Bahjah, Teller BMT, atau Virtual Account BMT.\n\nCatatan: Status pembayaran tagihan ini dapat langsung dipantau melalui tab "Tagihan Online (Invoice / VA)" pada layar Topup.',
                   style: TextStyle(fontSize: 12.5),
                 ),
               ),
