@@ -2140,11 +2140,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _pesanError != null
-              ? Center(
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text('Gagal memuat: $_pesanError'),
-                  AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
-                ]))
+              ? _tampilanGagalMuatProduk()
               : Column(
                   children: [
                     Expanded(
@@ -2166,6 +2162,74 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
                     _barCetak(),
                   ],
                 ),
+    );
+  }
+
+  /// Menampilkan kegagalan pemuatan tanpa membuang pilihan dan pengaturan.
+  ///
+  /// Refresh dapat gagal ketika perangkat belum memiliki salinan produk lokal
+  /// atau ketika layanan belum menjawab. Pada kondisi itu, pilihan yang sudah
+  /// dibuat tetap berada di [_produkTerpilihMap] dan [_idTerpilih]; tampilan ini
+  /// sengaja mempertahankan panel pilihan serta menyediakan percobaan ulang.
+  /// Memanggil [_muatHalaman] hanya meminta ulang daftar dan tidak mengosongkan
+  /// pilihan, sehingga pengguna tidak perlu memulai kembali dari awal.
+  Widget _tampilanGagalMuatProduk() {
+    return Column(
+      children: [
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 3,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.cloud_off_outlined,
+                            color: AppColors.textSecondary, size: 32),
+                        const SizedBox(height: 12),
+                        Text('Gagal memuat: $_pesanError',
+                            textAlign: TextAlign.center),
+                        if (_idTerpilih.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            '${_idTerpilih.length} pilihan barang tetap tersimpan. Coba muat ulang untuk melanjutkan.',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                                color: AppColors.textSecondary),
+                          ),
+                        ],
+                        AppDetailGalatOpsional(
+                            detail: detailUntuk(_pesanError)),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: _memuat
+                              ? null
+                              : () => _muatHalaman(resetHalaman: true),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Coba Muat Ulang Produk'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const VerticalDivider(width: 1),
+              Expanded(
+                flex: 2,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: _panelOpsi(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        _barCetak(),
+      ],
     );
   }
 
