@@ -404,12 +404,14 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
   late final TextEditingController _nama;
   late final TextEditingController _keterangan;
   late final TextEditingController _maksimalBolehUtang;
+  late final TextEditingController _hariCustomBatasUtang;
   late final TextEditingController _maksimalTransaksiHarian;
   late final TextEditingController _maksimalTransaksiMingguan;
   late final TextEditingController _maksimalTransaksiBulanan;
   Set<int> _caraBayarDipilih = {};
   Set<int> _caraBayarWajibPin = {};
   int? _caraBayarDefaultId;
+  String _periodeBatasUtang = 'AKUMULATIF';
   bool _tidakBolehCaraBayarLain = false;
   bool _aktif = true;
   bool _wajibHp = false;
@@ -432,6 +434,25 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
     final maksUtang = (t?['maksimalBolehUtang'] as num?) ?? 0;
     _maksimalBolehUtang =
         TextEditingController(text: maksUtang == 0 ? '' : '$maksUtang');
+    _periodeBatasUtang =
+        '${t?['periodeBatasUtang'] ?? 'AKUMULATIF'}'.toUpperCase();
+    const periodeValid = {
+      'AKUMULATIF',
+      'HARIAN',
+      'TIGA_HARI',
+      'MINGGUAN',
+      'BULANAN',
+      'TIGA_BULANAN',
+      'ENAM_BULANAN',
+      'TAHUNAN',
+      'CUSTOM'
+    };
+    if (!periodeValid.contains(_periodeBatasUtang)) {
+      _periodeBatasUtang = 'AKUMULATIF';
+    }
+    final hariCustom = (t?['hariCustomBatasUtang'] as num?)?.toInt() ?? 30;
+    _hariCustomBatasUtang =
+        TextEditingController(text: hariCustom.clamp(1, 3650).toString());
     _maksimalTransaksiHarian = _controllerBatas(t?['maksimalTransaksiHarian']);
     _maksimalTransaksiMingguan =
         _controllerBatas(t?['maksimalTransaksiMingguan']);
@@ -482,6 +503,7 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
     _nama.dispose();
     _keterangan.dispose();
     _maksimalBolehUtang.dispose();
+    _hariCustomBatasUtang.dispose();
     _maksimalTransaksiHarian.dispose();
     _maksimalTransaksiMingguan.dispose();
     _maksimalTransaksiBulanan.dispose();
@@ -515,6 +537,13 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
           'Cara bayar wajib PIN harus termasuk cara bayar yang diizinkan.');
       return;
     }
+    final hariCustom = int.tryParse(_hariCustomBatasUtang.text.trim());
+    if (_periodeBatasUtang == 'CUSTOM' &&
+        (hariCustom == null || hariCustom < 1 || hariCustom > 3650)) {
+      setStateIfMounted(() => _pesanError =
+          'Periode khusus harus diisi antara 1 sampai 3650 hari.');
+      return;
+    }
     setStateIfMounted(() {
       _menyimpan = true;
       _pesanError = null;
@@ -534,6 +563,9 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
         // piutang. Kirim alias agar perubahan limit tidak hanya tersimpan pada
         // snapshot lokal, tetapi ikut menjadi nilai efektif saat aksi bayar.
         'maksimal_boleh_utang': maksimalBolehUtang,
+        'periodeBatasUtang': _periodeBatasUtang,
+        'periode_batas_utang': _periodeBatasUtang,
+        'hariCustomBatasUtang': hariCustom ?? 30,
         'wajibHp': _wajibHp,
         'wajibEmail': _wajibEmail,
         'wajibPin': _wajibPin,
@@ -637,6 +669,52 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
                   ),
+                  DropdownButtonFormField<String>(
+                    value: _periodeBatasUtang,
+                    decoration: const InputDecoration(
+                      labelText: 'Periode Penggunaan Batas Utang',
+                      helperText:
+                          'Membatasi utang baru. Utang lama tetap tercatat dan tetap ditagih.',
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'AKUMULATIF',
+                          child: Text('Akumulatif (aturan saat ini)')),
+                      DropdownMenuItem(value: 'HARIAN', child: Text('Harian')),
+                      DropdownMenuItem(
+                          value: 'TIGA_HARI', child: Text('3 hari')),
+                      DropdownMenuItem(
+                          value: 'MINGGUAN', child: Text('Mingguan')),
+                      DropdownMenuItem(
+                          value: 'BULANAN', child: Text('Bulanan')),
+                      DropdownMenuItem(
+                          value: 'TIGA_BULANAN', child: Text('3 bulanan')),
+                      DropdownMenuItem(
+                          value: 'ENAM_BULANAN', child: Text('6 bulanan')),
+                      DropdownMenuItem(
+                          value: 'TAHUNAN', child: Text('1 tahunan')),
+                      DropdownMenuItem(
+                          value: 'CUSTOM', child: Text('Jumlah hari khusus')),
+                    ],
+                    onChanged: _menyimpan
+                        ? null
+                        : (value) => setStateIfMounted(
+                            () => _periodeBatasUtang = value ?? 'AKUMULATIF'),
+                  ),
+                  if (_periodeBatasUtang == 'CUSTOM')
+                    AppFormTextField(
+                      label: 'Jumlah hari khusus *',
+                      controller: _hariCustomBatasUtang,
+                      hintText: 'Contoh: 60 hari (1–3650)',
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (_periodeBatasUtang != 'CUSTOM') return null;
+                        final hari = int.tryParse(value?.trim() ?? '');
+                        return hari == null || hari < 1 || hari > 3650
+                            ? 'Isi angka 1 sampai 3650 hari'
+                            : null;
+                      },
+                    ),
                   AppFormSwitchTile(
                       title: 'Aktif',
                       value: _aktif,
