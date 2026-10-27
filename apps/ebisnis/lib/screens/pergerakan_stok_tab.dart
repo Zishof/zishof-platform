@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/aksi_baris_menu.dart';
 
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
 
@@ -613,6 +614,18 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
     );
   }
 
+  /// Saldo pembuka ditampilkan sebagai baris agar cocok dengan catatan stok manual.
+  DataRow _barisSaldoAwal(double saldo) => DataRow(cells: [
+        DataCell(Text('${_formatTglTampilan(widget.tglMulai)} 00:00')),
+        const DataCell(Text('-')),
+        const DataCell(Text('Saldo awal')),
+        const DataCell(Text('-')),
+        const DataCell(Text('-')),
+        const DataCell(Text('-')),
+        DataCell(Text(_formatAngka.format(saldo),
+            style: const TextStyle(fontWeight: FontWeight.bold))),
+      ]);
+
   @override
   Widget build(BuildContext context) {
     final awal = (_ringkasan?['awal'] as num?)?.toDouble() ?? 0;
@@ -651,16 +664,18 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
                       ],
                     ),
                   ),
-                  OutlinedButton.icon(
-                    onPressed: _eksporExcelProduk,
-                    icon: const Icon(Icons.file_download, size: 16, color: Colors.green),
-                    label: const Text('Download Excel', style: TextStyle(color: Colors.green)),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
+                  AksiBarisMenu(tooltip: 'Aksi rincian mutasi', aksi: [
+                    AksiBaris(
+                      ikon: Icons.file_download_outlined,
+                      label: 'Unduh Excel',
+                      onTap: _eksporExcelProduk,
+                    ),
+                    AksiBaris(
+                      ikon: Icons.close,
+                      label: 'Tutup rincian',
+                      onTap: () => Navigator.of(context).pop(),
+                    ),
+                  ]),
                 ],
               ),
               const SizedBox(height: 16),
@@ -684,7 +699,7 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
                     ? const Center(child: CircularProgressIndicator())
                     : _pesanError != null
                         ? Center(child: Text(_pesanError!, style: const TextStyle(color: Colors.red)))
-                        : _mutasi.isEmpty
+                        : _ringkasan == null
                             ? const Center(child: Text('Belum ada catatan mutasi transaksi pada rentang ini.'))
                             : Container(
                                 decoration: BoxDecoration(
@@ -701,14 +716,17 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
                                         headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
                                         columnSpacing: 24,
                                         columns: const [
-                                          DataColumn(label: Text('Tanggal', style: TextStyle(fontWeight: FontWeight.bold))),
-                                          DataColumn(label: Text('Tipe & No Referensi', style: TextStyle(fontWeight: FontWeight.bold))),
-                                          DataColumn(numeric: true, label: Text('Awal', style: TextStyle(fontWeight: FontWeight.bold))),
+                                          DataColumn(label: Text('Tanggal & jam', style: TextStyle(fontWeight: FontWeight.bold))),
+                                          DataColumn(label: Text('No faktur / referensi', style: TextStyle(fontWeight: FontWeight.bold))),
+                                          DataColumn(label: Text('Jenis mutasi', style: TextStyle(fontWeight: FontWeight.bold))),
+                                          DataColumn(numeric: true, label: Text('Saldo sebelum', style: TextStyle(fontWeight: FontWeight.bold))),
                                           DataColumn(numeric: true, label: Text('Masuk', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green))),
                                           DataColumn(numeric: true, label: Text('Keluar', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red))),
                                           DataColumn(numeric: true, label: Text('Sisa', style: TextStyle(fontWeight: FontWeight.bold))),
                                         ],
-                                        rows: _mutasi.map((m) {
+                                        rows: [
+                                          _barisSaldoAwal(awal),
+                                          ..._mutasi.map((m) {
                                           final tAwal = (m['awal'] as num?)?.toDouble() ?? 0;
                                           final tMasuk = (m['masuk'] as num?)?.toDouble() ?? 0;
                                           final tKeluar = (m['keluar'] as num?)?.toDouble() ?? 0;
@@ -717,14 +735,24 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
                                           final ref = (m['referensi'] as String?) ?? '';
 
                                           Color tipeColor = Colors.grey.shade700;
-                                          if (tipe.contains('Penjualan')) tipeColor = Colors.orange.shade800;
-                                          if (tipe.contains('Pembelian')) tipeColor = Colors.green.shade800;
-                                          if (tipe.contains('Retur')) tipeColor = Colors.blue.shade800;
-                                          if (tipe.contains('Opname') || tipe.contains('Penyesuaian')) tipeColor = Colors.purple.shade800;
+                                          if (tipe.contains('Penjualan')) {
+                                            tipeColor = Colors.orange.shade800;
+                                          }
+                                          if (tipe.contains('Pembelian')) {
+                                            tipeColor = Colors.green.shade800;
+                                          }
+                                          if (tipe.contains('Retur')) {
+                                            tipeColor = Colors.blue.shade800;
+                                          }
+                                          if (tipe.contains('Opname') ||
+                                              tipe.contains('Penyesuaian')) {
+                                            tipeColor = Colors.purple.shade800;
+                                          }
 
                                           return DataRow(
                                             cells: [
                                               DataCell(Text((m['tanggal'] as String?) ?? '-')),
+                                              DataCell(Text(ref.isEmpty ? '-' : ref)),
                                               DataCell(
                                                 Row(
                                                   mainAxisSize: MainAxisSize.min,
@@ -744,13 +772,6 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
                                                         ),
                                                       ),
                                                     ),
-                                                    if (ref.isNotEmpty) ...[
-                                                      const SizedBox(width: 8),
-                                                      Text(
-                                                        ref,
-                                                        style: const TextStyle(fontSize: 12),
-                                                      ),
-                                                    ],
                                                   ],
                                                 ),
                                               ),
@@ -769,7 +790,8 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
                                               )),
                                             ],
                                           );
-                                        }).toList(),
+                                        }),
+                                        ],
                                       ),
                                     ),
                                   ),
@@ -778,14 +800,6 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
               ),
               const SizedBox(height: 12),
 
-              // Tombol Tutup
-              Align(
-                alignment: Alignment.centerRight,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Tutup'),
-                ),
-              ),
             ],
           ),
         ),

@@ -16,6 +16,8 @@ import '../widgets/app_components.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
+import '../widgets/aksi_baris_menu.dart';
+import 'pergerakan_stok_tab.dart';
 
 final _mutasiRp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -274,6 +276,28 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
     }
   }
 
+  /// Membuka buku besar produk terpilih dalam periode yang sedang ditampilkan.
+  Future<void> _bukaRincian(Map<String, dynamic> produk) async {
+    final id = (produk['id'] as num?)?.toInt();
+    if (id == null || id <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Rincian belum tersedia untuk produk ini. Muat ulang data lalu coba lagi.'),
+      ));
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (_) => DialogDetailPergerakanStok(
+        idProduk: id,
+        namaProduk: '${produk['nama'] ?? '-'}',
+        kodeProduk: '${produk['kode'] ?? ''}',
+        kategori: '${produk['kategori'] ?? '-'}',
+        tglMulai: _dari,
+        tglSampai: _sampai,
+      ),
+    );
+  }
+
   AppTableCell _angkaCell(dynamic v, {bool rupiah = false}) =>
       AppTableCell.text(
         rupiah
@@ -311,6 +335,17 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
           _angkaCell(r['nilaiKeluar'], rupiah: true),
           _angkaCell(r['saldoAkhir']),
           _angkaCell(r['nilaiAkhir'], rupiah: true),
+          AppTableCell(
+            width: 64,
+            align: TextAlign.center,
+            child: AksiBarisMenu(aksi: [
+              AksiBaris(
+                ikon: Icons.receipt_long_outlined,
+                label: 'Lihat rincian mutasi',
+                onTap: () => _bukaRincian(r),
+              ),
+            ]),
+          ),
         ]));
     final totalRow = AppTableRowData(cells: [
       const AppTableCell(
@@ -327,6 +362,7 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
       _angkaCell(_summary['nilaiKeluar'], rupiah: true),
       _angkaCell(_summary['saldoAkhir']),
       _angkaCell(_summary['nilaiAkhir'], rupiah: true),
+      const AppTableCell(width: 64, child: SizedBox.shrink()),
     ]);
 
     return Padding(
@@ -380,7 +416,7 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
                     ]))
                   : SingleChildScrollView(
                       child: AppDataTable(
-                        minWidth: 1460,
+                        minWidth: 1524,
                         emptyText: 'Belum ada data mutasi barang.',
                         columns: const [
                           AppTableColumn('Kategori Barang', width: 130),
@@ -403,6 +439,7 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
                               width: 105, align: TextAlign.right),
                           AppTableColumn('Nilai Akhir',
                               width: 105, align: TextAlign.right),
+                          AppTableColumn('Aksi', width: 64, align: TextAlign.center),
                         ],
                         rows: [...rows, if (_data.isNotEmpty) totalRow],
                         pagination: AppTablePagination(
