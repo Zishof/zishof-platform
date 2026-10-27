@@ -786,6 +786,17 @@ class _TabelLaporanState extends State<_TabelLaporan> {
 
     if (idRincian == null) {
       if (!context.mounted) return;
+
+      // Bila kolom yang diklik adalah Penyesuaian / Stok Opname atau laporan mutasi item/gudang,
+      // jangan paksa memanggil transaksi penjualan kasir karena penyesuaian berasal dari
+      // stok fisik opname, bukan nota kasir.
+      final labelKolomDiklik = (kolom.length > kolomKe ? '${kolom[kolomKe]['l'] ?? ''}' : '').toLowerCase();
+      final apakahKolomPenyesuaian = labelKolomDiklik.contains('penyesuaian') ||
+          labelKolomDiklik.contains('opname') ||
+          labelKolomDiklik.contains('stok awal') ||
+          labelKolomDiklik.contains('stok akhir') ||
+          labelKolomDiklik.contains('pakai bahan') ||
+          (widget.idLaporan.startsWith('gud_') && !labelKolomDiklik.contains('keluar') && !labelKolomDiklik.contains('jual'));
       // Dimensi baris dikenali dari LABEL kolomnya, lalu dikirim ke aksi
       // laporan_rincian_transaksi supaya popup menampilkan NOTA-nya, bukan
       // sekadar mengulang isi baris ringkasan (permintaan 21-08-2026).
@@ -795,7 +806,7 @@ class _TabelLaporanState extends State<_TabelLaporan> {
       final adaRentang =
           '${widget.payloadFilter['tglMulai'] ?? ''}'.isNotEmpty &&
               '${widget.payloadFilter['tglSampai'] ?? ''}'.isNotEmpty;
-      final dimensi = adaRentang
+      final dimensi = (adaRentang && !apakahKolomPenyesuaian)
           ? _dimensiBaris(kolom, baris, widget.idLaporan, kolomKe)
           : const <String, dynamic>{};
       // Deteksi nomor jurnal atau bukti transaksi
@@ -859,15 +870,23 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                   Padding(
                     padding: const EdgeInsets.only(top: 10),
                     child: Text(
-                        apakahLaporanAkuntansi
-                            ? (kodeAkunDitemukan.isNotEmpty
-                                ? 'Tekan tombol "Telusuri Mutasi Buku Besar" di bawah untuk melihat mutasi dan voucher jurnal akun ini.'
-                                : (noJurnalDitemukan.isNotEmpty
-                                    ? 'Tekan tombol "Buka Voucher Jurnal" di bawah untuk melihat rincian transaksi debet-kredit.'
-                                    : 'Data ini merupakan ringkasan saldo akun akuntansi.'))
-                            : 'Angka ini tidak berasal dari transaksi penjualan '
-                                '(mis. stok atau data master), sehingga tidak ada '
-                                'nota penyusun yang bisa ditampilkan.',
+                        apakahKolomPenyesuaian
+                            ? (labelKolomDiklik.contains('penyesuaian') || labelKolomDiklik.contains('opname')
+                                ? 'Angka Penyesuaian berasal dari selisih fisik saat Stok Opname (koreksi stok plus/minus), bukan dari nota transaksi penjualan.'
+                                : (labelKolomDiklik.contains('stok awal')
+                                    ? 'Stok Awal adalah akumulasi mutasi sebelum tanggal mulai periode yang dipilih.'
+                                    : (labelKolomDiklik.contains('pakai bahan')
+                                        ? 'Angka ini berasal dari pemakaian bahan baku di dapur/produksi toko.'
+                                        : 'Angka ini merupakan ringkasan mutasi logistik barang di gudang.')))
+                            : (apakahLaporanAkuntansi
+                                ? (kodeAkunDitemukan.isNotEmpty
+                                    ? 'Tekan tombol "Telusuri Mutasi Buku Besar" di bawah untuk melihat mutasi dan voucher jurnal akun ini.'
+                                    : (noJurnalDitemukan.isNotEmpty
+                                        ? 'Tekan tombol "Buka Voucher Jurnal" di bawah untuk melihat rincian transaksi debet-kredit.'
+                                        : 'Data ini merupakan ringkasan saldo akun akuntansi.'))
+                                : 'Angka ini tidak berasal dari transaksi penjualan kasir '
+                                    '(mis. stok opname, mutasi logistik, atau data master), sehingga tidak ada '
+                                    'nota penjualan yang bisa ditampilkan.'),
                         style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
                   ),
                 if (dimensi.isNotEmpty) ...[
