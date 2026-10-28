@@ -745,19 +745,16 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
                                           final idPel = (m['idPelanggan'] as String?) ?? '';
                                           final namaPel = (m['namaPelanggan'] as String?) ?? '';
 
-                                          Color tipeColor = Colors.grey.shade700;
+                                          Color badgeColor = Colors.grey.shade700;
                                           if (tipe.contains('Penjualan')) {
-                                            tipeColor = Colors.orange.shade800;
-                                          }
-                                          if (tipe.contains('Pembelian')) {
-                                            tipeColor = Colors.green.shade800;
-                                          }
-                                          if (tipe.contains('Retur')) {
-                                            tipeColor = Colors.blue.shade800;
-                                          }
-                                          if (tipe.contains('Opname') ||
+                                            badgeColor = Colors.orange.shade800;
+                                          } else if (tipe.contains('Pembelian')) {
+                                            badgeColor = Colors.green.shade800;
+                                          } else if (tipe.contains('Retur')) {
+                                            badgeColor = Colors.blue.shade800;
+                                          } else if (tipe.contains('Opname') ||
                                               tipe.contains('Penyesuaian')) {
-                                            tipeColor = Colors.purple.shade800;
+                                            badgeColor = Colors.purple.shade800;
                                           }
 
                                           return DataRow(
@@ -765,7 +762,21 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
                                               DataCell(Text('$idx')),
                                               DataCell(Text((m['tanggal'] as String?) ?? '-')),
                                               DataCell(Text(ref.isEmpty ? '-' : ref)),
-                                              DataCell(Text(kodeMutasi, style: const TextStyle(fontWeight: FontWeight.w600))),
+                                              DataCell(Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: badgeColor.withValues(alpha: 0.12),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Text(
+                                                  kodeMutasi,
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: badgeColor,
+                                                  ),
+                                                ),
+                                              )),
                                               DataCell(Text(idPel.isEmpty ? '-' : idPel)),
                                               DataCell(Text(namaPel.isNotEmpty ? namaPel : (tipe.isNotEmpty ? tipe : '-'))),
                                               DataCell(Text(_formatAngka.format(tAwal))),
