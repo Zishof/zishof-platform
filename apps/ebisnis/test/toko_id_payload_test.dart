@@ -181,6 +181,9 @@ void main() {
       'produk_statistik',
       'produk_statistik_detail',
       'price_tag_list_produk',
+      'stok_pergerakan_rekap',
+      'stok_pergerakan_detail',
+      'stok_pergerakan_ekspor_excel',
       'so_simpan',
       'so_ringkasan',
       'so_harian',
@@ -213,6 +216,27 @@ void main() {
         'stok_mutasi_ledger', {'hari': 30, 'limit': 100, 'offset': 0});
     expect(payload['toko_id'], 22);
     expect(payload['hari'], 30);
+  });
+
+  test('semua permintaan buku besar produk memakai toko yang terlihat', () {
+    Sesi.instance
+      ..bolehSemuaToko = true
+      ..tokoFilter = 22
+      ..tokoId = 7;
+
+    for (final aksi in const [
+      'stok_pergerakan_rekap',
+      'stok_pergerakan_detail',
+      'stok_pergerakan_ekspor_excel',
+    ]) {
+      final payload = ApiClient.susunPayload(aksi, {
+        'id': 105862,
+        'dari': '2026-10-01',
+        'sampai': '2026-10-28',
+      });
+      expect(payload['toko_id'], 22, reason: aksi);
+      expect(payload['id'], 105862, reason: aksi);
+    }
   });
 
   test(
