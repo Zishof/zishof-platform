@@ -614,9 +614,12 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
     );
   }
 
-  /// Saldo pembuka ditampilkan sebagai baris agar cocok dengan catatan stok manual.
+  /// Saldo pembuka ditampilkan sebagai baris agar cocok dengan format buku besar Al-Bahjah.
   DataRow _barisSaldoAwal(double saldo) => DataRow(cells: [
+        const DataCell(Text('1')),
         DataCell(Text('${_formatTglTampilan(widget.tglMulai)} 00:00')),
+        const DataCell(Text('SA-001')),
+        const DataCell(Text('100')),
         const DataCell(Text('-')),
         const DataCell(Text('Saldo awal')),
         const DataCell(Text('-')),
@@ -716,23 +719,31 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
                                         headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
                                         columnSpacing: 24,
                                         columns: const [
+                                          DataColumn(label: Text('No', style: TextStyle(fontWeight: FontWeight.bold))),
                                           DataColumn(label: Text('Tanggal & jam', style: TextStyle(fontWeight: FontWeight.bold))),
-                                          DataColumn(label: Text('No faktur / referensi', style: TextStyle(fontWeight: FontWeight.bold))),
-                                          DataColumn(label: Text('Jenis mutasi', style: TextStyle(fontWeight: FontWeight.bold))),
+                                          DataColumn(label: Text('No Faktur', style: TextStyle(fontWeight: FontWeight.bold))),
+                                          DataColumn(label: Text('kode mutasi', style: TextStyle(fontWeight: FontWeight.bold))),
+                                          DataColumn(label: Text('ID Pelanggan', style: TextStyle(fontWeight: FontWeight.bold))),
+                                          DataColumn(label: Text('Nama Pelanggan', style: TextStyle(fontWeight: FontWeight.bold))),
                                           DataColumn(numeric: true, label: Text('Saldo sebelum', style: TextStyle(fontWeight: FontWeight.bold))),
                                           DataColumn(numeric: true, label: Text('Masuk', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green))),
                                           DataColumn(numeric: true, label: Text('Keluar', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red))),
-                                          DataColumn(numeric: true, label: Text('Sisa', style: TextStyle(fontWeight: FontWeight.bold))),
+                                          DataColumn(numeric: true, label: Text('Saldo', style: TextStyle(fontWeight: FontWeight.bold))),
                                         ],
                                         rows: [
                                           _barisSaldoAwal(awal),
-                                          ..._mutasi.map((m) {
+                                          ..._mutasi.asMap().entries.map((entry) {
+                                          final idx = entry.key + 2;
+                                          final m = entry.value;
                                           final tAwal = (m['awal'] as num?)?.toDouble() ?? 0;
                                           final tMasuk = (m['masuk'] as num?)?.toDouble() ?? 0;
                                           final tKeluar = (m['keluar'] as num?)?.toDouble() ?? 0;
                                           final tSisa = (m['sisa'] as num?)?.toDouble() ?? 0;
                                           final tipe = (m['tipe'] as String?) ?? '';
                                           final ref = (m['referensi'] as String?) ?? '';
+                                          final kodeMutasi = (m['kodeMutasi'] as String?) ?? '000';
+                                          final idPel = (m['idPelanggan'] as String?) ?? '';
+                                          final namaPel = (m['namaPelanggan'] as String?) ?? '';
 
                                           Color tipeColor = Colors.grey.shade700;
                                           if (tipe.contains('Penjualan')) {
@@ -751,30 +762,12 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
 
                                           return DataRow(
                                             cells: [
+                                              DataCell(Text('$idx')),
                                               DataCell(Text((m['tanggal'] as String?) ?? '-')),
                                               DataCell(Text(ref.isEmpty ? '-' : ref)),
-                                              DataCell(
-                                                Row(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                      decoration: BoxDecoration(
-                                                        color: tipeColor.withValues(alpha: 0.12),
-                                                        borderRadius: BorderRadius.circular(4),
-                                                      ),
-                                                      child: Text(
-                                                        tipe,
-                                                        style: TextStyle(
-                                                          fontSize: 11,
-                                                          fontWeight: FontWeight.bold,
-                                                          color: tipeColor,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
+                                              DataCell(Text(kodeMutasi, style: const TextStyle(fontWeight: FontWeight.w600))),
+                                              DataCell(Text(idPel.isEmpty ? '-' : idPel)),
+                                              DataCell(Text(namaPel.isNotEmpty ? namaPel : (tipe.isNotEmpty ? tipe : '-'))),
                                               DataCell(Text(_formatAngka.format(tAwal))),
                                               DataCell(Text(
                                                 tMasuk > 0 ? '+${_formatAngka.format(tMasuk)}' : '-',
