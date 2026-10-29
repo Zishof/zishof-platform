@@ -295,17 +295,21 @@ class ApiClient {
         payload['toko_id'] = idToko;
       }
     }
-    // `katalog` memiliki kontrak khusus di peladen: admin tanpa toko terikat
-    // hanya memperoleh daftar bila menyatakan `semuaToko=true`. Beberapa
-    // layar mencari produk langsung (Kasir, Kulakan, SPJ, Riwayat), sehingga
-    // pengaman ini dipusatkan agar satu pemanggil yang lupa tidak menampilkan
-    // cache sesaat lalu menimpanya dengan respons server kosong.
-    if (namaAksi == 'katalog' && !sudahAdaLingkupKatalog) {
-      final idToko = Sesi.instance.idTokoTerpilih;
-      if (idToko != null) {
-        payload['toko_id'] = idToko;
-      } else if (Sesi.instance.isAdmin) {
+    // `katalog` dan `produk_mutasi_ringkasan` memiliki perlakuan khusus:
+    // jika filter toko di bilah atas bernilai "Semua Toko" (tokoFilter == null)
+    // atau pengguna adalah admin multi-toko tanpa toko tunggal, sertakan flag
+    // `semuaToko = true` agar server mengagregasi data ke seluruh toko yang diizinkan,
+    // bukan menolaknya atau mengunci ke satu toko yang kebetulan kosong.
+    if ((namaAksi == 'katalog' || namaAksi == 'produk_mutasi_ringkasan') && !sudahAdaLingkupKatalog) {
+      if (Sesi.instance.tokoFilter == null && (Sesi.instance.bolehSemuaToko || Sesi.instance.isAdmin)) {
         payload['semuaToko'] = true;
+      } else {
+        final idToko = Sesi.instance.idTokoTerpilih;
+        if (idToko != null) {
+          payload['toko_id'] = idToko;
+        } else if (Sesi.instance.isAdmin) {
+          payload['semuaToko'] = true;
+        }
       }
     }
     return payload;
