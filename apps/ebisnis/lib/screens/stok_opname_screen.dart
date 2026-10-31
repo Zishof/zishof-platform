@@ -77,6 +77,38 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
   /// `kantin/stok/index.jsp` -- lihat JavaDoc server `KantinHelper.soEksporExcel`).
   /// BEDA dari riwayat hari ini yg tampil di tab Input Opname -- ini SELURUH
   /// riwayat toko, bukan cuma hari ini, supaya unduhan berguna sbg arsip.
+  /// "Template Excel" -- mengunduh template Excel siap isi untuk Stok Opname.
+  /// Berisi daftar produk aktif toko dengan stok sistem saat ini, sementara
+  /// kolom stok fisik dan keterangan dikosongkan agar petugas lapangan dapat
+  /// mengisinya secara offline lalu mengunggahnya via tombol "Unggah Excel".
+  Future<void> _unduhTemplateExcel() async {
+    try {
+      final hasil = await ApiClient.instance.aksi('so_template_excel', {});
+      final b64 = hasil['fileBase64'] as String?;
+      if (b64 == null || b64.isEmpty) {
+        throw Exception('Server tidak mengembalikan berkas template.');
+      }
+      final bytes = base64Decode(b64);
+      final namaFile = (hasil['namaFile'] as String?) ?? 'TemplateStokOpname.xlsx';
+      final path = await FilePicker.platform.saveFile(
+          dialogTitle: 'Simpan Template Stok Opname Excel',
+          fileName: namaFile,
+          bytes: bytes,
+          type: FileType.custom,
+          allowedExtensions: ['xlsx']);
+      if (path == null) return;
+      await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Template Stok Opname disimpan: $path')));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal mengunduh template: $e')));
+      }
+    }
+  }
+
   Future<void> _eksporExcel() async {
     try {
       final hasil = await ApiClient.instance.aksi('so_ekspor_excel', {});
@@ -214,6 +246,10 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
     final bolehUnggah =
         bolehKelola || Sesi.instance.bolehAksiPos('stokopname', 'create');
     final aksiHeader = [
+      AksiBaris(
+          ikon: Icons.file_download_outlined,
+          label: 'Template Excel',
+          onTap: _unduhTemplateExcel),
       AksiBaris(
           ikon: Icons.download_outlined,
           label: 'Unduh Excel',

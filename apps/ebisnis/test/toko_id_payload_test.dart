@@ -192,6 +192,7 @@ void main() {
       'so_harian_upload_excel',
       'so_harian_ekspor_excel',
       'so_ekspor_excel',
+      'so_template_excel',
       'so_impor_excel',
       'stok_dashboard',
       'stok_mutasi_ledger',
