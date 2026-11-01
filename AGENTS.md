@@ -36,3 +36,13 @@ merupakan gerbang rilis, bukan pilihan implementasi.
 
 Rujukan kanonis: `docs/pos/ATURAN-WAJIB-LOCAL-FIRST.md`.
 
+## Pencegahan Overflow Lebar Frame / Viewport (Responsive Width Containment)
+
+Seluruh layar aplikasi POS Desktop & Mobile (Windows, Android, Web) **WAJIB** menerapkan pencegahan overflow horizontal agar tidak pernah ada elemen yang melewati batas kanan frame/viewport (`RenderFlex overflowed by ... pixels on the right`):
+
+1. **Dilarang keras** meletakkan `Text`, badge, atau informasi dinamis langsung di dalam `Row` tanpa pembungkus `Expanded` atau `Flexible`.
+2. Untuk deretan filter, chip status, atau tombol aksi (> 2 tombol), **wajib** menggunakan `Wrap(spacing: 8, runSpacing: 8, ...)` atau `LayoutBuilder` responsif, bukan `Row` kaku.
+3. Setiap kartu ringkasan/KPI menggunakan `LayoutBuilder` atau `Wrap` dengan batas `constraints.maxWidth` sehingga aman di layar kasir sempit maupun monitor widescreen.
+4. Cantumkan dokumentasi Dartdoc pada widget/layar baru yang menjelaskan penerapan pembatasan lebar frame ini.
+
+
