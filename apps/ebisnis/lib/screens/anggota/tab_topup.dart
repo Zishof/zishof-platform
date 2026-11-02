@@ -1256,6 +1256,7 @@ class _FormTopupState extends State<_FormTopup> {
   DateTime _waktu = DateTime.now();
   DateTime? _tanggalExpired;
   bool _menyimpan = false;
+  bool _mengaturTeksMember = false;
   String? _pesanError;
   String? _detailGalat;
   Timer? _debounceCariMember;
@@ -1294,6 +1295,7 @@ class _FormTopupState extends State<_FormTopup> {
   }
 
   void _saatCariMemberBerubah() {
+    if (_mengaturTeksMember) return;
     _debounceCariMember?.cancel();
     _debounceCariMember = Timer(const Duration(milliseconds: 400),
         () => _cariAnggota(_cariMember.text));
@@ -1343,7 +1345,53 @@ class _FormTopupState extends State<_FormTopup> {
   Future<void> _simpan() async {
     if (!_formKey.currentState!.validate()) return;
     if (widget.deposit == null && _idMember == null) {
-      setStateIfMounted(() => _pesanError = 'Member wajib dipilih.');
+      // Auto-resolve jika user mengetik nama/kode tanpa mengklik dropdown list
+      final teksInput = _cariMember.text.trim();
+      if (teksInput.isNotEmpty) {
+        Map<String, dynamic>? memberCocok;
+        if (_hasilCariMember.isNotEmpty) {
+          for (final m in _hasilCariMember) {
+            final nama = '${m['nama'] ?? ''}'.trim().toLowerCase();
+            final kode = '${m['kode'] ?? ''}'.trim().toLowerCase();
+            if (nama == teksInput.toLowerCase() || kode == teksInput.toLowerCase()) {
+              memberCocok = m;
+              break;
+            }
+          }
+          if (memberCocok == null && _hasilCariMember.length == 1) {
+            memberCocok = _hasilCariMember.first;
+          }
+        }
+        if (memberCocok == null) {
+          try {
+            final cari = await ApiClient.instance.aksi('anggota_list', {
+              'keyword': teksInput,
+              'page_size': 5,
+            });
+            final data = ((cari['data'] as List?) ?? [])
+                .cast<Map<String, dynamic>>();
+            for (final m in data) {
+              final nama = '${m['nama'] ?? ''}'.trim().toLowerCase();
+              final kode = '${m['kode'] ?? ''}'.trim().toLowerCase();
+              if (nama == teksInput.toLowerCase() || kode == teksInput.toLowerCase()) {
+                memberCocok = m;
+                break;
+              }
+            }
+            if (memberCocok == null && data.length == 1) {
+              memberCocok = data.first;
+            }
+          } catch (_) {}
+        }
+        if (memberCocok != null) {
+          _idMember = memberCocok['id'] as int?;
+          _namaMemberDipilih = '${memberCocok['nama']}';
+          _hasilCariMember = [];
+        }
+      }
+    }
+    if (widget.deposit == null && _idMember == null) {
+      setStateIfMounted(() => _pesanError = 'Member belum dipilih. Silakan ketik nama/kode lalu klik nama member yang muncul pada daftar pilihan.');
       return;
     }
     setStateIfMounted(() {
@@ -1416,6 +1464,9 @@ class _FormTopupState extends State<_FormTopup> {
                       label: 'Cari Member *',
                       controller: _cariMember,
                       hintText: 'Ketik nama/kode member...',
+                      helperText: _idMember == null
+                          ? 'Ketik nama lalu klik salah satu member pada daftar yang muncul di bawah.'
+                          : null,
                     ),
                     if (_mencariMember)
                       const Padding(
@@ -1455,7 +1506,9 @@ class _FormTopupState extends State<_FormTopup> {
                                 _idMember = m['id'] as int;
                                 _namaMemberDipilih = '${m['nama']}';
                                 _hasilCariMember = [];
+                                _mengaturTeksMember = true;
                                 _cariMember.text = '${m['nama']}';
+                                _mengaturTeksMember = false;
                               }),
                             );
                           },
