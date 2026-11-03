@@ -366,14 +366,19 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
     try {
       final data = await _reportDataAktif(format: format);
       if (!mounted) return;
-      // Excel Penerimaan per Kasir memakai kolom rincian per nota, sedangkan
-      // Preview/PDF/Word tetap memakai kolom ringkasan. Jangan memakai model
-      // ringkasan yang tersimpan karena dapat menyembunyikan kolom rincian.
+      // Excel Penerimaan per Kasir (tab 5) memakai kolom rincian per nota, dan
+      // Rincian Produk (tab 6) saat diekspor harus menyertakan seluruh kolom rincian bawaan
+      // (waktu, nota, kasir, metode, kode, produk, qty, harga, diskon, total) agar kolom
+      // penting tidak hilang akibat model custom lama yang kolomnya tersimpan sebagian.
       final rincianPenerimaanExcel = _tab.index == 5 && format == 'excel';
-      final model = rincianPenerimaanExcel
-          ? DynamicReportModel.fromData(data)
-          : (_reportModels[_tab.index] ?? DynamicReportModel.fromData(data));
-      if (!rincianPenerimaanExcel) _reportModels[_tab.index] = model;
+      final rincianProdukExcel = _tab.index == 6 && format == 'excel';
+      final DynamicReportModel model;
+      if (rincianPenerimaanExcel || rincianProdukExcel) {
+        model = DynamicReportModel.fromData(data);
+      } else {
+        model = _reportModels[_tab.index] ?? DynamicReportModel.fromData(data);
+        _reportModels[_tab.index] = model;
+      }
       final slug = data.title
           .toLowerCase()
           .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
