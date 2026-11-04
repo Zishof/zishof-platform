@@ -23,6 +23,26 @@ import '../sesi.dart';
 import '../theme/app_colors.dart';
 import 'kasir_screen.dart';
 
+/// Menentukan nama yang dicetak sebagai kasir tanpa mencampur identitas
+/// transaksi lama dengan akun yang kebetulan sedang membuka aplikasi.
+///
+/// Pada cetak ulang, nama transaksi asal adalah rujukan. Jika catatan lama
+/// memang tidak menyimpan nama kasir, tampilkan keterangan yang jujur dan
+/// jangan menggantinya dengan nama pengguna saat ini. Untuk struk transaksi
+/// baru, nama akun aktif tetap dipakai seperti sebelumnya.
+String labelKasirStruk({
+  required bool cetakUlang,
+  required String? kasirTransaksi,
+  required String? kasirAktif,
+}) {
+  final sumber = kasirTransaksi?.trim() ?? '';
+  if (cetakUlang) {
+    return sumber.isEmpty ? 'Kasir tidak tercatat' : sumber;
+  }
+  final aktif = kasirAktif?.trim() ?? '';
+  return aktif.isEmpty ? '-' : aktif;
+}
+
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
 
 /// Struk transaksi -- preview layar dan PDF cetak memakai struktur yang sama:
@@ -48,6 +68,7 @@ class StrukScreen extends StatelessWidget {
   final String? catatanPesanan;
   final String? jenisKonsumsi;
   final bool bukaLaciSaatCetak;
+  final String? kasirTransaksi;
 
   /// Total diskon OTORITATIF dari server, bila sudah diterima.
   ///
@@ -95,6 +116,7 @@ class StrukScreen extends StatelessWidget {
     this.catatanPesanan,
     this.jenisKonsumsi,
     this.bukaLaciSaatCetak = true,
+    this.kasirTransaksi,
     this.totalDiskonOverride,
     this.catatanKoreksi,
     this.koreksiSudahDiterapkan = false,
@@ -395,8 +417,11 @@ class StrukScreen extends StatelessWidget {
   }
 
   String _labelKasir() {
-    final user = Sesi.instance.userId.trim();
-    return user.isEmpty ? '-' : user;
+    return labelKasirStruk(
+      cetakUlang: modeCetakUlang,
+      kasirTransaksi: kasirTransaksi,
+      kasirAktif: Sesi.instance.userId,
+    );
   }
 
   String _labelPelanggan() {
@@ -1528,8 +1553,7 @@ class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
     // Total fisik belanjaan pelanggan tidak boleh digelembungkan.
     final lonjakanAnomali = totalServer > (asli.total + 500);
     final totalEfektif = lonjakanAnomali ? asli.total : totalServer;
-    final totalDiskonEfektif =
-        lonjakanAnomali ? null : _totalDiskonServer;
+    final totalDiskonEfektif = lonjakanAnomali ? null : _totalDiskonServer;
 
     // Pembanding 1 rupiah: beda di bawah itu hanya pembulatan, bukan selisih
     // yang perlu diberitahukan ke kasir.

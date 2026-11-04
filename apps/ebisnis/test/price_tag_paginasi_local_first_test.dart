@@ -37,12 +37,13 @@ void main() {
     expect(tampilanGagal, contains('_panelOpsi()'));
     expect(tampilanGagal, contains('_barCetak()'));
     expect(tampilanGagal, contains('_idTerpilih.length'));
-    expect(tampilanGagal, contains('_muatHalaman(resetHalaman: true)'));
+    expect(tampilanGagal, contains('_muatHalaman(resetHalaman: false)'));
     expect(tampilanGagal, isNot(contains('_idTerpilih.clear()')));
     expect(tampilanGagal, isNot(contains('_produkTerpilihMap.clear()')));
   });
 
-  test('price tag tidak membaca seluruh cache katalog untuk metadata halaman', () {
+  test('price tag tidak membaca seluruh cache katalog untuk metadata halaman',
+      () {
     expect(source, isNot(contains('CoreDb.instance.produkCache()')));
     expect(source, isNot(contains('_lengkapiMetadataProduk(')));
   });

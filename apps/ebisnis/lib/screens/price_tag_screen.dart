@@ -771,8 +771,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
         {'page': 1, 'page_size': 200},
         'master:jenis_produk',
       );
-      final arr =
-          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      final arr = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       if (mounted) {
         setStateIfMounted(() {
           _daftarKategori = arr;
@@ -1067,7 +1066,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
     _fokusCari.requestFocus();
   }
 
-  List<Map<String, dynamic>> get _daftarProdukTampil => _produkSumberModel.toList();
+  List<Map<String, dynamic>> get _daftarProdukTampil =>
+      _produkSumberModel.toList();
 
   Iterable<Map<String, dynamic>> get _produkSumberModel {
     if (_model != ModelPriceTag.promo) return _daftarProdukHalaman;
@@ -1168,8 +1168,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
         idsPromo.add(id);
         final harga = (p['hargaJual'] as num?)?.toDouble() ?? 0;
         final hargaPromo = max(0, harga - diskon);
-        final hargaAsliText =
-            _formatRupiah(harga).replaceFirst('Rp ', 'Rp. ');
+        final hargaAsliText = _formatRupiah(harga).replaceFirst('Rp ', 'Rp. ');
         final hargaPromoText =
             _formatRupiah(hargaPromo).replaceFirst('Rp ', 'Rp. ');
         _promoHargaAsliDefaultPerProduk[id] = hargaAsliText;
@@ -1849,8 +1848,6 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
     return total;
   }
 
-
-
   Future<void> _cetak() async {
     final terpilih = <Map<String, dynamic>>[];
     for (final id in _idTerpilih) {
@@ -2198,8 +2195,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
                           Text(
                             '${_idTerpilih.length} pilihan barang tetap tersimpan. Coba muat ulang untuk melanjutkan.',
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
-                                color: AppColors.textSecondary),
+                            style:
+                                const TextStyle(color: AppColors.textSecondary),
                           ),
                         ],
                         AppDetailGalatOpsional(
@@ -2208,7 +2205,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
                         FilledButton.icon(
                           onPressed: _memuat
                               ? null
-                              : () => _muatHalaman(resetHalaman: true),
+                              : () => _muatHalaman(resetHalaman: false),
                           icon: const Icon(Icons.refresh),
                           label: const Text('Coba Muat Ulang Produk'),
                         ),
@@ -2280,8 +2277,6 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
       ),
     );
   }
-
-
 
   Widget _filterKategoriProduk() {
     return Padding(
@@ -2377,7 +2372,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
           SizedBox(
             width: 48,
             child: Tooltip(
-              message: 'Pilih Semua di Halaman Ini (${_daftarProdukHalaman.length})',
+              message:
+                  'Pilih Semua di Halaman Ini (${_daftarProdukHalaman.length})',
               child: Checkbox(
                 value: semuaTercentang,
                 onChanged: (v) => _pilihSemuaHalamanIni(v ?? false),
@@ -2757,7 +2753,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
                 (_marginKiriMm + _marginKananMm) > 22) ...[
               const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
                   color: Colors.amber.shade50,
                   borderRadius: BorderRadius.circular(8),
@@ -2765,19 +2762,22 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.info_outline, size: 18, color: Colors.amber.shade800),
+                    Icon(Icons.info_outline,
+                        size: 18, color: Colors.amber.shade800),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Margin tepi saat ini (${_marginKiriMm.toInt()}+${_marginKananMm.toInt()} mm) membuat label ${_ukuranAktif.lebarMm.toInt()} mm hanya muat 2 kolom di A4. Atur margin ke 10 mm agar muat 3 kolom penuh.',
-                        style: TextStyle(fontSize: 11.5, color: Colors.amber.shade900),
+                        style: TextStyle(
+                            fontSize: 11.5, color: Colors.amber.shade900),
                       ),
                     ),
                     const SizedBox(width: 8),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
                         backgroundColor: Colors.amber.shade300,
                         foregroundColor: Colors.black87,
                         elevation: 0,
@@ -2792,7 +2792,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
                         unawaited(_simpanPengaturanModel(_model));
                       },
                       child: const Text('Atur 10 mm (3 Kolom)',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          style: TextStyle(
+                              fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -4194,7 +4195,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
             _totalProduk == 0
                 ? '0 barang'
                 : '$awal - $akhir dari $_totalProduk barang',
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            style:
+                const TextStyle(fontSize: 12, color: AppColors.textSecondary),
           ),
           const SizedBox(width: 8),
           if (_idTerpilih.isNotEmpty)
@@ -4291,8 +4293,6 @@ class _PreviewBarcode extends StatelessWidget {
       ),
     );
   }
-
-
 }
 
 class _PriceTagPdfBuilder {

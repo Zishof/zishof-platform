@@ -800,8 +800,7 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
       'alasan': alasan,
       if (_memberPemulihan != null)
         ...identitasMemberPemulihan(_memberPemulihan),
-      if (widget.modeBaru)
-        'cara_bayar_nama': namaMetode,
+      if (widget.modeBaru) 'cara_bayar_nama': namaMetode,
       'item': item,
       'waktu': _waktu.toIso8601String(),
       if (caraBayarDiubahEfektif && _splitBayar.length >= 2)
@@ -2257,7 +2256,8 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
   }
 
   Future<void> _forceKirimAtauCekServer(Map<String, dynamic> row) async {
-    final kode = '${row['kode'] ?? row['kodeUnik'] ?? row['nomorNota'] ?? ''}'.trim();
+    final kode =
+        '${row['kode'] ?? row['kodeUnik'] ?? row['nomorNota'] ?? ''}'.trim();
     if (kode.isEmpty) return;
 
     if (!mounted) return;
@@ -3259,6 +3259,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
         nomorAntrian: '${detail['nomorAntrian'] ?? ''}',
         catatanPesanan: '${detail['keterangan'] ?? ''}',
         jenisKonsumsi: '${detail['jenisKonsumsi'] ?? 'NORMAL'}',
+        kasirTransaksi: '${detail['kasirNama'] ?? row['kasir'] ?? ''}',
       ),
     ));
   }
@@ -3391,7 +3392,8 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                   FilledButton.icon(
                     icon: const Icon(Icons.receipt_long_outlined, size: 18),
                     label: const Text('Rekap Penjualan Item'),
-                    onPressed: () => RekapPenjualanItemDialog.tampilkan(context),
+                    onPressed: () =>
+                        RekapPenjualanItemDialog.tampilkan(context),
                   ),
                 ],
               ),
