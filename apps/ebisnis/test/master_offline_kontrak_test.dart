@@ -332,7 +332,7 @@ void main() {
     expect(source, contains('Topup Online memerlukan koneksi ke server'));
     expect(source, contains('saldo member tidak berubah'));
     expect(source, contains('Saldo member belum bertambah'));
-    expect(source, contains('callback resmi bank'));
+    expect(source, contains('callback pembayaran resmi diterima server'));
   });
 
   test('dialog simpan "lokal dulu" bertahap + retry 5 menit berhenti sendiri',

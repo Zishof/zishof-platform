@@ -225,7 +225,8 @@ class _TabBuatReturState extends State<_TabBuatRetur> with JejakGalat {
         context,
         aksi: 'retur_penjualan_simpan',
         kunci: 'retur_penjualan:$_idempotencyKey',
-        cacheKey: 'master:retur_penjualan',
+        cacheKey:
+            'master:retur_penjualan:${Sesi.instance.idTokoTerpilih ?? "semua"}',
         rowLokal: {
           'id': -DateTime.now().millisecondsSinceEpoch,
           'kodeTransaksiAsal': '${_transaksiTerpilih!['nomorNota'] ?? ''}',
@@ -951,7 +952,8 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> with JejakGalat {
         context,
         aksi: 'retur_penjualan_hapus',
         kunci: 'retur_penjualan:${r['id']}',
-        cacheKey: 'master:retur_penjualan',
+        cacheKey:
+            'master:retur_penjualan:${Sesi.instance.idTokoTerpilih ?? "semua"}',
         rowLokal: {'id': r['id']},
         hapusLokal: true,
         body: {'id': r['id']},
@@ -1082,7 +1084,8 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> with JejakGalat {
       await prosesSimpanMaster(context,
           aksi: 'retur_penjualan_ubah',
           kunci: 'retur_penjualan:${r['id']}',
-          cacheKey: 'master:retur_penjualan',
+          cacheKey:
+              'master:retur_penjualan:${Sesi.instance.idTokoTerpilih ?? "semua"}',
           rowLokal: {
             'id': r['id'],
             'qty': parseDesimal(qtyController.text) ?? r['qty'],

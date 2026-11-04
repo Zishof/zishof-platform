@@ -460,7 +460,8 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
         context,
         aksi: 'retur_pembelian_simpan',
         kunci: 'retur_pembelian:$_idempotencyKey',
-        cacheKey: 'master:retur_pembelian',
+        cacheKey:
+            'master:retur_pembelian:${Sesi.instance.idTokoTerpilih ?? "semua"}',
         rowLokal: {
           'id': -DateTime.now().millisecondsSinceEpoch,
           'jumlahItem': itemsSimpan.length,
@@ -529,7 +530,8 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
         context,
         aksi: 'retur_pembelian_hapus',
         kunci: 'retur_pembelian:${r['id']}',
-        cacheKey: 'master:retur_pembelian',
+        cacheKey:
+            'master:retur_pembelian:${Sesi.instance.idTokoTerpilih ?? "semua"}',
         rowLokal: {'id': r['id']},
         hapusLokal: true,
         body: {'id': r['id']},
