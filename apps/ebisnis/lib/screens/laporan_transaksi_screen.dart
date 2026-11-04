@@ -33,6 +33,21 @@ String _formatWaktu(dynamic raw) {
   }
 }
 
+/// Menampilkan kasir untuk satu baris rincian tanpa mengarang identitas.
+///
+/// Bila laporan dibuka dari satu kasir tertentu, nama filter adalah sumber yang
+/// sah untuk rincian dalam lingkup tersebut. Pada laporan semua kasir, baris
+/// yang memang tidak menyimpan nama diberi keterangan yang jelas.
+String labelKasirRincianTransaksi({
+  required String? kasirBaris,
+  required String? kasirFilter,
+}) {
+  final namaBaris = kasirBaris?.trim() ?? '';
+  if (namaBaris.isNotEmpty) return namaBaris;
+  final filter = kasirFilter?.trim() ?? '';
+  return filter.isNotEmpty ? filter : 'Kasir tidak tercatat';
+}
+
 Future<List<Map<String, dynamic>>> _ambilSemuaBarisLaporan(
     String action, Map<String, dynamic> payload) async {
   final result = <Map<String, dynamic>>[];
@@ -2131,7 +2146,16 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir>
               final total = (hasil['total'] as Map?)?.cast<String, dynamic>() ??
                   const <String, dynamic>{};
               final closingDikonfirmasi = total['closingDikonfirmasi'] == true;
-              final semuaBaris = [...data, _barisTotalRincian(total)];
+              final semuaBaris = [
+                ...data.map((row) => {
+                      ...row,
+                      'kasir': labelKasirRincianTransaksi(
+                        kasirBaris: row['kasir']?.toString(),
+                        kasirFilter: kasir,
+                      ),
+                    }),
+                _barisTotalRincian(total),
+              ];
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
