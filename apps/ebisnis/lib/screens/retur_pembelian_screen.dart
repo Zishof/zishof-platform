@@ -110,10 +110,15 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
       // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
       // seketika, hasil server menyusul + diff utk kilau baris. Jalur SIMPAN
       // dan HAPUS retur TETAP online-only lewat ApiClient (transaksional).
+      final idToko = Sesi.instance.idTokoTerpilih;
       await MasterOffline.daftarCacheDulu(
           'retur_pembelian_list',
-          {'page': _halaman, 'page_size': _pageSize},
-          'master:retur_pembelian', onData: (hasil) {
+          {
+            if (idToko != null) 'toko_id': idToko,
+            'page': _halaman,
+            'page_size': _pageSize,
+          },
+          'master:retur_pembelian:${idToko ?? "semua"}', onData: (hasil) {
         if (!mounted) return;
         setStateIfMounted(() {
           _riwayat = _diff.terapkan(hasil);

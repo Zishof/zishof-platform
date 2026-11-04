@@ -892,14 +892,16 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> with JejakGalat {
       // antrean perangkat, baru dikirim. Aman diulang karena tiap penyimpanan
       // membawa idempotency_key, sehingga kiriman ganda tidak melahirkan retur
       // kedua. Hapus bersifat LUNAK di sisi lokal dan dapat dipulihkan.
+      final idToko = Sesi.instance.idTokoTerpilih;
       await MasterOffline.daftarCacheDulu(
           'retur_penjualan_list',
           {
+            if (idToko != null) 'toko_id': idToko,
             if (_kataKunci.isNotEmpty) 'keyword': _kataKunci,
             'page': _halaman,
             'page_size': _pageSize,
           },
-          'master:retur_penjualan', onData: (hasil) {
+          'master:retur_penjualan:${idToko ?? "semua"}', onData: (hasil) {
         if (!mounted) return;
         setStateIfMounted(() {
           _data = _diff.terapkan(hasil);
