@@ -159,10 +159,58 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
           .aksi('so_impor_excel', {'file_base64': base64Encode(bytes)});
       final disimpan = (hasil['disimpan'] as num?)?.toInt() ?? 0;
       final dilewati = (hasil['dilewati'] as num?)?.toInt() ?? 0;
+      final masalahList = (hasil['masalah'] as List?)?.cast<Map<String, dynamic>>() ?? [];
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-              'Tersimpan $disimpan baris${dilewati > 0 ? ', dilewati $dilewati baris (tidak lengkap/gagal)' : ''}.')));
+      if (dilewati > 0 && masalahList.isNotEmpty) {
+        await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Hasil Unggah Stok Opname'),
+            content: SizedBox(
+              width: 500,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Tersimpan: $disimpan baris\nDilewati: $dilewati baris',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('Rincian baris yang dilewati:',
+                        style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    ...masalahList.take(20).map((m) => Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text(
+                            '\u2022 Baris ${m['baris'] ?? '-'}: [${m['produk'] ?? '-'}] \u2014 ${m['alasan'] ?? 'Gagal diproses'}',
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        )),
+                    if (masalahList.length > 20)
+                      Text(
+                        '... dan ${masalahList.length - 20} baris lainnya.',
+                        style: const TextStyle(
+                            fontSize: 12, fontStyle: FontStyle.italic),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Tutup'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                'Tersimpan $disimpan baris${dilewati > 0 ? ', dilewati $dilewati baris (tidak lengkap/gagal)' : ''}.')));
+      }
       setStateIfMounted(() {});
     } catch (e) {
       if (mounted) {
