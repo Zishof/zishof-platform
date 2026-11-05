@@ -140,11 +140,14 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
     }
   }
 
-  /// "Unggah Excel" (gap-closure) -- SENGAJA insert-only (tiap baris file
-  /// selalu jadi catatan baru lewat `so_impor_excel`/`StokOpnameScanUtil.simpanOpname`
-  /// server, TIDAK PERNAH meng-update baris lama), TANPA layar tinjau terpisah
-  /// (beda dari Impor Excel Produk) krn tak ada risiko "menimpa data lama
-  /// diam-diam" yg perlu ditinjau dulu -- konsisten dgn Electron/JSP.
+  /// "Unggah Excel" adalah impor massal online-only: setiap baris dicatat
+  /// server sebagai hasil opname baru. Proses ini tidak boleh dimasukkan ke
+  /// antrean offline karena hasil impor parsial dapat membuat pengiriman ulang
+  /// menggandakan baris yang sudah tersimpan.
+  ///
+  /// Server tidak memperbarui catatan opname lama. Karena itu, saat hanya
+  /// sebagian baris diterima, pengguna harus memeriksa riwayat dahulu dan
+  /// mengirim ulang hanya baris yang belum tersimpan.
   Future<void> _unggahExcel() async {
     try {
       final hasilPilih = await FilePicker.platform.pickFiles(
@@ -159,13 +162,33 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
           .aksi('so_impor_excel', {'file_base64': base64Encode(bytes)});
       final disimpan = (hasil['disimpan'] as num?)?.toInt() ?? 0;
       final dilewati = (hasil['dilewati'] as num?)?.toInt() ?? 0;
-      final masalahList = (hasil['masalah'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      final masalahRaw = hasil['masalah'];
+      final masalahList = masalahRaw is List
+          ? masalahRaw
+              .whereType<Map>()
+              .map((baris) => Map<String, dynamic>.from(baris))
+              .toList()
+          : <Map<String, dynamic>>[];
       if (!mounted) return;
-      if (dilewati > 0 && masalahList.isNotEmpty) {
+      if (dilewati > 0) {
         await showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('Hasil Unggah Stok Opname'),
+            title: Row(
+              children: [
+                const Expanded(child: Text('Hasil Unggah Stok Opname')),
+                AksiBarisMenu(
+                  tooltip: 'Aksi hasil unggah',
+                  aksi: [
+                    AksiBaris(
+                      ikon: Icons.close,
+                      label: 'Tutup',
+                      onTap: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
+                ),
+              ],
+            ),
             content: SizedBox(
               width: 500,
               child: SingleChildScrollView(
@@ -178,32 +201,36 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 12),
-                    const Text('Rincian baris yang dilewati:',
-                        style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 6),
-                    ...masalahList.take(20).map((m) => Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: Text(
-                            '\u2022 Baris ${m['baris'] ?? '-'}: [${m['produk'] ?? '-'}] \u2014 ${m['alasan'] ?? 'Gagal diproses'}',
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        )),
-                    if (masalahList.length > 20)
-                      Text(
-                        '... dan ${masalahList.length - 20} baris lainnya.',
-                        style: const TextStyle(
-                            fontSize: 12, fontStyle: FontStyle.italic),
+                    if (masalahList.isNotEmpty) ...[
+                      const Text('Rincian baris yang dilewati:',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 6),
+                      ...masalahList.take(20).map((m) => Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Text(
+                              '\u2022 Baris ${m['baris'] ?? '-'}: [${m['produk'] ?? '-'}] \u2014 ${m['alasan'] ?? 'Belum dapat diproses'}',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          )),
+                      if (masalahList.length > 20)
+                        Text(
+                          '... dan ${masalahList.length - 20} baris lainnya.',
+                          style: const TextStyle(
+                              fontSize: 12, fontStyle: FontStyle.italic),
+                        ),
+                    ] else ...[
+                      const Text(
+                        'Rincian penyebab belum tersedia. Pastikan kolom Stok Fisik sudah diisi untuk setiap barang dan berkas berasal dari toko yang sedang dipilih.',
                       ),
+                    ],
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Sebelum mencoba lagi, periksa Riwayat Opname. Jika ada baris yang sudah tersimpan, unggah hanya baris yang belum tersimpan agar catatan tidak berulang.',
+                    ),
                   ],
                 ),
               ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Tutup'),
-              ),
-            ],
           ),
         );
       } else {
