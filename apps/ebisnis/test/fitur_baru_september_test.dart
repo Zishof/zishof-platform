@@ -32,13 +32,17 @@ void main() {
       expect(content.contains('produk.pemasokNama'), isTrue);
     });
 
-    test('4. Query LaporanKantinUtil.java di AIS memiliki kolom Kategori untuk pnj_per_barang', () {
+    test('4. Laporan Penjualan per Barang menyediakan identitas produk dan margin estimasi', () {
       final file = File('C:/opt/AIS/ais/src/main/src/ais/action/master/koperasi/helper/LaporanKantinUtil.java');
       final content = file.readAsStringSync();
 
       expect(content.contains('left join koperasi.jenis_produk jp on jp.id=pr.jenis_produk'), isTrue);
       expect(content.contains('coalesce(nullif(trim(jp.nama),\'\'),\'Umum\')'), isTrue);
       expect(content.contains('new Kolom("Kategori","text")'), isTrue);
+      expect(content.contains('new Kolom("Barcode", "text")'), isTrue);
+      expect(content.contains('new Kolom("Pemasok Utama", "text")'), isTrue);
+      expect(content.contains('new Kolom("Total HPP (Estimasi)", "num")'), isTrue);
+      expect(content.contains('new Kolom("Laba Kotor (Estimasi)", "num")'), isTrue);
     });
   });
 }
