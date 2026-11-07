@@ -149,6 +149,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
   DateTime? _tanggalStok;
   HasilStokTanggal? _stokTanggal;
   bool _memuatStokTanggal = false;
+  int _generasiMuatStokTanggal = 0;
   DynamicReportModel? _modelLaporan;
   bool _menyiapkanLaporan = false;
 
@@ -162,6 +163,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
 
   @override
   void dispose() {
+    _generasiMuatStokTanggal++;
     MasterOffline.revisiBaris.removeListener(_saatCacheBerubah);
     _controllerCariProduk.dispose();
     super.dispose();
@@ -638,23 +640,39 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
   /// Ambil ulang stok pada tanggal acuan. Dipanggil saat tanggal berubah dan
   /// saat kata kunci berubah, supaya angka di layar selalu cocok dgn filter.
   Future<void> _muatStokTanggal() async {
+    final generasi = ++_generasiMuatStokTanggal;
     if (_tanggalStok == null) {
-      setStateIfMounted(() => _stokTanggal = null);
+      setStateIfMounted(() {
+        _stokTanggal = null;
+        _memuatStokTanggal = false;
+      });
       return;
     }
-    setStateIfMounted(() => _memuatStokTanggal = true);
+    final tanggal = _tanggalStok;
+    final kataKunci = _kataKunci;
+    setStateIfMounted(() {
+      _stokTanggal = null;
+      _memuatStokTanggal = true;
+    });
     try {
-      final hasil = await StokPerTanggal.ambil(
-          tanggal: _tanggalStok, kataKunci: _kataKunci);
-      setStateIfMounted(() => _stokTanggal = hasil);
+      final hasil =
+          await StokPerTanggal.ambil(tanggal: tanggal, kataKunci: kataKunci);
+      if (mounted && generasi == _generasiMuatStokTanggal) {
+        setStateIfMounted(() => _stokTanggal = hasil);
+      }
     } catch (e) {
-      if (mounted) {
+      if (mounted && generasi == _generasiMuatStokTanggal) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Gagal memuat stok per tanggal: $e')));
-        setStateIfMounted(() => _tanggalStok = null);
+        setStateIfMounted(() {
+          _tanggalStok = null;
+          _stokTanggal = null;
+        });
       }
     } finally {
-      setStateIfMounted(() => _memuatStokTanggal = false);
+      if (mounted && generasi == _generasiMuatStokTanggal) {
+        setStateIfMounted(() => _memuatStokTanggal = false);
+      }
     }
   }
 
@@ -669,7 +687,10 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
       helpText: 'Tampilkan stok pada tanggal',
     );
     if (pilih == null) return;
-    setStateIfMounted(() => _tanggalStok = pilih);
+    setStateIfMounted(() {
+      _tanggalStok = pilih;
+      _stokTanggal = null;
+    });
     await _muatStokTanggal();
   }
 
@@ -698,7 +719,64 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
           : '  -  dari salinan tersimpan '
               '${DateFormat('dd/MM/yyyy HH:mm').format(c.disimpanPada!)}';
     }
+    if (_tanggalStok != null) {
+      teks +=
+          '  -  nilai memakai harga beli produk saat ini; nilai lampau perkiraan';
+    }
     return teks;
+  }
+
+  /// Menampilkan jumlah produk dan total nilai untuk tanggal yang dipilih.
+  /// Angka berasal dari baris laporan yang sama dengan rincian dan ekspor.
+  Widget _ringkasanStokTanggal() {
+    final hasil = _stokTanggal;
+    final nilai = hasil?.totalNilaiPersediaan;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Laporan Ringkasan Persediaan',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              _tanggalStok == null
+                  ? ''
+                  : DateFormat('dd MMMM yyyy', 'id_ID').format(_tanggalStok!),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            Wrap(spacing: 12, runSpacing: 8, children: [
+              _KartuRingkasanStok(
+                label: 'Jumlah Produk',
+                nilai: _memuatStokTanggal
+                    ? 'Memuat…'
+                    : hasil == null
+                        ? 'Belum tersedia'
+                        : NumberFormat.decimalPattern('id_ID')
+                            .format(hasil.jumlahProduk),
+                ikon: Icons.inventory_2_outlined,
+              ),
+              _KartuRingkasanStok(
+                label: 'Total Nilai Persediaan',
+                nilai: _memuatStokTanggal
+                    ? 'Memuat…'
+                    : nilai == null
+                        ? 'Nilai belum tersedia'
+                        : _formatRupiah.format(nilai),
+                ikon: Icons.account_balance_wallet_outlined,
+              ),
+            ]),
+            const SizedBox(height: 10),
+            Text(
+              'Nilai dihitung dari stok pada tanggal pilihan dan harga beli produk saat ini. Untuk tanggal lampau, nilai merupakan perkiraan.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _aturAtauPreviewLaporan({required bool preview}) async {
@@ -775,9 +853,11 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
             onPressed: sibuk
                 ? null
                 : () {
+                    _generasiMuatStokTanggal++;
                     setStateIfMounted(() {
                       _tanggalStok = null;
                       _stokTanggal = null;
+                      _memuatStokTanggal = false;
                     });
                   },
             icon: const Icon(Icons.clear, size: 18),
@@ -1591,7 +1671,9 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                                   ),
                                                   const SizedBox(height: 8),
                                                 ],
-                                                if (_statistik != null)
+                                                if (_tanggalStok != null)
+                                                  _ringkasanStokTanggal()
+                                                else if (_statistik != null)
                                                   _KartuStatistik(
                                                     statistik: _statistik!,
                                                     onTap: _bukaDetailStatistik,
@@ -1825,6 +1907,50 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
           ]),
         ));
   }
+}
+
+/// Kartu ringkasan kecil yang dapat membungkus ke baris berikutnya pada layar
+/// sempit, sehingga nominal dan keterangannya tetap terbaca.
+class _KartuRingkasanStok extends StatelessWidget {
+  final String label;
+  final String nilai;
+  final IconData ikon;
+
+  const _KartuRingkasanStok({
+    required this.label,
+    required this.nilai,
+    required this.ikon,
+  });
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 280,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              Icon(ikon, color: AppColors.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: Theme.of(context).textTheme.bodySmall),
+                    const SizedBox(height: 3),
+                    Text(nilai,
+                        style: Theme.of(context).textTheme.titleMedium,
+                        softWrap: true),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
 }
 
 class _KartuStatistik extends StatelessWidget {

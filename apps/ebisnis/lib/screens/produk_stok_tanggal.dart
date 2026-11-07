@@ -152,6 +152,49 @@ class HasilStokTanggal {
 
   bool get kosong => baris.isEmpty;
 
+  /// Jumlah produk pada hasil yang sedang ditampilkan setelah filter pencarian.
+  int get jumlahProduk => baris.length;
+
+  /// Jumlah nilai persediaan yang dikirim bersama baris laporan.
+  ///
+  /// Nilai tidak dihitung ulang dari stok di perangkat, agar ringkasan sama
+  /// dengan rincian dan berkas ekspor. Laporan server menghargai stok historis
+  /// menggunakan harga beli master produk saat ini; untuk tanggal lampau,
+  /// hasilnya merupakan perkiraan dan bukan rekaman harga historis tersimpan.
+  /// null berarti kolom nilai tidak tersedia atau ada nilai yang tidak dapat
+  /// dibaca, sehingga layar tidak boleh menampilkan angka yang menyesatkan.
+  double? get totalNilaiPersediaan {
+    final indeks = kolom.indexWhere((judul) {
+      final normal = judul.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      return normal == 'nilaistok' ||
+          normal == 'nilaipersediaan' ||
+          normal == 'totalnilaipersediaan';
+    });
+    if (indeks < 0) return null;
+    var jumlah = 0.0;
+    for (final row in baris) {
+      if (indeks >= row.length) return null;
+      final nilai = _angkaOpsional(row[indeks]);
+      if (nilai == null) return null;
+      jumlah += nilai;
+    }
+    return jumlah;
+  }
+
+  static double? _angkaOpsional(Object? nilai) {
+    if (nilai is num) return nilai.toDouble();
+    if (nilai == null) return null;
+    var teks = '$nilai'.trim().replaceAll(RegExp(r'[^0-9,.-]'), '');
+    if (teks.isEmpty) return null;
+    if (teks.contains(',') && teks.contains('.')) {
+      // Format Indonesia: titik ribuan dan koma desimal.
+      teks = teks.replaceAll('.', '').replaceAll(',', '.');
+    } else if (teks.contains(',')) {
+      teks = teks.replaceAll(',', '.');
+    }
+    return double.tryParse(teks);
+  }
+
   /// Ubah menjadi bahan DynamicReportDesigner (Preview/Atur Model/PDF/Excel/
   /// Word). Isinya PERSIS baris laporan yang sudah tersaring server, jadi apa
   /// yang diekspor sama dengan apa yang tampil.
