@@ -30,6 +30,7 @@ List<Map<String, dynamic>> rekapSaldoVoucherDariMutasi(
         () => <String, dynamic>{
               'idAnggota': m['idAnggota'],
               'namaAnggota': '${m['namaAnggota'] ?? '-'}',
+              'unit': '${m['unitAnggota'] ?? m['unit'] ?? ''}',
               'saldoAwal': saldoAwalResmi is num
                   ? saldoAwalResmi.toDouble()
                   : _angkaSaldoVoucher(m['saldoAwal']),
@@ -38,6 +39,10 @@ List<Map<String, dynamic>> rekapSaldoVoucherDariMutasi(
               'saldoAkhir': 0.0,
               'jumlahTransaksi': 0,
             });
+    if ('${entri['unit'] ?? ''}'.trim().isEmpty &&
+        '${m['unitAnggota'] ?? m['unit'] ?? ''}'.trim().isNotEmpty) {
+      entri['unit'] = '${m['unitAnggota'] ?? m['unit'] ?? ''}';
+    }
     entri['masuk'] =
         (entri['masuk'] as double) + _angkaSaldoVoucher(m['masuk']);
     entri['keluar'] =
@@ -161,8 +166,9 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
     final hasil = kunciCari.isEmpty
         ? daftar
         : daftar
-            .where(
-                (r) => '${r['namaAnggota']}'.toLowerCase().contains(kunciCari))
+            .where((r) =>
+                '${r['namaAnggota']}'.toLowerCase().contains(kunciCari) ||
+                '${r['unit'] ?? ''}'.toLowerCase().contains(kunciCari))
             .toList();
     hasil.sort((a, b) =>
         (b['saldoAkhir'] as double).compareTo(a['saldoAkhir'] as double));
@@ -175,6 +181,7 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
             'Periode ${_fmtTglTampil.format(_dari)} s.d. ${_fmtTglTampil.format(_sampai)}',
         columns: const [
           DynamicReportColumn('namaAnggota', 'Anggota'),
+          DynamicReportColumn('unit', 'Unit'),
           DynamicReportColumn('saldoAwal', 'Saldo Awal', numeric: true),
           DynamicReportColumn('masuk', 'Masuk', numeric: true),
           DynamicReportColumn('keluar', 'Keluar', numeric: true),
@@ -401,10 +408,11 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
                         child: Text(
                             'Belum ada saldo voucher pada rentang tanggal ini.'))
                     : AppDataTable(
-                        minWidth: 820,
+                        minWidth: 920,
                         emptyText: 'Tidak ada data pada rentang ini.',
                         columns: const [
                           AppTableColumn('Anggota', flex: 4),
+                          AppTableColumn('Unit', flex: 2),
                           AppTableColumn('Saldo Awal',
                               flex: 2, align: TextAlign.right),
                           AppTableColumn('Masuk',
@@ -421,6 +429,11 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
                                   cells: [
                                     AppTableCell.text('${r['namaAnggota']}',
                                         flex: 4),
+                                    AppTableCell.text(
+                                        '${r['unit'] ?? ''}'.trim().isEmpty
+                                            ? '-'
+                                            : '${r['unit']}',
+                                        flex: 2),
                                     AppTableCell.text(
                                         _fmtRp.format(r['saldoAwal'] ?? 0),
                                         flex: 2,

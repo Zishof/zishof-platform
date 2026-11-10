@@ -212,6 +212,7 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
           'NUPTK',
           'NIDN',
           'NAMA_MEMBER',
+          'UNIT',
           'NOMINAL',
           'WAKTU',
           'TANGGAL_EXPIRED',
@@ -229,6 +230,7 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
                   d['nuptk'] ?? '',
                   d['nidn'] ?? '',
                   d['namaMember'] ?? '',
+                  d['unitMember'] ?? d['unit'] ?? '',
                   (d['nominal'] as num?) ?? 0,
                   d['waktu'] ?? '',
                   d['tanggalExpired'] ?? '',
@@ -339,6 +341,7 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
           'NUPTK',
           'NIDN',
           'NAMA_MEMBER',
+          'UNIT',
           'NOMINAL',
           'WAKTU',
           'TANGGAL_EXPIRED',
@@ -356,6 +359,7 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
                   m['nuptk'] ?? '',
                   m['nidn'] ?? '',
                   m['nama'] ?? '',
+                  m['unit'] ?? '',
                   '',
                   '',
                   '',
@@ -593,6 +597,7 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
               'Waktu',
               'Kode',
               'Member',
+              'Unit',
               'Nominal',
               'Metode',
               'Keterangan'
@@ -602,6 +607,7 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
                       '${d['waktu'] ?? ''}',
                       '${d['kodeMember'] ?? ''}',
                       '${d['namaMember'] ?? ''}',
+                      '${d['unitMember'] ?? d['unit'] ?? '-'}',
                       _formatRupiah.format((d['nominal'] as num?) ?? 0),
                       '${d['jenisPembayaranNama'] ?? ''}',
                       '${d['keterangan'] ?? ''}',
@@ -1191,11 +1197,12 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
           ],
           const SizedBox(height: 12),
           AppDataTable(
-            minWidth: 900,
+            minWidth: 980,
             emptyText: 'Belum ada riwayat topup.',
             columns: [
               const AppTableColumn('Waktu', flex: 2),
               const AppTableColumn('Member', flex: 3),
+              const AppTableColumn('Unit', flex: 2),
               const AppTableColumn('Nominal', flex: 2, align: TextAlign.right),
               const AppTableColumn('Metode / Ket.', flex: 3),
               AppTableColumn('Aksi',
@@ -1203,6 +1210,7 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
             ],
             rows: _daftar.map((d) {
               final expired = d['tanggalExpired'] != null;
+              final unitText = '${d['unitMember'] ?? d['unit'] ?? ''}'.trim();
               return AppTableRowData(
                 cells: [
                   AppTableCell(
@@ -1233,6 +1241,11 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
                                   fontSize: 11, color: AppColors.warning)),
                       ],
                     ),
+                  ),
+                  AppTableCell.text(
+                    unitText.isEmpty ? '-' : unitText,
+                    flex: 2,
+                    maxLines: 2,
                   ),
                   AppTableCell.text(
                     _formatRupiah.format((d['nominal'] as num?) ?? 0),

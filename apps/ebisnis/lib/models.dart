@@ -710,6 +710,7 @@ class Anggota {
   final double minSaldo;
   final int? tipeAnggotaKoperasiId;
   final String tipeNama;
+  final String unit;
   final String? tanggalKadaluarsa;
   final String userid;
   final String fotoUrl;
@@ -738,6 +739,7 @@ class Anggota {
     required this.minSaldo,
     this.tipeAnggotaKoperasiId,
     this.tipeNama = '',
+    this.unit = '',
     this.tanggalKadaluarsa,
     this.userid = '',
     this.fotoUrl = '',
@@ -770,6 +772,7 @@ class Anggota {
         minSaldo: (j['minSaldo'] as num?)?.toDouble() ?? 0,
         tipeAnggotaKoperasiId: j['tipeAnggotaKoperasiId'] as int?,
         tipeNama: (j['tipeNama'] ?? '') as String,
+        unit: (j['unit'] ?? j['unitNama'] ?? '') as String,
         tanggalKadaluarsa: j['tanggalKadaluarsa'] as String?,
         userid: (j['userid'] ?? '') as String,
         fotoUrl: (j['fotoUrl'] ?? '') as String,
@@ -788,6 +791,8 @@ class Anggota {
         telp: (b['telp'] ?? '') as String,
         email: (b['email'] ?? '') as String,
         jenisNama: (b['jenis_nama'] ?? '') as String,
+        tipeNama: (b['tipe_nama'] ?? '') as String,
+        unit: (b['unit'] ?? '') as String,
         wajibPin: (b['wajib_pin'] as int? ?? 0) == 1,
         pinSudahDiatur: (b['pin_sudah_diatur'] as int? ?? 0) == 1,
         wajibBiometricWajah: (b['wajib_biometric_wajah'] as int? ?? 0) == 1,
@@ -813,6 +818,8 @@ class Anggota {
         'telp': j['telp'] ?? '',
         'email': j['email'] ?? '',
         'jenis_nama': j['jenisNama'] ?? '',
+        'tipe_nama': j['tipeNama'] ?? '',
+        'unit': j['unit'] ?? j['unitNama'] ?? '',
         'wajib_pin': (j['wajibPin'] == true) ? 1 : 0,
         'pin_sudah_diatur': (j['pinSudahDiatur'] == true) ? 1 : 0,
         'wajib_biometric_wajah': (j['wajibBiometricWajah'] == true) ? 1 : 0,

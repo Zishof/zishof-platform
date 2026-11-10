@@ -149,7 +149,7 @@ class CoreDb {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 20,
+        version: 21,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -681,6 +681,19 @@ class CoreDb {
         }
       }
     }
+    if (versiLama < 21) {
+      // Kolom `unit` (SD/SMP/SMA untuk Siswa, STAI untuk Mahasiswa, atau Satuan
+      // Kerja untuk Pegawai/Guru/Dosen) serta `tipe_nama` disimpan di cache
+      // lokal agar tampilan Data Member & pencarian berdasarkan unit tetap
+      // bekerja penuh baik online maupun offline.
+      for (final kolom in const ['tipe_nama TEXT', 'unit TEXT']) {
+        try {
+          await db.execute('ALTER TABLE anggota_cache ADD COLUMN $kolom');
+        } catch (_) {
+          // Kolom mungkin sudah dibuat oleh upgrade parsial.
+        }
+      }
+    }
   }
 
   /// Pemetaan id sementara (negatif, dibuat klien saat offline) -> id server.
@@ -793,6 +806,8 @@ class CoreDb {
         telp TEXT,
         email TEXT,
         jenis_nama TEXT,
+        tipe_nama TEXT,
+        unit TEXT,
         wajib_pin INTEGER DEFAULT 0,
         pin_sudah_diatur INTEGER DEFAULT 0,
         wajib_biometric_wajah INTEGER DEFAULT 0,
@@ -1745,8 +1760,8 @@ class CoreDb {
     final hasil = await database.rawQuery(
         'SELECT COUNT(*) AS n FROM anggota_cache '
         'WHERE nama LIKE ? OR kode LIKE ? OR kode_identitas LIKE ? '
-        'OR hp LIKE ? OR telp LIKE ? OR email LIKE ?',
-        [kw, kw, kw, kw, kw, kw]);
+        'OR hp LIKE ? OR telp LIKE ? OR email LIKE ? OR COALESCE(unit,\'\') LIKE ? OR COALESCE(tipe_nama,\'\') LIKE ?',
+        [kw, kw, kw, kw, kw, kw, kw, kw]);
     return (hasil.first['n'] as int?) ?? 0;
   }
 
@@ -1761,8 +1776,8 @@ class CoreDb {
     return database.query(
       'anggota_cache',
       where: 'nama LIKE ? OR kode LIKE ? OR kode_identitas LIKE ? '
-          'OR hp LIKE ? OR telp LIKE ? OR email LIKE ?',
-      whereArgs: [kw, kw, kw, kw, kw, kw],
+          'OR hp LIKE ? OR telp LIKE ? OR email LIKE ? OR COALESCE(unit,\'\') LIKE ? OR COALESCE(tipe_nama,\'\') LIKE ?',
+      whereArgs: [kw, kw, kw, kw, kw, kw, kw, kw],
       orderBy: 'nama ASC',
       limit: limit,
       offset: offset,

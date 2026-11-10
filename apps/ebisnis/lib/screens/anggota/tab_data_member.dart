@@ -156,13 +156,17 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
         if (!mounted) return;
         final dariServer = hasil['dariServer'] == true;
         if (!dariServer && pakaiCachePenuh) return;
-        final data = ((hasil['data'] as List?) ?? [])
+        final rawMaps = ((hasil['data'] as List?) ?? [])
             .whereType<Map<String, dynamic>>()
             // Draf create offline belum punya id -- model Anggota mensyaratkan
             // id int, jadi baris draf dilewati sampai tersinkron ke server.
             .where((e) => e['id'] is int)
-            .map(Anggota.fromJson)
             .toList();
+        if (dariServer && rawMaps.isNotEmpty) {
+          unawaited(CoreDb.instance.upsertAnggotaCache(
+              rawMaps.map(Anggota.keCacheRow).toList()));
+        }
+        final data = rawMaps.map(Anggota.fromJson).toList();
         setStateIfMounted(() {
           _daftar = data;
           _total = dariServer
@@ -389,6 +393,7 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
           'KODE_MEMBER',
           'NAMA_MEMBER',
           'IDENTITAS',
+          'UNIT',
           'PIN_SUDAH_DIATUR',
           'PIN_BARU',
           'KETERANGAN',
@@ -399,6 +404,7 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
                   m['kode'] ?? '',
                   m['nama'] ?? '',
                   m['kodeIdentitas'] ?? '',
+                  m['unit'] ?? '',
                   m['pinSudahDiatur'] == true ? 'YA' : 'BELUM',
                   '',
                   'Isi PIN_BARU 4-8 angka. Untuk PIN berawalan 0, format sel sebagai Text.',
@@ -681,7 +687,7 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
             children: [
               Expanded(
                 child: AppSearchField(
-                  hintText: 'Cari nama/kode/telepon/email...',
+                  hintText: 'Cari nama/kode/unit/telepon/email...',
                   debounce: const Duration(milliseconds: 450),
                   onChanged: _cariUlang,
                 ),
@@ -779,13 +785,14 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
 
   Widget _tabelAnggota() {
     return AppDataTable(
-      minWidth: 1040,
+      minWidth: 1120,
       emptyText: 'Belum ada member.',
       columns: [
         const AppTableColumn('Nama', flex: 3),
         const AppTableColumn('Kode', flex: 2),
         const AppTableColumn('Identitas', flex: 2),
         const AppTableColumn('Jenis / Tipe', flex: 2),
+        const AppTableColumn('Unit', flex: 2),
         const AppTableColumn('Kontak', flex: 3),
         const AppTableColumn('Status', flex: 2, align: TextAlign.center),
         AppTableColumn('Aksi', width: 64, align: TextAlign.center),
@@ -858,6 +865,11 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
             ),
             AppTableCell.text(
               jenisTipe.isEmpty ? 'Tanpa Jenis' : jenisTipe,
+              flex: 2,
+              maxLines: 2,
+            ),
+            AppTableCell.text(
+              a.unit.trim().isEmpty ? '-' : a.unit.trim(),
               flex: 2,
               maxLines: 2,
             ),
@@ -1389,7 +1401,7 @@ class _FormAnggotaState extends State<_FormAnggota> with JejakGalat {
             scrollController: scrollController,
             title: ubah ? 'Ubah Member' : 'Tambah Member Baru',
             subtitle: ubah
-                ? 'Kode member: ${widget.anggota!.kode}'
+                ? 'Kode member: ${widget.anggota!.kode}${widget.anggota!.unit.trim().isNotEmpty ? ' · Unit: ${widget.anggota!.unit.trim()}' : ''}'
                 : 'Lengkapi identitas pelanggan/member agar transaksi dan laporan lebih mudah dilacak.',
             icon: ubah ? Icons.edit_outlined : Icons.person_add_alt_1_outlined,
             headerTrailing: _avatarHeader(),
