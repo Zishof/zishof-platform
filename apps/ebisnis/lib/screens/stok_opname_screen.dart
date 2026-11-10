@@ -31,6 +31,7 @@ import '../widgets/proses_simpan_master.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
 import 'tab_so_grand.dart';
+import 'tab_pkm_screen.dart';
 
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
 final _formatRupiah =
@@ -59,7 +60,7 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 7, vsync: this);
+    _tab = TabController(length: 8, vsync: this);
     _tab.addListener(_saatTabBerubah);
   }
 
@@ -381,6 +382,7 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
               Tab(text: 'Monitor Keluar/Masuk'),
               Tab(text: 'SO Harian'),
               Tab(text: 'SO Grand'),
+              Tab(text: 'PKM & Saran PO'),
               Tab(text: 'Input Opname'),
               Tab(text: 'SO by Scan'),
             ],
@@ -392,8 +394,9 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
               const _TabMonitorBarang(),
               const _TabSoHarian(),
               const TabSoGrand(),
+              const TabPkmKuantitasMaksimum(),
               const _TabInputOpname(),
-              _TabSoByScan(aktif: _tab.index == 6),
+              _TabSoByScan(aktif: _tab.index == 7),
             ]),
           ),
         ],
