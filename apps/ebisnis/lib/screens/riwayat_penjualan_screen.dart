@@ -204,6 +204,10 @@ class _BarisKoreksiTransaksi {
     required this.harga,
     this.diskonAwal = 0,
     required double qty,
+    this.rakId,
+    this.rakNama = '',
+    this.rakUtamaId,
+    this.rakUtamaNama = '',
   })  : qtyAwal = pembelianId == null ? 0 : qty,
         qtyController = TextEditingController(text: _formatQtyKoreksi(qty));
 
@@ -214,6 +218,10 @@ class _BarisKoreksiTransaksi {
   final double qtyAwal;
   final double diskonAwal;
   final TextEditingController qtyController;
+  int? rakId;
+  String rakNama;
+  final int? rakUtamaId;
+  final String rakUtamaNama;
 
   double get subtotalAwal => qtyAwal <= 0 ? 0 : (harga * qtyAwal) - diskonAwal;
 
@@ -282,6 +290,7 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
   bool _memuatMember = false;
   bool _metodeMemberTerkunci = false;
   int _versiMember = 0;
+  List<Map<String, dynamic>> _daftarRakToko = [];
 
   List<CaraBayar> get _metodeTersedia {
     if (_memberPemulihan == null) return Sesi.instance.caraBayar;
@@ -387,8 +396,15 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
               harga: (i['harga'] as num?)?.toDouble() ?? 0,
               diskonAwal: (i['diskon'] as num?)?.toDouble() ?? 0,
               qty: (i['qty'] as num?)?.toDouble() ?? 0,
+              rakId: (i['rakId'] as num?)?.toInt() ??
+                  (i['rak_id'] as num?)?.toInt(),
+              rakNama: '${i['rakNama'] ?? i['rak_nama'] ?? ''}',
+              rakUtamaId: (i['rakUtamaId'] as num?)?.toInt() ??
+                  (i['rak_utama_id'] as num?)?.toInt(),
+              rakUtamaNama: '${i['rakUtamaNama'] ?? i['rak_utama_nama'] ?? ''}',
             ))
         .toList();
+    unawaited(_muatDaftarRakToko());
     if (widget.bolehSplitPembayaran) {
       _splitBayar = _slotPembayaranAwal();
       if (_splitBayar.isNotEmpty) {
@@ -697,9 +713,71 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
         nama: '${produk['nama'] ?? 'Produk'}',
         harga: (produk['hargaJual'] as num?)?.toDouble() ?? 0,
         qty: 1,
+        rakId: (produk['rakUtamaId'] as num?)?.toInt() ??
+            (produk['rak_utama_id'] as num?)?.toInt(),
+        rakNama: '${produk['rakUtamaNama'] ?? produk['rak_utama_nama'] ?? ''}',
+        rakUtamaId: (produk['rakUtamaId'] as num?)?.toInt() ??
+            (produk['rak_utama_id'] as num?)?.toInt(),
+        rakUtamaNama:
+            '${produk['rakUtamaNama'] ?? produk['rak_utama_nama'] ?? ''}',
       ));
       _hasilCari = [];
     });
+  }
+
+  Future<void> _muatDaftarRakToko() async {
+    try {
+      final hasil = await ApiClient.instance.aksi('rak_list', {});
+      final rows = ((hasil['data'] as List?) ?? [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      if (!mounted) return;
+      setState(() {
+        _daftarRakToko = rows;
+      });
+    } catch (_) {}
+  }
+
+  List<DropdownMenuItem<int?>> _itemRakUntukBaris(_BarisKoreksiTransaksi b) {
+    final unik = <int, Map<String, dynamic>>{};
+    for (final r in _daftarRakToko) {
+      final id = (r['id'] as num?)?.toInt();
+      if (id != null && id > 0) {
+        unik.putIfAbsent(id, () => r);
+      }
+    }
+    final defaultLabel = b.rakUtamaNama.trim().isNotEmpty
+        ? b.rakUtamaNama.trim()
+        : 'RAK Utama';
+    final hasil = <DropdownMenuItem<int?>>[
+      DropdownMenuItem<int?>(
+        value: null,
+        child: Text('Default ($defaultLabel)', overflow: TextOverflow.ellipsis),
+      ),
+    ];
+    for (final r in unik.values) {
+      final id = (r['id'] as num).toInt();
+      final nama = '${r['nama'] ?? 'RAK Utama'}'.trim();
+      final kode = '${r['kode'] ?? ''}'.trim();
+      final label = kode.isNotEmpty && kode.toUpperCase() != nama.toUpperCase()
+          ? '$nama [$kode]'
+          : nama;
+      hasil.add(DropdownMenuItem<int?>(
+        value: id,
+        child: Text(label, overflow: TextOverflow.ellipsis),
+      ));
+    }
+    if (b.rakId != null && !unik.containsKey(b.rakId)) {
+      hasil.add(DropdownMenuItem<int?>(
+        value: b.rakId,
+        child: Text(
+          b.rakNama.isNotEmpty ? b.rakNama : 'Rak #${b.rakId}',
+          overflow: TextOverflow.ellipsis,
+        ),
+      ));
+    }
+    return hasil;
   }
 
   void _simpan() {
@@ -789,6 +867,8 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
         'jumlah': qty,
         'diskon': 0,
         'cashback': 0,
+        if (_baris[i].rakId != null) 'rak_id': _baris[i].rakId,
+        if (_baris[i].rakId != null) 'rakId': _baris[i].rakId,
       });
     }
     final namaMetode = caraSaatIni.isNotEmpty
@@ -1068,7 +1148,44 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: Text(b.nama),
-                    subtitle: Text(_formatRupiah.format(b.harga)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_formatRupiah.format(b.harga)),
+                        const SizedBox(height: 4),
+                        SizedBox(
+                          width: 280,
+                          child: DropdownButtonFormField<int?>(
+                            value: b.rakId,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              isDense: true,
+                              labelText: 'Ambil dari Rak',
+                              prefixIcon: Icon(Icons.shelves, size: 16),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 6),
+                            ),
+                            items: _itemRakUntukBaris(b),
+                            onChanged: (val) {
+                              setState(() {
+                                b.rakId = val;
+                                if (val != null) {
+                                  final match = _daftarRakToko.firstWhere(
+                                    (r) => (r['id'] as num?)?.toInt() == val,
+                                    orElse: () => const {},
+                                  );
+                                  if (match.isNotEmpty) {
+                                    b.rakNama = '${match['nama'] ?? ''}';
+                                  }
+                                } else {
+                                  b.rakNama = b.rakUtamaNama;
+                                }
+                              });
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
                     trailing: SizedBox(
                       width: 220,
                       child: Row(children: [
@@ -2484,7 +2601,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                               style:
                                   const TextStyle(fontWeight: FontWeight.w600)),
                           Text(
-                            'Harga ${_formatRupiah.format(i['harga'])} · Diskon ${_formatRupiah.format(i['diskon'] ?? 0)} · Pajak ${_formatRupiah.format(pajakBaris)} · Subtotal ${_formatRupiah.format(subtotal)}',
+                            'Harga ${_formatRupiah.format(i['harga'])} · Diskon ${_formatRupiah.format(i['diskon'] ?? 0)} · Pajak ${_formatRupiah.format(pajakBaris)} · Subtotal ${_formatRupiah.format(subtotal)} · Rak: ${(i['rakNama'] ?? i['rak_nama'] ?? i['rakUtamaNama'] ?? i['rak_utama_nama'] ?? 'RAK Utama')}',
                             style: const TextStyle(
                                 fontSize: 12, color: AppColors.textSecondary),
                           ),

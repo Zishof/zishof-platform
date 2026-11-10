@@ -43,6 +43,7 @@ import '../screens/supplier_screen.dart';
 import '../screens/jenis_produk_screen.dart';
 import '../screens/uom_screen.dart';
 import '../screens/grup_produk_screen.dart';
+import '../screens/rak_produk_screen.dart';
 import '../screens/hrd_dasar_screen.dart';
 import '../screens/ga_inventaris_screen.dart';
 import '../screens/toko_kelola_screen.dart';
@@ -146,6 +147,7 @@ enum MenuEBisnis {
   jenisProduk,
   uom,
   grupProduk,
+  rakProduk,
   hrdDasar,
   gaInventaris,
   stokOpname,
@@ -332,6 +334,7 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
   MenuEBisnis.anggota: 'anggota',
   MenuEBisnis.produk: 'produk',
   MenuEBisnis.jenisProduk: 'produk',
+  MenuEBisnis.rakProduk: 'produk',
   MenuEBisnis.uom: 'uom_konversi',
   // Fail-closed di server (KUNCI_DEFAULT_NONAKTIF): perubahan harga massal lintas outlet.
   MenuEBisnis.grupProduk: 'grup_produk',
@@ -791,6 +794,9 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(
       MenuEBisnis.grupProduk, Icons.workspaces_outline, 'Grup Produk',
       builder: _bangunGrupProduk),
+  _ItemMenuShell(
+      MenuEBisnis.rakProduk, Icons.shelves, 'Rak Produk',
+      builder: _bangunRakProduk),
   _ItemMenuShell(MenuEBisnis.hrdDasar, Icons.groups_outlined, 'SDM / HRD',
       builder: _bangunHrdDasar),
   _ItemMenuShell(
@@ -1077,6 +1083,7 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.jenisProduk,
     MenuEBisnis.uom,
     MenuEBisnis.grupProduk,
+    MenuEBisnis.rakProduk,
     MenuEBisnis.stokOpname,
     MenuEBisnis.kedaluwarsa,
     MenuEBisnis.kulakan,
@@ -1207,6 +1214,7 @@ Widget _bangunProduk(BuildContext c) => const ProdukScreen();
 Widget _bangunJenisProduk(BuildContext c) => const JenisProdukScreen();
 Widget _bangunUom(BuildContext c) => const UomScreen();
 Widget _bangunGrupProduk(BuildContext c) => const GrupProdukScreen();
+Widget _bangunRakProduk(BuildContext c) => const RakProdukScreen();
 Widget _bangunHrdDasar(BuildContext c) => const HrdDasarScreen();
 Widget _bangunGaInventaris(BuildContext c) => const GaInventarisScreen();
 Widget _bangunStok(BuildContext c) => const StokOpnameScreen();
@@ -1725,6 +1733,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Satuan / UOM';
     case MenuEBisnis.grupProduk:
       return 'Grup Produk';
+    case MenuEBisnis.rakProduk:
+      return 'Rak Produk';
     case MenuEBisnis.hrdDasar:
       return 'SDM / HRD';
     case MenuEBisnis.gaInventaris:

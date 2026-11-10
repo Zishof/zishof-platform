@@ -3249,6 +3249,9 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   int? _satuanPembelianId;
   late String _satuanPembelianNamaAwal;
   int? _kategoriId;
+  int? _rakUtamaId;
+  String _rakUtamaNama = 'RAK Utama';
+  List<Map<String, dynamic>> _daftarRakPilihan = [];
   int? _kebijakanReturId;
   bool _izinkanJualMinusStok = false;
   // Grup harga terpusat: -1 = tidak diubah (payload TIDAK dikirim -- data produk
@@ -3316,6 +3319,23 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
         ? p!.satuanPembelianNama
         : (p?.satuanNama ?? '');
     _kategoriId = p?.kategoriId;
+    _rakUtamaId = p?.rakUtamaId;
+    _rakUtamaNama = (p?.rakUtamaNama.trim().isNotEmpty == true)
+        ? p!.rakUtamaNama.trim()
+        : 'RAK Utama';
+    if (p != null && p.daftarRak.isNotEmpty) {
+      _daftarRakPilihan = p.daftarRak
+          .map((r) => <String, dynamic>{
+                'id': ((r['rakId'] ?? r['id']) as num?)?.toInt(),
+                'kode': '${r['rakKode'] ?? r['kode'] ?? ''}',
+                'nama': '${r['rakNama'] ?? r['nama'] ?? 'RAK Utama'}',
+                'stok': (r['stokRak'] ?? r['stok'] ?? 0),
+                'utama': r['utama'] == true,
+              })
+          .where((r) => (r['id'] as int?) != null && (r['id'] as int) > 0)
+          .toList();
+    }
+    _muatDaftarRakProduk();
     _kebijakanReturId = p?.kebijakanReturId ??
         (widget.kebijakanRetur.where((e) => e.bawaan).isNotEmpty
             ? widget.kebijakanRetur.firstWhere((e) => e.bawaan).id
@@ -3430,6 +3450,116 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   /// Deduplikasi dilakukan di batas UI dan nilai lama tetap disediakan sebagai
   /// fallback agar produk masih dapat diedit ketika referensinya belum masuk
   /// halaman cache yang sedang tersedia.
+  Future<void> _muatDaftarRakProduk() async {
+    try {
+      final hasil = await ApiClient.instance.aksi('rak_list', {});
+      final rows = ((hasil['data'] as List?) ?? [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      if (!mounted) return;
+      setStateIfMounted(() {
+        final p = widget.produk;
+        if (p != null && p.daftarRak.isNotEmpty) {
+          final idRakProduk = <int, Map<String, dynamic>>{};
+          for (final r in p.daftarRak) {
+            final id = ((r['rakId'] ?? r['id']) as num?)?.toInt();
+            if (id != null && id > 0) {
+              idRakProduk[id] = {
+                'id': id,
+                'kode': '${r['rakKode'] ?? r['kode'] ?? ''}',
+                'nama': '${r['rakNama'] ?? r['nama'] ?? 'RAK Utama'}',
+                'stok': r['stokRak'] ?? r['stok'] ?? 0,
+                'utama': r['utama'] == true,
+              };
+            }
+          }
+          if (idRakProduk.isNotEmpty) {
+            _daftarRakPilihan = idRakProduk.values.toList();
+            if (_rakUtamaId == null || !idRakProduk.containsKey(_rakUtamaId)) {
+              _rakUtamaId = idRakProduk.keys.first;
+              _rakUtamaNama =
+                  '${idRakProduk[_rakUtamaId]?['nama'] ?? 'RAK Utama'}';
+            }
+            return;
+          }
+        }
+        _daftarRakPilihan = rows
+            .map((r) => <String, dynamic>{
+                  'id': (r['id'] as num?)?.toInt(),
+                  'kode': '${r['kode'] ?? ''}',
+                  'nama': '${r['nama'] ?? 'RAK Utama'}',
+                  'stok': r['totalStokRak'] ?? 0,
+                })
+            .where((r) => (r['id'] as int?) != null && (r['id'] as int) > 0)
+            .toList();
+        if (_rakUtamaId == null && _daftarRakPilihan.isNotEmpty) {
+          final def = _daftarRakPilihan.firstWhere(
+            (r) =>
+                '${r['kode'] ?? ''}'.toUpperCase() == 'RAK-UTAMA' ||
+                '${r['nama'] ?? ''}'.toLowerCase() == 'rak utama',
+            orElse: () => _daftarRakPilihan.first,
+          );
+          _rakUtamaId = def['id'] as int?;
+          _rakUtamaNama = '${def['nama'] ?? 'RAK Utama'}';
+        }
+      });
+    } catch (_) {
+      // Tetap gunakan daftar rak yang sudah ada di produk saat offline.
+    }
+  }
+
+  String _namaRakUtama(int? id) {
+    if (id != null) {
+      for (final r in _daftarRakPilihan) {
+        if ((r['id'] as num?)?.toInt() == id) {
+          final nama = '${r['nama'] ?? ''}'.trim();
+          if (nama.isNotEmpty) return nama;
+        }
+      }
+    }
+    return _rakUtamaNama.trim().isNotEmpty ? _rakUtamaNama.trim() : 'RAK Utama';
+  }
+
+  List<DropdownMenuItem<int?>> _itemRakUtama() {
+    final unik = <int, Map<String, dynamic>>{};
+    for (final r in _daftarRakPilihan) {
+      final id = (r['id'] as num?)?.toInt();
+      if (id != null && id > 0) {
+        unik.putIfAbsent(id, () => r);
+      }
+    }
+    final hasil = <DropdownMenuItem<int?>>[];
+    if (unik.isEmpty && _rakUtamaId == null) {
+      hasil.add(const DropdownMenuItem<int?>(
+        value: null,
+        child: Text('RAK Utama (Default Toko)'),
+      ));
+    }
+    for (final r in unik.values) {
+      final id = (r['id'] as num).toInt();
+      final kode = '${r['kode'] ?? ''}'.trim();
+      final nama = '${r['nama'] ?? 'RAK Utama'}'.trim();
+      final stok = r['stok'];
+      final labelStok = stok != null ? ' (Stok: $stok)' : '';
+      final label = kode.isNotEmpty && kode.toUpperCase() != nama.toUpperCase()
+          ? '$nama [$kode]$labelStok'
+          : '$nama$labelStok';
+      hasil.add(DropdownMenuItem<int?>(
+        value: id,
+        child: Text(label, overflow: TextOverflow.ellipsis),
+      ));
+    }
+    final aktif = _rakUtamaId;
+    if (aktif != null && !unik.containsKey(aktif)) {
+      hasil.add(DropdownMenuItem<int?>(
+        value: aktif,
+        child: Text(_namaRakUtama(aktif), overflow: TextOverflow.ellipsis),
+      ));
+    }
+    return hasil;
+  }
+
   List<DropdownMenuItem<int?>> _itemKategori() {
     final unik = <int, Kategori>{};
     for (final kategori in widget.kategori) {
@@ -3992,6 +4122,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'satuan_id': _satuanId,
           'satuan_pembelian_id': _satuanPembelianId,
           'kategori_id': _kategoriId,
+          if (_rakUtamaId != null) 'rak_utama_id': _rakUtamaId,
           'kebijakan_retur_id': _kebijakanReturId,
           'izinkan_jual_minus_stok': _izinkanJualMinusStok,
           if (_grupProdukPilihan != -1)
@@ -4048,6 +4179,8 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'satuanPembelianId': _satuanPembelianId,
           'satuanPembelianNama': _namaUom(_satuanPembelianId),
           'kategoriId': _kategoriId,
+          'rakUtamaId': _rakUtamaId,
+          'rakUtamaNama': _namaRakUtama(_rakUtamaId),
           'kebijakanReturId': _kebijakanReturId,
           'izinkanJualMinusStok': _izinkanJualMinusStok,
           'aktif': _aktif,
@@ -4109,6 +4242,8 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'stok': _angka(_stok.text),
           'kategoriId': _kategoriId,
           'kategoriNama': widget.produk?.kategoriNama ?? '',
+          'rakUtamaId': _rakUtamaId,
+          'rakUtamaNama': _namaRakUtama(_rakUtamaId),
           'gambarUrl': widget.produk?.gambarUrl ?? '',
           'aktif': _aktif,
           'jenisItem': _jenisItem,
@@ -4296,6 +4431,23 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                         child: _pemilihUom(),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int?>(
+                    value: _rakUtamaId,
+                    isExpanded: true,
+                    decoration: AppFormStyle.fieldDecoration(
+                      context,
+                      labelText:
+                          'RAK Utama (Default Pengurangan Stok Penjualan)',
+                      helperText:
+                          'Saat penjualan terjadi, stok rak yang dikurangi otomatis berasal dari RAK Utama ini.',
+                    ),
+                    items: _itemRakUtama(),
+                    onChanged: (v) => setStateIfMounted(() {
+                      _rakUtamaId = v;
+                      _rakUtamaNama = _namaRakUtama(v);
+                    }),
                   ),
                   const SizedBox(height: 12),
                   _pemilihUom(pembelian: true),

@@ -91,6 +91,15 @@ class Produk {
   /// `_KartuProduk` di kasir_screen.dart), tepat 1 -> statis, TIDAK berganti.
   final List<String> fotoUrls;
 
+  /// ID Rak Utama (default pengurangan stok saat penjualan produk).
+  final int? rakUtamaId;
+
+  /// Nama Rak Utama untuk tampilan cepat di tabel dan form Ubah Produk.
+  final String rakUtamaNama;
+
+  /// Daftar rak yang menampung produk ini ([{rakId, rakKode, rakNama, stokRak, utama}]).
+  final List<Map<String, dynamic>> daftarRak;
+
   Produk({
     required this.id,
     required this.kode,
@@ -126,6 +135,9 @@ class Produk {
     this.ekstraPilihan = const [],
     this.kemasan = const [],
     this.fotoUrls = const [],
+    this.rakUtamaId,
+    this.rakUtamaNama = 'RAK Utama',
+    this.daftarRak = const [],
   });
 
   factory Produk.fromJson(Map<String, dynamic> j) => Produk(
@@ -182,6 +194,18 @@ class Produk {
             .toList(),
         fotoUrls:
             ((j['fotoUrls'] as List?) ?? []).map((e) => e as String).toList(),
+        rakUtamaId: ((j['rakUtamaId'] ?? j['rak_utama_id']) as num?)?.toInt(),
+        rakUtamaNama: ((j['rakUtamaNama'] ?? j['rak_utama_nama']) as String?)
+                    ?.trim()
+                    .isNotEmpty ==
+                true
+            ? ((j['rakUtamaNama'] ?? j['rak_utama_nama']) as String).trim()
+            : 'RAK Utama',
+        daftarRak: ((j['daftarRak'] ?? j['daftar_rak']) as List?)
+                ?.whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList() ??
+            const [],
       );
 
   /// Baris utk `CoreDb.replaceProdukCache` -- dipakai bersama oleh KasirScreen

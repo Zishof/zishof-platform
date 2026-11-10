@@ -57,12 +57,45 @@ class StokOpnameScreen extends StatefulWidget {
 class _StokOpnameScreenState extends State<StokOpnameScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tab;
+  List<Map<String, dynamic>> _daftarRakToko = [];
+  int? _rakTerpilihId;
+  String _rakTerpilihNama = '';
 
   @override
   void initState() {
     super.initState();
     _tab = TabController(length: 8, vsync: this);
     _tab.addListener(_saatTabBerubah);
+    _muatDaftarRakToko();
+  }
+
+  Future<void> _muatDaftarRakToko() async {
+    try {
+      final payload = <String, dynamic>{};
+      if (Sesi.instance.idTokoTerpilih != null) {
+        payload['toko_id'] = Sesi.instance.idTokoTerpilih;
+      }
+      final res = await ApiClient.instance.aksi('rak_list', payload);
+      final list = ((res['data'] as List?) ?? [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      if (!mounted) return;
+      setStateIfMounted(() {
+        _daftarRakToko = list;
+        if (_rakTerpilihId == null && list.isNotEmpty) {
+          final utama = list.firstWhere(
+            (r) =>
+                r['utama'] == true ||
+                '${r['kode'] ?? ''}'.toUpperCase() == 'RAK-UTAMA' ||
+                '${r['nama'] ?? ''}'.toLowerCase().contains('rak utama'),
+            orElse: () => list.first,
+          );
+          _rakTerpilihId = (utama['id'] as num?)?.toInt();
+          _rakTerpilihNama = '${utama['nama'] ?? 'RAK Utama'}';
+        }
+      });
+    } catch (_) {}
   }
 
   void _saatTabBerubah() {
@@ -388,16 +421,110 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
               Tab(text: 'SO by Scan'),
             ],
           ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.latarLembut(AppColors.primary),
+              border: Border(
+                bottom: BorderSide(color: AppColors.borderOf(context)),
+              ),
+            ),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.shelves, size: 18, color: AppColors.primary),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Rak Stok Opname Aktif:',
+                      style: TextStyle(
+                          fontSize: 12.5, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+                SizedBox(
+                  width: 280,
+                  child: DropdownButtonFormField<int?>(
+                    value: _rakTerpilihId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      const DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text('Semua Rak / Default RAK Utama'),
+                      ),
+                      ..._daftarRakToko.map((r) {
+                        final id = (r['id'] as num?)?.toInt();
+                        final nama = '${r['nama'] ?? 'Rak'}';
+                        final kode = '${r['kode'] ?? ''}';
+                        return DropdownMenuItem<int?>(
+                          value: id,
+                          child: Text(
+                            kode.isNotEmpty &&
+                                    kode.toUpperCase() != nama.toUpperCase()
+                                ? '$nama [$kode]'
+                                : nama,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      }),
+                    ],
+                    onChanged: (val) {
+                      setStateIfMounted(() {
+                        _rakTerpilihId = val;
+                        if (val != null) {
+                          final m = _daftarRakToko.firstWhere(
+                            (r) => (r['id'] as num?)?.toInt() == val,
+                            orElse: () => const {},
+                          );
+                          _rakTerpilihNama = '${m['nama'] ?? 'RAK Utama'}';
+                        } else {
+                          _rakTerpilihNama = '';
+                        }
+                      });
+                    },
+                  ),
+                ),
+                Text(
+                  'Semua entry SO (Input Opname, SO by Scan, SO Grand) dicatat per Rak & disinkronkan ke stok total produk.',
+                  style: TextStyle(
+                      fontSize: 11.5,
+                      color: AppColors.textSecondaryOf(context)),
+                ),
+              ],
+            ),
+          ),
           Expanded(
             child: TabBarView(controller: _tab, children: [
               const _TabMutasiStok(),
               const TabPergerakanStok(),
               const _TabMonitorBarang(),
               _TabSoHarian(onBukaSoGrand: () => _tab.animateTo(4)),
-              const TabSoGrand(),
+              TabSoGrand(
+                filterRakId: _rakTerpilihId,
+                filterRakNama: _rakTerpilihNama,
+              ),
               const TabPkmKuantitasMaksimum(),
-              const _TabInputOpname(),
-              _TabSoByScan(aktif: _tab.index == 7),
+              _TabInputOpname(
+                rakAktifId: _rakTerpilihId,
+                rakAktifNama: _rakTerpilihNama,
+                daftarRak: _daftarRakToko,
+              ),
+              _TabSoByScan(
+                aktif: _tab.index == 7,
+                rakAktifId: _rakTerpilihId,
+                rakAktifNama: _rakTerpilihNama,
+                daftarRak: _daftarRakToko,
+              ),
             ]),
           ),
         ],
@@ -1528,6 +1655,7 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
               AppTableColumn('Cek', flex: 1),
               AppTableColumn('Kode / Barcode', flex: 2),
               AppTableColumn('Produk', flex: 4),
+              AppTableColumn('Rak', flex: 2),
               AppTableColumn('Satuan', flex: 1),
               AppTableColumn('Terjual', flex: 1, align: TextAlign.right),
               AppTableColumn('Retur', flex: 1, align: TextAlign.right),
@@ -1539,6 +1667,8 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
             rows: _data.map((r) {
               final produkId = (r['produkId'] as num).toInt();
               final dicek = _selesai.contains(produkId);
+              final rakNama =
+                  '${r['rakNama'] ?? r['rak_nama'] ?? r['rakUtamaNama'] ?? 'Rak Belum Ditentukan'}';
               return AppTableRowData(cells: [
                 AppTableCell(
                   flex: 1,
@@ -1552,6 +1682,7 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
                     flex: 2,
                     maxLines: 2),
                 AppTableCell.text('${r['nama'] ?? ''}', flex: 4, maxLines: 2),
+                AppTableCell.text(rakNama, flex: 2, maxLines: 2),
                 AppTableCell.text('${r['satuan'] ?? '-'}', flex: 1),
                 AppTableCell.text(_formatAngka.format(r['qtyTerjual'] ?? 0),
                     flex: 1, align: TextAlign.right),
@@ -1586,7 +1717,15 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
 }
 
 class _TabInputOpname extends StatefulWidget {
-  const _TabInputOpname();
+  final int? rakAktifId;
+  final String rakAktifNama;
+  final List<Map<String, dynamic>> daftarRak;
+
+  const _TabInputOpname({
+    this.rakAktifId,
+    this.rakAktifNama = '',
+    this.daftarRak = const [],
+  });
 
   @override
   State<_TabInputOpname> createState() => _TabInputOpnameState();
@@ -1752,6 +1891,8 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
           'produk_id': p['produkId'],
           'stok_fisik': stokFisik,
           'keterangan': _keteranganController.text.trim(),
+          if (widget.rakAktifId != null) 'rak_id': widget.rakAktifId,
+          if (widget.rakAktifId != null) 'rakId': widget.rakAktifId,
         },
         // Opname adalah catatan kejadian append-only, bukan edit atas satu
         // record per produk. Tanpa kunci coalesce, dua hasil hitung produk
@@ -1821,6 +1962,7 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
         AppTableColumn('Waktu', flex: 2),
         AppTableColumn('Kode', flex: 1),
         AppTableColumn('Produk', flex: 3),
+        AppTableColumn('Rak', flex: 2),
         if (AppVariant.isAlBahjah)
           AppTableColumn('HPP/unit', flex: 2, align: TextAlign.right),
         AppTableColumn('Sistem', flex: 1, align: TextAlign.right),
@@ -1857,6 +1999,10 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
                     fontFamily: 'monospace',
                     fontSize: 12.5)),
             AppTableCell.text('${k['nama'] ?? ''}', flex: 3, maxLines: 2),
+            AppTableCell.text(
+                '${k['rakNama'] ?? k['rak_nama'] ?? 'Rak Belum Ditentukan'}',
+                flex: 2,
+                maxLines: 2),
             if (AppVariant.isAlBahjah)
               AppTableCell.text(
                   _hpp[k['produkId']] == null
@@ -2159,8 +2305,16 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
 /// LANGSUNG per satu produk).
 class _TabSoByScan extends StatefulWidget {
   final bool aktif;
+  final int? rakAktifId;
+  final String rakAktifNama;
+  final List<Map<String, dynamic>> daftarRak;
 
-  const _TabSoByScan({required this.aktif});
+  const _TabSoByScan({
+    required this.aktif,
+    this.rakAktifId,
+    this.rakAktifNama = '',
+    this.daftarRak = const [],
+  });
 
   @override
   State<_TabSoByScan> createState() => _TabSoByScanState();
@@ -2289,6 +2443,8 @@ class _TabSoByScanState extends State<_TabSoByScan>
             'produk_id': a.produk['produkId'],
             'stok_fisik': stok,
             'keterangan': a.keterangan.text.trim(),
+            if (widget.rakAktifId != null) 'rak_id': widget.rakAktifId,
+            if (widget.rakAktifId != null) 'rakId': widget.rakAktifId,
           },
           // Setiap hasil hitung adalah kejadian tersendiri. Jangan gabungkan
           // antrean per produk karena dapat menghilangkan audit opname awal.

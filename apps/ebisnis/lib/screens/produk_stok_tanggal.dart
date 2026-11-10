@@ -39,6 +39,7 @@ class StokPerTanggal {
   static Future<HasilStokTanggal> ambil({
     DateTime? tanggal,
     String kataKunci = '',
+    Map<String, double>? hargaBeliTambahan,
   }) async {
     final payload = <String, dynamic>{
       'r': 'stok_per_tanggal',
@@ -73,8 +74,13 @@ class StokPerTanggal {
       disimpanPada = DateTime.tryParse('${hasil['_disimpanPada'] ?? ''}');
     }
 
+    // PosApi.prosesLaporanJalankan mengirim elemen kolom berupa objek JSON
+    // {"l": kl.label, "t": kl.tipe}. Membaca hanya e['judul'] ?? e['nama'] ?? e
+    // akan mengubah Map menjadi string "{l: Stok, t: num}" sehingga pencocokan
+    // nama kolom ("Stok", "Kode", "Harga Beli", "Nilai Stok") gagal total dan
+    // kartu dashboard menjadi 0 / "Belum lengkap".
     final kolom = ((hasil['kolom'] as List?) ?? [])
-        .map((e) => '${(e is Map ? (e['judul'] ?? e['nama'] ?? e) : e)}')
+        .map((e) => '${(e is Map ? (e['judul'] ?? e['nama'] ?? e['l'] ?? e['label'] ?? e) : e)}')
         .toList();
     final baris = ((hasil['baris'] as List?) ?? [])
         .whereType<List>()
@@ -82,25 +88,45 @@ class StokPerTanggal {
         .toList();
 
     // Kolom laporan: kode, barcode, nama, kategori, toko, satuan, stok,
-    // hargabeli, hargajual. Indeksnya dicari lewat judul supaya perubahan
-    // urutan di server tidak diam-diam menggeser nilai yang dibaca.
-    int cari(List<String> kandidat) {
+    // hargabeli, hargajual, nilai stok. Indeksnya dicari lewat judul supaya
+    // perubahan urutan di server tidak diam-diam menggeser nilai yang dibaca.
+    int cariKode() {
       for (var i = 0; i < kolom.length; i++) {
-        final k = kolom[i].toLowerCase();
-        for (final c in kandidat) {
-          if (k.contains(c)) return i;
+        final k = kolom[i].toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+        if (k == 'kode' || k == 'kodebarang' || k == 'kodeproduk' || k.contains('kode')) {
+          return i;
         }
       }
-      return -1;
+      return baris.isNotEmpty && baris.first.isNotEmpty ? 0 : -1;
     }
 
-    final iKode = cari(['kode']);
-    final iStok = cari(['stok']);
+    int cariStok() {
+      for (var i = 0; i < kolom.length; i++) {
+        final k = kolom[i].toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+        if (k == 'stok' ||
+            k == 'sisastok' ||
+            k == 'stokakhir' ||
+            k == 'jumlahstok' ||
+            (k.startsWith('stok') && !k.contains('nilai'))) {
+          return i;
+        }
+      }
+      for (var i = 0; i < kolom.length; i++) {
+        final k = kolom[i].toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+        if (k.contains('stok') && !k.contains('nilai')) return i;
+      }
+      return baris.isNotEmpty && baris.first.length >= 7 ? 6 : -1;
+    }
+
+    final iKode = cariKode();
+    final iStok = cariStok();
 
     // Muat peta harga beli produk dari cache lokal CoreDb sebagai fallback
-    // jaminan agar totalNilaiPersediaan tidak pernah bernilai null ("Nilai belum tersedia")
-    // meskipun respons laporan server stok_per_tanggal belum menyertakan kolom Harga Beli / Nilai.
-    final hargaBeliPerKode = <String, double>{};
+    // jaminan agar totalNilaiPersediaan tetap terhitung akurat bila ada baris
+    // laporan yang membutuhkan harga beli dari master lokal.
+    final hargaBeliPerKode = <String, double>{
+      if (hargaBeliTambahan != null) ...hargaBeliTambahan,
+    };
     try {
       final cacheProduk =
           await CoreDb.instance.produkCache(keyword: '', limit: 100000);
@@ -108,9 +134,6 @@ class StokPerTanggal {
         final kd = '${p['kode'] ?? ''}'.trim();
         if (kd.isNotEmpty) {
           final hb = (p['harga_beli'] as num?)?.toDouble() ?? 0;
-          // Harga jual bukan pengganti HPP. Menggunakannya akan membuat
-          // nilai persediaan tampak tersedia tetapi keliru; tanpa HPP yang
-          // sahih, layar harus menyatakan nilainya belum lengkap.
           if (hb > 0) hargaBeliPerKode[kd] = hb;
         }
       }
@@ -180,12 +203,28 @@ class HasilStokTanggal {
   /// Jumlah produk pada hasil yang sedang ditampilkan setelah filter pencarian.
   int get jumlahProduk => baris.length;
 
+  /// Indeks kolom kuantitas Stok pada `baris` laporan (publik agar dialog rincian
+  /// klik kartu di `produk_screen.dart` memakai indeks yang persis sama).
+  int get indeksStok => _indeksStok;
+
   int get _indeksStok {
     for (var i = 0; i < kolom.length; i++) {
       final normal =
           kolom[i].toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-      if (normal == 'stok' || normal.startsWith('stok')) return i;
+      if (normal == 'stok' ||
+          normal == 'sisastok' ||
+          normal == 'stokakhir' ||
+          normal == 'jumlahstok' ||
+          (normal.startsWith('stok') && !normal.contains('nilai'))) {
+        return i;
+      }
     }
+    for (var i = 0; i < kolom.length; i++) {
+      final normal =
+          kolom[i].toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      if (normal.contains('stok') && !normal.contains('nilai')) return i;
+    }
+    if (baris.isNotEmpty && baris.first.length >= 7) return 6;
     return -1;
   }
 
@@ -195,6 +234,7 @@ class HasilStokTanggal {
           kolom[i].toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
       if (normal.contains('hargabeli') || normal.contains('hpp')) return i;
     }
+    if (baris.isNotEmpty && baris.first.length >= 8) return 7;
     return -1;
   }
 
@@ -209,27 +249,48 @@ class HasilStokTanggal {
         return i;
       }
     }
+    if (baris.isNotEmpty && baris.first.length >= 10) return 9;
     return -1;
+  }
+
+  /// Membaca angka stok satu baris laporan secara aman.
+  double angkaStokBaris(List<dynamic> row) {
+    final iStok = _indeksStok;
+    if (iStok >= 0 && iStok < row.length) {
+      return _angkaOpsional(row[iStok]) ?? 0.0;
+    }
+    final iKode = _indeksKode;
+    if (iKode >= 0 && iKode < row.length) {
+      final kd = '${row[iKode] ?? ''}'.trim();
+      if (stokPerKode.containsKey(kd)) return stokPerKode[kd] ?? 0.0;
+    }
+    return 0.0;
   }
 
   /// Jumlah produk yang memiliki stok > 0 pada tanggal pilihan.
   int get jumlahStokTersedia {
+    if (baris.isEmpty && stokPerKode.isNotEmpty) {
+      return stokPerKode.values.where((s) => s > 0).length;
+    }
     final iStok = _indeksStok;
     if (iStok < 0) return 0;
     var n = 0;
     for (final row in baris) {
-      if (iStok < row.length && (_angkaOpsional(row[iStok]) ?? 0) > 0) n++;
+      if (angkaStokBaris(row) > 0) n++;
     }
     return n;
   }
 
   /// Jumlah produk dengan stok menipis (0 < stok <= 5) pada tanggal pilihan.
   int get jumlahStokMenipis {
+    if (baris.isEmpty && stokPerKode.isNotEmpty) {
+      return stokPerKode.values.where((s) => s > 0 && s <= 5).length;
+    }
     final iStok = _indeksStok;
     if (iStok < 0) return 0;
     var n = 0;
     for (final row in baris) {
-      final s = iStok < row.length ? (_angkaOpsional(row[iStok]) ?? 0) : 0.0;
+      final s = angkaStokBaris(row);
       if (s > 0 && s <= 5) n++;
     }
     return n;
@@ -237,24 +298,28 @@ class HasilStokTanggal {
 
   /// Jumlah produk dengan stok habis (= 0) pada tanggal pilihan.
   int get jumlahStokHabis {
+    if (baris.isEmpty && stokPerKode.isNotEmpty) {
+      return stokPerKode.values.where((s) => s == 0).length;
+    }
     final iStok = _indeksStok;
     if (iStok < 0) return 0;
     var n = 0;
     for (final row in baris) {
-      final s = iStok < row.length ? (_angkaOpsional(row[iStok]) ?? 0) : 0.0;
-      if (s == 0) n++;
+      if (angkaStokBaris(row) == 0) n++;
     }
     return n;
   }
 
   /// Jumlah produk dengan stok minus (< 0) pada tanggal pilihan.
   int get jumlahStokMinus {
+    if (baris.isEmpty && stokPerKode.isNotEmpty) {
+      return stokPerKode.values.where((s) => s < 0).length;
+    }
     final iStok = _indeksStok;
     if (iStok < 0) return 0;
     var n = 0;
     for (final row in baris) {
-      final s = iStok < row.length ? (_angkaOpsional(row[iStok]) ?? 0) : 0.0;
-      if (s < 0) n++;
+      if (angkaStokBaris(row) < 0) n++;
     }
     return n;
   }
@@ -265,6 +330,7 @@ class HasilStokTanggal {
           kolom[i].toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
       if (normal == 'kode' || normal.contains('kode')) return i;
     }
+    if (baris.isNotEmpty && baris.first.isNotEmpty) return 0;
     return -1;
   }
 
