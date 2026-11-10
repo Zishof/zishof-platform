@@ -4,6 +4,7 @@ import '../../widgets/dashboard_charts.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
 import '../../widgets/penanda_data_tersimpan.dart';
+import '../../widgets/rincian_intip_dialog.dart';
 import 'muat_dashboard.dart';
 
 /// Tab 2/9 "Keuangan & Kinerja" -- aksi `dashboard_keuangan` (semua jendela
@@ -129,10 +130,96 @@ class _RingkasanTabKeuanganState extends State<RingkasanTabKeuangan> with JejakG
           ),
           const SizedBox(height: 12),
           BarisKpi(kartu: [
-            KartuKpi(label: 'Omzet (14 hari)$_sufiksAcuan', nilai: formatRupiahDasbor.format(labaKpi['omzet'] ?? 0), warna: const Color(0xFF1E3A5F)),
-            KartuKpi(label: 'Modal (14 hari)$_sufiksAcuan', nilai: formatRupiahDasbor.format(labaKpi['modal'] ?? 0), warna: const Color(0xFFC0563D)),
-            KartuKpi(label: 'Laba Kotor$_sufiksAcuan', nilai: formatRupiahDasbor.format(labaKpi['labaKotor'] ?? 0), warna: const Color(0xFF2E7D32)),
-            KartuKpi(label: 'Margin$_sufiksAcuan', nilai: '${((labaKpi['marginPersen'] as num?) ?? 0).toStringAsFixed(1)}%', warna: const Color(0xFF0284C7)),
+            KartuKpi(
+              label: 'Omzet (14 hari)$_sufiksAcuan',
+              nilai: formatRupiahDasbor.format(labaKpi['omzet'] ?? 0),
+              warna: const Color(0xFF1E3A5F),
+              onTap: () => tampilkanRincianKlikDialog(
+                context,
+                judul: 'Rincian Tren Omzet & Laba Harian (14 Hari)',
+                subjudul:
+                    'Total Omzet: ${formatRupiahDasbor.format(labaKpi['omzet'] ?? 0)} | Laba Kotor: ${formatRupiahDasbor.format(labaKpi['labaKotor'] ?? 0)}',
+                kolom: const ['No', 'Tanggal', 'Omzet', 'Modal / HPP', 'Laba Kotor'],
+                baris: trenLaba
+                    .asMap()
+                    .entries
+                    .map((e) => <Object?>[
+                          e.key + 1,
+                          e.value['tanggal'] ?? '-',
+                          formatRupiahDasbor.format(e.value['omzet'] ?? 0),
+                          formatRupiahDasbor.format(e.value['modal'] ?? 0),
+                          formatRupiahDasbor.format(e.value['laba'] ?? 0),
+                        ])
+                    .toList(),
+              ),
+            ),
+            KartuKpi(
+              label: 'Modal / HPP (14 hari)$_sufiksAcuan',
+              nilai: formatRupiahDasbor.format(labaKpi['modal'] ?? 0),
+              warna: const Color(0xFFC0563D),
+              onTap: () => tampilkanRincianKlikDialog(
+                context,
+                judul: 'Rincian Modal / HPP (14 Hari)',
+                subjudul: 'Total Modal: ${formatRupiahDasbor.format(labaKpi['modal'] ?? 0)}',
+                kolom: const ['No', 'Tanggal', 'Omzet', 'Modal / HPP', 'Laba Kotor'],
+                baris: trenLaba
+                    .asMap()
+                    .entries
+                    .map((e) => <Object?>[
+                          e.key + 1,
+                          e.value['tanggal'] ?? '-',
+                          formatRupiahDasbor.format(e.value['omzet'] ?? 0),
+                          formatRupiahDasbor.format(e.value['modal'] ?? 0),
+                          formatRupiahDasbor.format(e.value['laba'] ?? 0),
+                        ])
+                    .toList(),
+              ),
+            ),
+            KartuKpi(
+              label: 'Laba Kotor (GM Rp)$_sufiksAcuan',
+              nilai: formatRupiahDasbor.format(labaKpi['labaKotor'] ?? 0),
+              warna: const Color(0xFF2E7D32),
+              onTap: () => tampilkanRincianKlikDialog(
+                context,
+                judul: 'Rincian Laba Kotor / Gross Margin (Rp)',
+                subjudul:
+                    'Laba Kotor: ${formatRupiahDasbor.format(labaKpi['labaKotor'] ?? 0)} (GM%: ${((labaKpi['marginPersen'] as num?) ?? 0).toStringAsFixed(1)}%)',
+                kolom: const ['No', 'Tanggal', 'Omzet', 'Modal / HPP', 'Laba Kotor'],
+                baris: trenLaba
+                    .asMap()
+                    .entries
+                    .map((e) => <Object?>[
+                          e.key + 1,
+                          e.value['tanggal'] ?? '-',
+                          formatRupiahDasbor.format(e.value['omzet'] ?? 0),
+                          formatRupiahDasbor.format(e.value['modal'] ?? 0),
+                          formatRupiahDasbor.format(e.value['laba'] ?? 0),
+                        ])
+                    .toList(),
+              ),
+            ),
+            KartuKpi(
+              label: 'GM (%) Margin$_sufiksAcuan',
+              nilai: '${((labaKpi['marginPersen'] as num?) ?? 0).toStringAsFixed(1)}%',
+              warna: const Color(0xFF0284C7),
+              onTap: () => tampilkanRincianKlikDialog(
+                context,
+                judul: 'Rincian Gross Margin (%) per Menu / Produk',
+                subjudul:
+                    'Rata-rata Margin: ${((labaKpi['marginPersen'] as num?) ?? 0).toStringAsFixed(1)}%',
+                kolom: const ['No', 'Tenant / Toko', 'Produk / Menu', 'Margin (%)'],
+                baris: rekapMenu
+                    .asMap()
+                    .entries
+                    .map((e) => <Object?>[
+                          e.key + 1,
+                          e.value['tenant'] ?? '-',
+                          e.value['menu'] ?? '-',
+                          '${((e.value['marginPersen'] as num?) ?? 0).toStringAsFixed(1)}%',
+                        ])
+                    .toList(),
+              ),
+            ),
           ]),
           const SizedBox(height: 12),
           PanelChart(
@@ -177,10 +264,91 @@ class _RingkasanTabKeuanganState extends State<RingkasanTabKeuangan> with JejakG
           Text('Resep, HPP & Margin', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           BarisKpi(kartu: [
-            KartuKpi(label: 'Menu Ber-Resep', nilai: '${resepKpi['menuBerResep'] ?? 0}', warna: const Color(0xFF1E3A5F)),
-            KartuKpi(label: 'Rata Margin', nilai: '${((resepKpi['rataMargin'] as num?) ?? 0).toStringAsFixed(1)}%', warna: const Color(0xFF2E7D32)),
-            KartuKpi(label: 'Margin Tertipis', nilai: '${resepKpi['marginTertipisNama'] ?? '-'}', warna: Colors.red),
-            KartuKpi(label: 'Bahan Terpakai (30h)$_sufiksAcuan', nilai: formatRupiahDasbor.format(resepKpi['nilaiBahanTerpakai'] ?? 0), warna: const Color(0xFFB8860B)),
+            KartuKpi(
+              label: 'Menu Ber-Resep',
+              nilai: '${resepKpi['menuBerResep'] ?? 0}',
+              warna: const Color(0xFF1E3A5F),
+              onTap: () => tampilkanRincianKlikDialog(
+                context,
+                judul: 'Rincian Rekap Menu & Margin HPP',
+                subjudul: 'Total Menu Ber-Resep: ${resepKpi['menuBerResep'] ?? 0}',
+                kolom: const ['No', 'Tenant', 'Nama Menu', 'Margin (%)'],
+                baris: rekapMenu
+                    .asMap()
+                    .entries
+                    .map((e) => <Object?>[
+                          e.key + 1,
+                          e.value['tenant'] ?? '-',
+                          e.value['menu'] ?? '-',
+                          '${((e.value['marginPersen'] as num?) ?? 0).toStringAsFixed(1)}%',
+                        ])
+                    .toList(),
+              ),
+            ),
+            KartuKpi(
+              label: 'Rata Margin',
+              nilai: '${((resepKpi['rataMargin'] as num?) ?? 0).toStringAsFixed(1)}%',
+              warna: const Color(0xFF2E7D32),
+              onTap: () => tampilkanRincianKlikDialog(
+                context,
+                judul: 'Rincian Margin Menu',
+                subjudul:
+                    'Rata-rata Margin: ${((resepKpi['rataMargin'] as num?) ?? 0).toStringAsFixed(1)}%',
+                kolom: const ['No', 'Tenant', 'Nama Menu', 'Margin (%)'],
+                baris: rekapMenu
+                    .asMap()
+                    .entries
+                    .map((e) => <Object?>[
+                          e.key + 1,
+                          e.value['tenant'] ?? '-',
+                          e.value['menu'] ?? '-',
+                          '${((e.value['marginPersen'] as num?) ?? 0).toStringAsFixed(1)}%',
+                        ])
+                    .toList(),
+              ),
+            ),
+            KartuKpi(
+              label: 'Margin Tertipis',
+              nilai: '${resepKpi['marginTertipisNama'] ?? '-'}',
+              warna: Colors.red,
+              onTap: () => tampilkanRincianKlikDialog(
+                context,
+                judul: 'Rincian Menu Berdasarkan Margin',
+                subjudul: 'Margin Tertipis: ${resepKpi['marginTertipisNama'] ?? '-'}',
+                kolom: const ['No', 'Tenant', 'Nama Menu', 'Margin (%)'],
+                baris: rekapMenu
+                    .asMap()
+                    .entries
+                    .map((e) => <Object?>[
+                          e.key + 1,
+                          e.value['tenant'] ?? '-',
+                          e.value['menu'] ?? '-',
+                          '${((e.value['marginPersen'] as num?) ?? 0).toStringAsFixed(1)}%',
+                        ])
+                    .toList(),
+              ),
+            ),
+            KartuKpi(
+              label: 'Bahan Terpakai (30h)$_sufiksAcuan',
+              nilai: formatRupiahDasbor.format(resepKpi['nilaiBahanTerpakai'] ?? 0),
+              warna: const Color(0xFFB8860B),
+              onTap: () => tampilkanRincianKlikDialog(
+                context,
+                judul: 'Rincian Pemakaian Bahan Baku (30 Hari)',
+                subjudul:
+                    'Total Nilai Pemakaian: ${formatRupiahDasbor.format(resepKpi['nilaiBahanTerpakai'] ?? 0)}',
+                kolom: const ['No', 'Nama Bahan Baku', 'Nilai Pemakaian'],
+                baris: rekapBahan
+                    .asMap()
+                    .entries
+                    .map((e) => <Object?>[
+                          e.key + 1,
+                          e.value['nama'] ?? '-',
+                          formatRupiahDasbor.format(e.value['nilai'] ?? 0),
+                        ])
+                    .toList(),
+              ),
+            ),
           ]),
           const SizedBox(height: 12),
           if (rekapMenu.isNotEmpty)

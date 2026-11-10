@@ -32,15 +32,21 @@ class KartuKpi extends StatelessWidget {
   final String label;
   final String nilai;
   final Color warna;
+  final String? sublabel;
+  final VoidCallback? onTap;
+  final String? tooltip;
   const KartuKpi(
       {super.key,
       required this.label,
       required this.nilai,
-      required this.warna});
+      required this.warna,
+      this.sublabel,
+      this.onTap,
+      this.tooltip});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final kartu = Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: warna.withValues(alpha: 0.08),
@@ -52,19 +58,59 @@ class KartuKpi extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(nilai,
-              style: TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 15, color: warna),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis),
+          Row(
+            children: [
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(nilai,
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: warna),
+                      maxLines: 1,
+                      softWrap: false),
+                ),
+              ),
+              if (onTap != null)
+                Icon(Icons.open_in_new,
+                    size: 13, color: warna.withValues(alpha: 0.7)),
+            ],
+          ),
           Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 11,
               color: AppColors.textSecondaryOf(context),
             ),
           ),
+          if (sublabel != null && sublabel!.isNotEmpty)
+            Text(
+              sublabel!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: warna.withValues(alpha: 0.85),
+              ),
+            ),
         ],
+      ),
+    );
+    if (onTap == null) return kartu;
+    return Tooltip(
+      message: tooltip ?? 'Klik untuk melihat rincian $label (Excel & PDF)',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: onTap,
+          child: kartu,
+        ),
       ),
     );
   }

@@ -5,11 +5,16 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 import '../api_client.dart';
+import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/aksi_baris_menu.dart';
+import '../widgets/rincian_intip_dialog.dart';
 
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
 
@@ -204,6 +209,123 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
     }
   }
 
+  Future<void> _cetakPdfRekap() async {
+    if (_data.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tidak ada data pergerakan stok untuk dicetak.')),
+      );
+      return;
+    }
+    try {
+      final doc = pw.Document();
+      doc.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4.landscape,
+          margin: const pw.EdgeInsets.all(20),
+          header: (_) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'Rekap Pergerakan & Audit Stok · ${Sesi.instance.tokoNama}',
+                style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+              ),
+              pw.Text(
+                'Periode: ${_formatTglTampilan(_tglMulai)} s/d ${_formatTglTampilan(_tglSampai)} · Dicetak: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
+                style: const pw.TextStyle(fontSize: 8.5),
+              ),
+              pw.SizedBox(height: 8),
+            ],
+          ),
+          build: (_) => [
+            pw.TableHelper.fromTextArray(
+              headers: const [
+                'Grup',
+                'Kode',
+                'Nama Produk',
+                'Saldo Awal',
+                'Masuk',
+                'Retur',
+                'Penjualan',
+                'Keluar',
+                'Opname (+)',
+                'Opname (-)',
+                'Saldo Akhir',
+                'Status Audit',
+              ],
+              data: _data.map((item) {
+                return [
+                  '${item['kategori'] ?? '-'}',
+                  '${item['kode'] ?? '-'}',
+                  '${item['nama'] ?? '-'}',
+                  _formatAngka.format((item['awal'] as num?) ?? 0),
+                  _formatAngka.format((item['masuk'] as num?) ?? 0),
+                  _formatAngka.format((item['retur'] as num?) ?? 0),
+                  _formatAngka.format((item['penjualan'] as num?) ?? 0),
+                  _formatAngka.format((item['keluar'] as num?) ?? 0),
+                  _formatAngka.format((item['opnameMasuk'] as num?) ?? 0),
+                  _formatAngka.format((item['opnameKeluar'] as num?) ?? 0),
+                  _formatAngka.format((item['sisa'] as num?) ?? 0),
+                  '${item['statusAudit'] ?? 'Normal'}',
+                ];
+              }).toList(),
+              headerStyle: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+              cellStyle: const pw.TextStyle(fontSize: 7),
+            ),
+          ],
+        ),
+      );
+      await Printing.layoutPdf(
+        onLayout: (_) async => doc.save(),
+        name: 'Rekap_Pergerakan_Stok_${_formatTglParam(_tglMulai)}_${_formatTglParam(_tglSampai)}.pdf',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal mencetak PDF: $e')),
+      );
+    }
+  }
+
+  void _intipRingkasanKategori(String judul, bool Function(Map<String, dynamic>) predikat) {
+    final cocok = _data.where(predikat).toList();
+    tampilkanRincianKlikDialog(
+      context,
+      judul: 'Rincian $judul',
+      subjudul:
+          'Periode ${_formatTglTampilan(_tglMulai)} - ${_formatTglTampilan(_tglSampai)} (${cocok.length} Produk)',
+      kolom: const [
+        'Grup',
+        'Kode',
+        'Nama Produk',
+        'Saldo Awal',
+        'Masuk',
+        'Retur',
+        'Penjualan',
+        'Keluar',
+        'Opname (+)',
+        'Opname (-)',
+        'Saldo Akhir',
+        'Status Audit',
+      ],
+      baris: cocok
+          .map((item) => <Object?>[
+                item['kategori'] ?? '-',
+                item['kode'] ?? '-',
+                item['nama'] ?? '-',
+                _formatAngka.format((item['awal'] as num?) ?? 0),
+                _formatAngka.format((item['masuk'] as num?) ?? 0),
+                _formatAngka.format((item['retur'] as num?) ?? 0),
+                _formatAngka.format((item['penjualan'] as num?) ?? 0),
+                _formatAngka.format((item['keluar'] as num?) ?? 0),
+                _formatAngka.format((item['opnameMasuk'] as num?) ?? 0),
+                _formatAngka.format((item['opnameKeluar'] as num?) ?? 0),
+                _formatAngka.format((item['sisa'] as num?) ?? 0),
+                item['statusAudit'] ?? 'Normal',
+              ])
+          .toList(),
+    );
+  }
+
   void _bukaDetailProduk(Map<String, dynamic> item) {
     final idProduk = (item['id'] as num?)?.toInt() ?? 0;
     if (idProduk <= 0) return;
@@ -253,23 +375,31 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
     );
   }
 
-  Widget _buildSummaryMini(String title, num val, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('$title: ', style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
-          Text(
-            _formatAngka.format(val),
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color),
-          ),
-        ],
+  Widget _buildSummaryMini(String title, num val, Color color, {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('$title: ', style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
+            Text(
+              _formatAngka.format(val),
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color),
+            ),
+            if (onTap != null) ...[
+              const SizedBox(width: 4),
+              Icon(Icons.open_in_new, size: 11, color: color.withValues(alpha: 0.7)),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -427,7 +557,7 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
                 OutlinedButton.icon(
                   onPressed: _memuat ? null : _eksporExcel,
                   icon: const Icon(Icons.file_download, size: 16, color: Colors.green),
-                  label: const Text('Unduh Excel', style: TextStyle(color: Colors.green)),
+                  label: const Text('Download Excel', style: TextStyle(color: Colors.green)),
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Colors.green),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -435,17 +565,77 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
                   ),
                 ),
 
+                // Tombol Cetak PDF
+                OutlinedButton.icon(
+                  onPressed: _memuat ? null : _cetakPdfRekap,
+                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 16, color: Colors.redAccent),
+                  label: const Text('Cetak PDF', style: TextStyle(color: Colors.redAccent)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.redAccent),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+
                 if (_ringkasanTotal != null) ...[
-                  _buildSummaryMini('Masuk', (_ringkasanTotal!['masuk'] as num?) ?? 0, Colors.green),
-                  _buildSummaryMini('Retur', (_ringkasanTotal!['retur'] as num?) ?? 0, Colors.blue),
-                  _buildSummaryMini('Penjualan', (_ringkasanTotal!['penjualan'] as num?) ?? 0, Colors.orange),
-                  _buildSummaryMini('Keluar', (_ringkasanTotal!['keluar'] as num?) ?? 0, Colors.red),
-                  _buildSummaryMini('Opname (+)', (_ringkasanTotal!['opnameMasuk'] as num?) ?? 0, Colors.purple),
-                  _buildSummaryMini('Opname (-)', (_ringkasanTotal!['opnameKeluar'] as num?) ?? 0, Colors.pink),
+                  _buildSummaryMini(
+                    'Masuk',
+                    (_ringkasanTotal!['masuk'] as num?) ?? 0,
+                    Colors.green,
+                    onTap: () => _intipRingkasanKategori(
+                        'Barang Masuk', (i) => ((i['masuk'] as num?) ?? 0) > 0),
+                  ),
+                  _buildSummaryMini(
+                    'Retur',
+                    (_ringkasanTotal!['retur'] as num?) ?? 0,
+                    Colors.blue,
+                    onTap: () => _intipRingkasanKategori(
+                        'Retur Penjualan', (i) => ((i['retur'] as num?) ?? 0) > 0),
+                  ),
+                  _buildSummaryMini(
+                    'Penjualan',
+                    (_ringkasanTotal!['penjualan'] as num?) ?? 0,
+                    Colors.orange,
+                    onTap: () => _intipRingkasanKategori(
+                        'Penjualan Kasir', (i) => ((i['penjualan'] as num?) ?? 0) > 0),
+                  ),
+                  _buildSummaryMini(
+                    'Keluar',
+                    (_ringkasanTotal!['keluar'] as num?) ?? 0,
+                    Colors.red,
+                    onTap: () => _intipRingkasanKategori(
+                        'Total Barang Keluar', (i) => ((i['keluar'] as num?) ?? 0) > 0),
+                  ),
+                  _buildSummaryMini(
+                    'Opname (+)',
+                    (_ringkasanTotal!['opnameMasuk'] as num?) ?? 0,
+                    Colors.purple,
+                    onTap: () => _intipRingkasanKategori(
+                        'Koreksi Opname (+)', (i) => ((i['opnameMasuk'] as num?) ?? 0) > 0),
+                  ),
+                  _buildSummaryMini(
+                    'Opname (-)',
+                    (_ringkasanTotal!['opnameKeluar'] as num?) ?? 0,
+                    Colors.pink,
+                    onTap: () => _intipRingkasanKategori(
+                        'Koreksi Opname (-)', (i) => ((i['opnameKeluar'] as num?) ?? 0) > 0),
+                  ),
                   if (((_ringkasanTotal!['jmlDinolkanSo'] as num?) ?? 0) > 0)
-                    _buildSummaryMini('SO->0', (_ringkasanTotal!['jmlDinolkanSo'] as num?) ?? 0, Colors.deepOrange),
+                    _buildSummaryMini(
+                      'SO->0',
+                      (_ringkasanTotal!['jmlDinolkanSo'] as num?) ?? 0,
+                      Colors.deepOrange,
+                      onTap: () => _intipRingkasanKategori(
+                          'Barang Dinolkan saat SO', (i) => i['statusKode'] == 'DINOLKAN_SO'),
+                    ),
                   if (((_ringkasanTotal!['jmlStokMinus'] as num?) ?? 0) > 0)
-                    _buildSummaryMini('Stok Minus', (_ringkasanTotal!['jmlStokMinus'] as num?) ?? 0, Colors.red.shade900),
+                    _buildSummaryMini(
+                      'Stok Minus',
+                      (_ringkasanTotal!['jmlStokMinus'] as num?) ?? 0,
+                      Colors.red.shade900,
+                      onTap: () => _intipRingkasanKategori(
+                          'Barang Stok Minus (< 0)', (i) => ((i['sisa'] as num?) ?? 0) < 0),
+                    ),
                 ],
               ],
             ),
@@ -740,6 +930,104 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
     }
   }
 
+  Future<void> _cetakPdfProduk() async {
+    try {
+      final awal = (_ringkasan?['awal'] as num?)?.toDouble() ?? 0;
+      final sisa = (_ringkasan?['sisa'] as num?)?.toDouble() ?? 0;
+      final doc = pw.Document();
+      doc.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4.landscape,
+          margin: const pw.EdgeInsets.all(20),
+          header: (_) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'Buku Besar Pergerakan Stok · ${widget.namaProduk}',
+                style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+              ),
+              pw.Text(
+                'Kode: ${widget.kodeProduk.isEmpty ? '-' : widget.kodeProduk} | Grup: ${widget.kategori} | Periode: ${_formatTglTampilan(widget.tglMulai)} - ${_formatTglTampilan(widget.tglSampai)} | Saldo Awal: ${_formatAngka.format(awal)} | Saldo Akhir: ${_formatAngka.format(sisa)}',
+                style: const pw.TextStyle(fontSize: 8.5),
+              ),
+              pw.SizedBox(height: 8),
+            ],
+          ),
+          build: (_) => [
+            pw.TableHelper.fromTextArray(
+              headers: const [
+                'No',
+                'Tanggal & Jam',
+                'No Faktur',
+                'Kode Mutasi',
+                'ID Pelanggan',
+                'Pelanggan / Petugas',
+                'Saldo Awal',
+                'Masuk',
+                'Keluar',
+                'Saldo Akhir',
+                'Rincian Audit / Keterangan',
+              ],
+              data: [
+                [
+                  '1',
+                  '${_formatTglTampilan(widget.tglMulai)} 00:00',
+                  'SA-001',
+                  '100',
+                  '-',
+                  'Saldo awal',
+                  '-',
+                  '-',
+                  '-',
+                  _formatAngka.format(awal),
+                  'Saldo awal periode',
+                ],
+                ..._mutasi.asMap().entries.map((entry) {
+                  final idx = entry.key + 2;
+                  final m = entry.value;
+                  final tAwal = (m['awal'] as num?)?.toDouble() ?? 0;
+                  final tMasuk = (m['masuk'] as num?)?.toDouble() ?? 0;
+                  final tKeluar = (m['keluar'] as num?)?.toDouble() ?? 0;
+                  final tSisa = (m['sisa'] as num?)?.toDouble() ?? 0;
+                  final namaPel = (m['namaPelanggan'] as String?) ?? '';
+                  final oleh = (m['oleh'] as String?) ?? '';
+                  final tipe = (m['tipe'] as String?) ?? '';
+                  final pelaku = namaPel.isNotEmpty
+                      ? (oleh.isNotEmpty && oleh != namaPel ? '$namaPel ($oleh)' : namaPel)
+                      : (oleh.isNotEmpty ? oleh : (tipe.isNotEmpty ? tipe : '-'));
+                  return [
+                    '$idx',
+                    '${m['tanggal'] ?? '-'}',
+                    '${m['referensi'] ?? '-'}',
+                    '${m['kodeMutasi'] ?? '000'}',
+                    '${m['idPelanggan'] ?? '-'}',
+                    pelaku,
+                    _formatAngka.format(tAwal),
+                    tMasuk > 0 ? '+${_formatAngka.format(tMasuk)}' : '-',
+                    tKeluar > 0 ? '-${_formatAngka.format(tKeluar)}' : '-',
+                    _formatAngka.format(tSisa),
+                    '${(m['keterangan'] as String?)?.isNotEmpty == true ? m['keterangan'] : tipe}',
+                  ];
+                }),
+              ],
+              headerStyle: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+              cellStyle: const pw.TextStyle(fontSize: 7),
+            ),
+          ],
+        ),
+      );
+      await Printing.layoutPdf(
+        onLayout: (_) async => doc.save(),
+        name: 'Buku_Besar_${widget.kodeProduk.isEmpty ? widget.idProduk : widget.kodeProduk}.pdf',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal mencetak PDF: $e')),
+      );
+    }
+  }
+
   void _bukaAnalisisCerdas() {
     showDialog(
       context: context,
@@ -808,10 +1096,16 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
     final opnameKeluar = (_ringkasan?['opnameKeluar'] as num?)?.toDouble() ?? 0;
     final sisa = (_ringkasan?['sisa'] as num?)?.toDouble() ?? 0;
 
+    final screenSize = MediaQuery.sizeOf(context);
+    final dialogWidth = (screenSize.width * 0.95).clamp(360.0, 1680.0);
+    final dialogHeight = (screenSize.height * 0.88).clamp(360.0, 960.0);
+
     return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1120, maxHeight: 740),
+      child: SizedBox(
+        width: dialogWidth,
+        height: dialogHeight,
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -837,10 +1131,22 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
                       ],
                     ),
                   ),
+                  OutlinedButton.icon(
+                    onPressed: _eksporExcelProduk,
+                    icon: const Icon(Icons.file_download_outlined, size: 16),
+                    label: const Text('Download Excel'),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: _cetakPdfProduk,
+                    icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+                    label: const Text('Cetak PDF'),
+                  ),
+                  const SizedBox(width: 8),
                   FilledButton.tonalIcon(
                     onPressed: _bukaAnalisisCerdas,
                     icon: const Icon(Icons.auto_awesome, size: 17),
-                    label: const Text('Analisis Cerdas Produk Ini'),
+                    label: const Text('Analisis Cerdas'),
                   ),
                   const SizedBox(width: 8),
                   AksiBarisMenu(tooltip: 'Aksi rincian mutasi', aksi: [
@@ -851,8 +1157,13 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
                     ),
                     AksiBaris(
                       ikon: Icons.file_download_outlined,
-                      label: 'Unduh Excel',
+                      label: 'Download Excel',
                       onTap: _eksporExcelProduk,
+                    ),
+                    AksiBaris(
+                      ikon: Icons.picture_as_pdf_outlined,
+                      label: 'Cetak PDF',
+                      onTap: _cetakPdfProduk,
                     ),
                     AksiBaris(
                       ikon: Icons.close,
@@ -867,14 +1178,14 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
               // 8 Summary Cards (termasuk Opname + dan Opname -)
               Row(
                 children: [
-                  _buildSummaryCard('Awal', awal, Colors.blueGrey),
+                  _buildSummaryCard('Saldo Awal', awal, Colors.blueGrey),
                   _buildSummaryCard('Masuk', masuk, Colors.green),
                   _buildSummaryCard('Pengembalian', retur, Colors.blue),
                   _buildSummaryCard('Penjualan', penjualan, Colors.orange),
                   _buildSummaryCard('Keluar', keluar, Colors.red),
                   _buildSummaryCard('Opname (+)', opnameMasuk, Colors.purple),
                   _buildSummaryCard('Opname (-)', opnameKeluar, Colors.pink),
-                  _buildSummaryCard('Sisa', sisa, Colors.indigo),
+                  _buildSummaryCard('Saldo Akhir', sisa, Colors.indigo),
                 ],
               ),
               const SizedBox(height: 16),
@@ -900,18 +1211,18 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
                                       scrollDirection: Axis.horizontal,
                                       child: DataTable(
                                         headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
-                                        columnSpacing: 20,
+                                        columnSpacing: 22,
                                         columns: const [
                                           DataColumn(label: Text('No', style: TextStyle(fontWeight: FontWeight.bold))),
-                                          DataColumn(label: Text('Tanggal & jam', style: TextStyle(fontWeight: FontWeight.bold))),
+                                          DataColumn(label: Text('Tanggal & Jam', style: TextStyle(fontWeight: FontWeight.bold))),
                                           DataColumn(label: Text('No Faktur', style: TextStyle(fontWeight: FontWeight.bold))),
-                                          DataColumn(label: Text('kode mutasi', style: TextStyle(fontWeight: FontWeight.bold))),
+                                          DataColumn(label: Text('Kode Mutasi', style: TextStyle(fontWeight: FontWeight.bold))),
                                           DataColumn(label: Text('ID Pelanggan', style: TextStyle(fontWeight: FontWeight.bold))),
                                           DataColumn(label: Text('Pelanggan / Petugas', style: TextStyle(fontWeight: FontWeight.bold))),
-                                          DataColumn(numeric: true, label: Text('Saldo sebelum', style: TextStyle(fontWeight: FontWeight.bold))),
+                                          DataColumn(numeric: true, label: Text('Saldo Awal', style: TextStyle(fontWeight: FontWeight.bold))),
                                           DataColumn(numeric: true, label: Text('Masuk', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green))),
                                           DataColumn(numeric: true, label: Text('Keluar', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red))),
-                                          DataColumn(numeric: true, label: Text('Saldo', style: TextStyle(fontWeight: FontWeight.bold))),
+                                          DataColumn(numeric: true, label: Text('Saldo Akhir', style: TextStyle(fontWeight: FontWeight.bold))),
                                           DataColumn(label: Text('Rincian Audit / Keterangan', style: TextStyle(fontWeight: FontWeight.bold))),
                                         ],
                                         rows: [

@@ -27,6 +27,7 @@ import '../services/transaksi_rekonsiliasi_service.dart';
 import '../widgets/jejak_galat.dart';
 import '../widgets/aksi_baris_menu.dart';
 import '../widgets/pemilih_metode_split.dart';
+import '../widgets/rincian_intip_dialog.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -2532,10 +2533,14 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                   await _forceKirimAtauCekServer(row);
                 },
               ),
-            if (hasil['bolehEditTransaksi'] == true)
+            if (hasil['bolehEditTransaksi'] == true ||
+                hasil['bisaEditDenganSupervisor'] == true ||
+                row['idTransaksi'] != null)
               TextButton.icon(
                 icon: const Icon(Icons.edit_note_outlined, size: 19),
-                label: const Text('Edit Transaksi'),
+                label: Text(Sesi.instance.bolehKelola
+                    ? 'Edit Transaksi'
+                    : 'Edit Transaksi (Supervisor)'),
                 onPressed: () {
                   Navigator.of(context).pop();
                   _editTransaksi(row, hasil, items);
@@ -2556,12 +2561,12 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                   if (aktif && mounted) await _lihatDetail(row);
                 },
               ),
-            if (row['idTransaksi'] != null &&
-                (Sesi.instance.bolehAksiPos('riwayatpenjualan', 'delete') ||
-                    Sesi.instance.bolehAksiPos('riwayatpenjualan', 'reject')))
+            if (row['idTransaksi'] != null)
               TextButton.icon(
                 icon: const Icon(Icons.cancel_outlined, size: 18),
-                label: const Text('Batalkan Transaksi'),
+                label: Text(Sesi.instance.bolehKelola
+                    ? 'Batalkan Transaksi'
+                    : 'Batalkan Transaksi (Supervisor)'),
                 style: TextButton.styleFrom(foregroundColor: Colors.red),
                 onPressed: () {
                   Navigator.of(context).pop();
@@ -2639,6 +2644,15 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
   }
 
   Future<void> _batalkanTransaksi(Map<String, dynamic> row) async {
+    Map<String, String>? otorisasi;
+    if (!Sesi.instance.bolehKelola && !Sesi.instance.isAdmin) {
+      otorisasi = await tampilkanDialogOtorisasiSupervisor(
+        context,
+        namaTindakan: 'Batalkan Transaksi',
+        nomorNota: '${row['nomorNota'] ?? ''}',
+      );
+      if (otorisasi == null || !mounted) return;
+    }
     final alasanController = TextEditingController();
     final setuju = await showDialog<bool>(
       context: context,
@@ -2693,6 +2707,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
         'id': row['idTransaksi'],
         'alasan': alasan,
         'idempotency_key': key,
+        if (otorisasi != null) ...otorisasi,
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -2708,6 +2723,15 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
 
   Future<void> _editTransaksi(Map<String, dynamic> row,
       Map<String, dynamic> detail, List<Map<String, dynamic>> items) async {
+    Map<String, String>? otorisasi;
+    if (!Sesi.instance.bolehKelola && !Sesi.instance.isAdmin) {
+      otorisasi = await tampilkanDialogOtorisasiSupervisor(
+        context,
+        namaTindakan: 'Edit Transaksi',
+        nomorNota: '${detail['kode'] ?? row['nomorNota'] ?? ''}',
+      );
+      if (otorisasi == null || !mounted) return;
+    }
     final hasilEdit = await showDialog<Map<String, dynamic>>(
       context: context,
       barrierDismissible: false,
@@ -2746,6 +2770,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
           'nama_member': hasilEdit['nama_member'],
         if (hasilEdit['kasir_user_id'] != null)
           'kasir_user_id': hasilEdit['kasir_user_id'],
+        if (otorisasi != null) ...otorisasi,
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -3266,6 +3291,45 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
 
   int get _totalHalaman => (_total / _pageSize).ceil().clamp(1, 999999);
 
+  Future<void> _tampilkanRincianKpiRiwayat(String judul) async {
+    await tampilkanRincianKlikDialog(
+      context,
+      judul: judul,
+      subjudul: 'Rincian transaksi pada halaman yang sedang ditampilkan',
+      ringkasanTeks:
+          'Total: $_total nota · Omzet: ${_formatRupiah.format(_omzetTotal)}',
+      kolom: const [
+        'Nomor Nota',
+        'Waktu',
+        'Pembeli',
+        'Kasir / Mesin',
+        'Metode Bayar',
+        'Total (Rp)',
+      ],
+      baris: _data.map((row) {
+        final kasir = '${row['kasir'] ?? '-'}';
+        final mesin = '${row['namaMesin'] ?? ''}'.trim();
+        return <Object?>[
+          row['nomorNota'] ?? '-',
+          _formatWaktu(row['waktu']),
+          row['pembeli'] ?? 'Umum',
+          mesin.isEmpty ? kasir : '$kasir / $mesin',
+          StrukScreen.labelPembayaran(row),
+          _formatRupiah.format(row['totalBiaya'] ?? 0),
+        ];
+      }).toList(),
+      barisTotal: [
+        'TOTAL HALAMAN INI',
+        '',
+        '',
+        '',
+        '${_data.length} nota',
+        _formatRupiah.format(_data.fold<double>(
+            0, (s, r) => s + ((r['totalBiaya'] as num?)?.toDouble() ?? 0))),
+      ],
+    );
+  }
+
   Future<void> _mulaiDataSampleTransaksi() async {
     final setuju = await showDialog<bool>(
       context: context,
@@ -3426,15 +3490,17 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                 scrollDirection: Axis.horizontal,
                 children: [
                   SizedBox(
-                      width: 190,
+                      width: 210,
                       child: AppKpiCard(
                           icon: Icons.receipt_long,
                           warna: AppColors.primary,
                           nilai: '$_total',
-                          label: 'Total Transaksi')),
+                          label: 'Total Transaksi',
+                          tooltip: 'Klik untuk rincian daftar transaksi (Excel & PDF)',
+                          onTap: () => _tampilkanRincianKpiRiwayat('Total Transaksi ($_total Nota)'))),
                   const SizedBox(width: 8),
                   SizedBox(
-                    width: 190,
+                    width: 220,
                     child: AppKpiCard(
                       icon: Icons.payments_outlined,
                       warna: AppColors.success,
@@ -3445,6 +3511,23 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                                   _formatTanggalServer.format(_sampai!)
                           ? 'Omzet ${_formatTanggalServer.format(_mulai!)}'
                           : 'Omzet seluruh hasil filter',
+                      tooltip: 'Klik untuk rincian omzet transaksi (Excel & PDF)',
+                      onTap: () => _tampilkanRincianKpiRiwayat(
+                          'Rincian Omzet (${_formatRupiah.format(_omzetTotal)})'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 210,
+                    child: AppKpiCard(
+                      icon: Icons.shopping_bag_outlined,
+                      warna: Colors.purple,
+                      nilai: _formatRupiah.format(
+                          _total > 0 ? (_omzetTotal / _total) : 0),
+                      label: 'APC (Rata-rata Struk)',
+                      tooltip: 'Average Purchase Customer = Omzet / Jumlah Struk',
+                      onTap: () => _tampilkanRincianKpiRiwayat(
+                          'Rincian APC / Rata-rata Belanja per Struk'),
                     ),
                   ),
                 ],

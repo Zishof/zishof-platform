@@ -41,6 +41,7 @@ import 'produk_riwayat_perubahan_tab.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
 import '../widgets/aksi_baris_menu.dart';
+import '../widgets/rincian_intip_dialog.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -742,11 +743,48 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
     return teks;
   }
 
+  Future<void> _tampilkanRincianStokTanggalFilter(String filter) async {
+    final hasil = _stokTanggal;
+    if (hasil == null) return;
+    final iStok = hasil.kolom.indexWhere(
+        (k) => k.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '').startsWith('stok'));
+    final barisTampil = hasil.baris.where((r) {
+      if (iStok < 0 || iStok >= r.length) return true;
+      final v = r[iStok];
+      final s = v is num
+          ? v.toDouble()
+          : (double.tryParse('$v'.replaceAll(',', '.')) ?? 0);
+      switch (filter) {
+        case 'tersedia':
+          return s > 0;
+        case 'menipis':
+          return s > 0 && s <= 5;
+        case 'habis':
+          return s == 0;
+        case 'minus':
+          return s < 0;
+        default:
+          return true;
+      }
+    }).map((r) => r.map<Object?>((c) => c).toList()).toList();
+
+    await tampilkanRincianKlikDialog(
+      context,
+      judul: 'Rincian Stok per Tanggal (${filter.toUpperCase()})',
+      subjudul: _subjudulLaporan,
+      kolom: hasil.kolom,
+      baris: barisTampil,
+      ringkasanTeks:
+          '${barisTampil.length} produk · Total Nilai: ${_formatRupiah.format(hasil.totalNilaiPersediaan ?? 0)}',
+    );
+  }
+
   /// Menampilkan jumlah produk dan total nilai untuk tanggal yang dipilih.
   /// Angka berasal dari baris laporan yang sama dengan rincian dan ekspor.
   Widget _ringkasanStokTanggal() {
     final hasil = _stokTanggal;
     final nilai = hasil?.totalNilaiPersediaan;
+    final fmtAngka = NumberFormat.decimalPattern('id_ID');
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -811,23 +849,71 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                     ? 'Memuat…'
                     : hasil == null
                         ? 'Belum tersedia'
-                        : NumberFormat.decimalPattern('id_ID')
-                            .format(hasil.jumlahProduk),
+                        : fmtAngka.format(hasil.jumlahProduk),
                 ikon: Icons.inventory_2_outlined,
+                onTap: hasil == null
+                    ? null
+                    : () => _tampilkanRincianStokTanggalFilter('semua'),
               ),
+              _KartuRingkasanStok(
+                label: 'Stok Tersedia (> 0)',
+                nilai: _memuatStokTanggal
+                    ? 'Memuat…'
+                    : hasil == null
+                        ? '-'
+                        : fmtAngka.format(hasil.jumlahStokTersedia),
+                ikon: Icons.check_circle_outline,
+                onTap: hasil == null
+                    ? null
+                    : () => _tampilkanRincianStokTanggalFilter('tersedia'),
+              ),
+              _KartuRingkasanStok(
+                label: 'Stok Menipis (1–5)',
+                nilai: _memuatStokTanggal
+                    ? 'Memuat…'
+                    : hasil == null
+                        ? '-'
+                        : fmtAngka.format(hasil.jumlahStokMenipis),
+                ikon: Icons.warning_amber_outlined,
+                onTap: hasil == null
+                    ? null
+                    : () => _tampilkanRincianStokTanggalFilter('menipis'),
+              ),
+              _KartuRingkasanStok(
+                label: 'Stok Habis (0)',
+                nilai: _memuatStokTanggal
+                    ? 'Memuat…'
+                    : hasil == null
+                        ? '-'
+                        : fmtAngka.format(hasil.jumlahStokHabis),
+                ikon: Icons.remove_shopping_cart_outlined,
+                onTap: hasil == null
+                    ? null
+                    : () => _tampilkanRincianStokTanggalFilter('habis'),
+              ),
+              if ((hasil?.jumlahStokMinus ?? 0) > 0)
+                _KartuRingkasanStok(
+                  label: 'Stok Minus (< 0)',
+                  nilai: fmtAngka.format(hasil!.jumlahStokMinus),
+                  ikon: Icons.trending_down_outlined,
+                  onTap: () => _tampilkanRincianStokTanggalFilter('minus'),
+                ),
               _KartuRingkasanStok(
                 label: 'Total Nilai Persediaan',
                 nilai: _memuatStokTanggal
                     ? 'Memuat…'
                     : nilai == null
-                        ? 'Nilai belum tersedia'
+                        ? _formatRupiah.format(0)
                         : _formatRupiah.format(nilai),
                 ikon: Icons.account_balance_wallet_outlined,
+                onTap: hasil == null
+                    ? null
+                    : () => _tampilkanRincianStokTanggalFilter('semua'),
               ),
             ]),
             const SizedBox(height: 10),
             Text(
-              'Nilai dihitung dari stok pada tanggal pilihan dan harga beli produk saat ini. Untuk tanggal lampau, nilai merupakan perkiraan.',
+              'Nilai dihitung dari stok pada tanggal pilihan dan harga beli produk saat ini. Klik kartu di atas untuk melihat rincian & ekspor Excel/PDF.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
@@ -1571,7 +1657,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
       ),
     ];
     return DefaultTabController(
-        length: 5,
+        length: 6,
         initialIndex: _tabAktif,
         child: AppShell(
           menuAktif: MenuEBisnis.produk,
@@ -1586,7 +1672,8 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
           scrollable: false,
           floatingActionButton: _tabAktif == 1 ||
                   _tabAktif == 2 ||
-                  _tabAktif == 4 ||
+                  _tabAktif == 3 ||
+                  _tabAktif == 5 ||
                   (_tabAktif == 0 && !_bolehProduk('create'))
               ? null
               : FloatingActionButton.extended(
@@ -1606,6 +1693,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
             Material(
               color: Theme.of(context).cardColor,
               child: TabBar(
+                isScrollable: true,
                 onTap: (i) => setStateIfMounted(() => _tabAktif = i),
                 tabs: const [
                   Tab(
@@ -1614,6 +1702,9 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                   Tab(
                       text: 'Mutasi Barang',
                       icon: Icon(Icons.swap_horiz_outlined)),
+                  Tab(
+                      text: 'Mutasi Barang per Tanggal',
+                      icon: Icon(Icons.date_range_outlined)),
                   Tab(
                       text: 'Rekonsiliasi Stok',
                       icon: Icon(Icons.fact_check_outlined)),
@@ -1630,14 +1721,19 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                 child: _tabAktif == 1
                     ? const ProdukMutasiBarangTab()
                     : _tabAktif == 2
-                        ? const ProdukRekonsiliasiLedgerTab()
-                        : _tabAktif == 4
-                            ? const ProdukRiwayatPerubahanTab()
-                            : _tabAktif == 3
-                                ? (_memuat
-                                    ? const Center(
-                                        child: CircularProgressIndicator())
-                                    : _daftarKebijakanRetur())
+                        ? const ProdukMutasiBarangTab(
+                            key: ValueKey('mutasi_per_tanggal'),
+                            modePerTanggalLengkap: true,
+                          )
+                        : _tabAktif == 3
+                            ? const ProdukRekonsiliasiLedgerTab()
+                            : _tabAktif == 5
+                                ? const ProdukRiwayatPerubahanTab()
+                                : _tabAktif == 4
+                                    ? (_memuat
+                                        ? const Center(
+                                            child: CircularProgressIndicator())
+                                        : _daftarKebijakanRetur())
                                 : (_memuat && _semuaProduk.isEmpty
                                     ? const Center(
                                         child: CircularProgressIndicator())
@@ -1979,39 +2075,48 @@ class _KartuRingkasanStok extends StatelessWidget {
   final String label;
   final String nilai;
   final IconData ikon;
+  final VoidCallback? onTap;
 
   const _KartuRingkasanStok({
     required this.label,
     required this.nilai,
     required this.ikon,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) => SizedBox(
-        width: 280,
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            children: [
-              Icon(ikon, color: AppColors.primary),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(label, style: Theme.of(context).textTheme.bodySmall),
-                    const SizedBox(height: 3),
-                    Text(nilai,
-                        style: Theme.of(context).textTheme.titleMedium,
-                        softWrap: true),
-                  ],
+        width: 240,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Icon(ikon, color: AppColors.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(label, style: Theme.of(context).textTheme.bodySmall),
+                      const SizedBox(height: 3),
+                      Text(nilai,
+                          style: Theme.of(context).textTheme.titleMedium,
+                          softWrap: true),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                if (onTap != null)
+                  Icon(Icons.open_in_new,
+                      size: 15, color: AppColors.primary.withValues(alpha: 0.7)),
+              ],
+            ),
           ),
         ),
       );

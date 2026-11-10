@@ -292,6 +292,14 @@ class _LaporanScreenState extends State<LaporanScreen> with JejakGalat {
           judul: judul,
           inline: true);
     }
+    const petaSiklus = {
+      'saldo_awal_akun': 0,
+      'jurnal_penyesuaian': 1,
+      'tutup_buku': 2,
+    };
+    if (petaSiklus.containsKey(id)) {
+      return SiklusAkuntansiScreen(tabAwal: petaSiklus[id]!);
+    }
     // Item lain (mis. laporan ber-URL) tetap memakai jalur pembuka lama.
     return Center(
       child: FilledButton.icon(
@@ -403,7 +411,13 @@ class _LaporanScreenState extends State<LaporanScreen> with JejakGalat {
     for (final item in _pendukung) {
       if (item['id'] == minta) return item;
     }
-    return null;
+    // Fallback langsung bila server belum mengirimkan item di daftar `pendukung`
+    // (mis. sebelum restart server), agar submenu Posting Kulakan, Posting Bayar Hutang,
+    // Posting Terima Piutang, Posting HPP, dan Posting Penjualan selalu membuka panel yang tepat.
+    return <String, dynamic>{
+      'id': minta,
+      'judul': widget.judul,
+    };
   }
 
   Widget _katalog() {

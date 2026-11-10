@@ -205,6 +205,12 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
         headers: const [
           'ID_MEMBER',
           'KODE_MEMBER',
+          'KODE_PEGAWAI',
+          'NIS',
+          'NISN',
+          'NIM',
+          'NUPTK',
+          'NIDN',
           'NAMA_MEMBER',
           'NOMINAL',
           'WAKTU',
@@ -216,6 +222,12 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
             .map((d) => <Object?>[
                   d['idMember'] ?? '',
                   d['kodeMember'] ?? '',
+                  d['kodePegawai'] ?? '',
+                  d['nis'] ?? '',
+                  d['nisn'] ?? '',
+                  d['nim'] ?? '',
+                  d['nuptk'] ?? '',
+                  d['nidn'] ?? '',
                   d['namaMember'] ?? '',
                   (d['nominal'] as num?) ?? 0,
                   d['waktu'] ?? '',
@@ -320,6 +332,12 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
         headers: const [
           'ID_MEMBER',
           'KODE_MEMBER',
+          'KODE_PEGAWAI',
+          'NIS',
+          'NISN',
+          'NIM',
+          'NUPTK',
+          'NIDN',
           'NAMA_MEMBER',
           'NOMINAL',
           'WAKTU',
@@ -331,6 +349,12 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
             .map((m) => <Object?>[
                   m['id'] ?? '',
                   m['kode'] ?? m['kodeIdentitas'] ?? '',
+                  m['kodePegawai'] ?? '',
+                  m['nis'] ?? '',
+                  m['nisn'] ?? '',
+                  m['nim'] ?? '',
+                  m['nuptk'] ?? '',
+                  m['nidn'] ?? '',
                   m['nama'] ?? '',
                   '',
                   '',
@@ -391,15 +415,44 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
       }
       final kolomKode = header['KODE_MEMBER'];
       final kolomId = header['ID_MEMBER'];
+      final kolomKodePegawai = header['KODE_PEGAWAI'];
+      final kolomNis = header['NIS'];
+      final kolomNisn = header['NISN'];
+      final kolomNim = header['NIM'];
+      final kolomNuptk = header['NUPTK'];
+      final kolomNidn = header['NIDN'];
       final kolomNominal = header['NOMINAL'];
-      if ((kolomKode == null && kolomId == null) || kolomNominal == null) {
+      String ambilIdentitas(List<String> row) {
+        for (final idx in [
+          kolomKode,
+          kolomKodePegawai,
+          kolomNis,
+          kolomNisn,
+          kolomNim,
+          kolomNuptk,
+          kolomNidn,
+        ]) {
+          if (idx != null && idx < row.length) {
+            final v = row[idx].trim().replaceFirst(RegExp(r'\.0$'), '');
+            if (v.isNotEmpty) return v;
+          }
+        }
+        return '';
+      }
+      if ((kolomKode == null &&
+              kolomId == null &&
+              kolomKodePegawai == null &&
+              kolomNis == null &&
+              kolomNisn == null &&
+              kolomNim == null &&
+              kolomNuptk == null &&
+              kolomNidn == null) ||
+          kolomNominal == null) {
         throw const FormatException(
-            'Kolom ID_MEMBER atau KODE_MEMBER, serta NOMINAL wajib tersedia.');
+            'Kolom ID_MEMBER / KODE_MEMBER / KODE_PEGAWAI / NIS / NISN / NIM / NUPTK / NIDN, serta NOMINAL wajib tersedia.');
       }
       final jumlahCalon = tabel.skip(1).where((row) {
-        final kode = kolomKode != null && kolomKode < row.length
-            ? row[kolomKode].trim()
-            : '';
+        final kode = ambilIdentitas(row);
         final id =
             kolomId != null && kolomId < row.length ? row[kolomId].trim() : '';
         return kode.isNotEmpty || id.isNotEmpty;
@@ -440,9 +493,7 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
 
       for (var i = 1; i < tabel.length; i++) {
         final row = tabel[i];
-        final kode = kolomKode == null || kolomKode >= row.length
-            ? ''
-            : row[kolomKode].trim();
+        final kode = ambilIdentitas(row);
         final idMemberText = kolomId == null || kolomId >= row.length
             ? ''
             : row[kolomId].trim().replaceFirst(RegExp(r'\.0$'), '');
@@ -467,14 +518,22 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
           if (idMember == null) {
             final cari = await ApiClient.instance.aksi('anggota_list', {
               'keyword': kode,
-              'page_size': 10,
+              'page_size': 15,
             });
             final anggota = ((cari['data'] as List?) ?? [])
                 .cast<Map<String, dynamic>>()
-                .where((m) => '${m['kode']}'.trim() == kode)
+                .where((m) =>
+                    '${m['kode'] ?? ''}'.trim() == kode ||
+                    '${m['kodeIdentitas'] ?? ''}'.trim() == kode ||
+                    '${m['kodePegawai'] ?? ''}'.trim() == kode ||
+                    '${m['nis'] ?? ''}'.trim() == kode ||
+                    '${m['nisn'] ?? ''}'.trim() == kode ||
+                    '${m['nim'] ?? ''}'.trim() == kode ||
+                    '${m['nuptk'] ?? ''}'.trim() == kode ||
+                    '${m['nidn'] ?? ''}'.trim() == kode)
                 .toList();
             if (anggota.isEmpty) {
-              throw FormatException('kode member "$kode" tidak ditemukan.');
+              throw FormatException('identitas member "$kode" tidak ditemukan.');
             }
             idMember = (anggota.first['id'] as num).toInt();
           }

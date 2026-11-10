@@ -30,6 +30,7 @@ import '../services/pencarian_produk_lokal.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
+import '../widgets/rincian_intip_dialog.dart';
 import 'tab_so_grand.dart';
 import 'tab_pkm_screen.dart';
 
@@ -392,7 +393,7 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
               const _TabMutasiStok(),
               const TabPergerakanStok(),
               const _TabMonitorBarang(),
-              const _TabSoHarian(),
+              _TabSoHarian(onBukaSoGrand: () => _tab.animateTo(4)),
               const TabSoGrand(),
               const TabPkmKuantitasMaksimum(),
               const _TabInputOpname(),
@@ -500,6 +501,21 @@ class _TabMutasiStokState extends State<_TabMutasiStok> with JejakGalat {
                     warna: const Color(0xFF2E7D32),
                     nilai: _formatAngka.format(d['barangMasuk'] ?? 0),
                     label: 'Barang Masuk',
+                    tooltip: 'Klik untuk melihat ringkasan mutasi stok',
+                    onTap: () => tampilkanRincianKlikDialog(
+                      context,
+                      judul: 'Ringkasan Mutasi Stok Bulan Ini',
+                      subjudul: 'Rekapitulasi keluar/masuk stok dan progres opname',
+                      kolom: const ['Indikator', 'Nilai'],
+                      baris: [
+                        ['Barang Masuk', _formatAngka.format(d['barangMasuk'] ?? 0)],
+                        ['Barang Keluar', _formatAngka.format(d['barangKeluar'] ?? 0)],
+                        ['Total Stok Sistem', _formatAngka.format(d['totalStok'] ?? 0)],
+                        ['Stok Kritis (<10)', '${d['stokKritis'] ?? 0}'],
+                        ['Produk Diopname Hari Ini', '${r['jumlahProduk'] ?? 0} produk'],
+                        ['Selisih Bersih Hari Ini', _formatAngka.format(r['selisihBersih'] ?? 0)],
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -510,6 +526,22 @@ class _TabMutasiStokState extends State<_TabMutasiStok> with JejakGalat {
                     warna: const Color(0xFFC0563D),
                     nilai: _formatAngka.format(d['barangKeluar'] ?? 0),
                     label: 'Barang Keluar',
+                    tooltip: 'Klik untuk melihat Top 5 Barang Keluar + Excel & PDF',
+                    onTap: () => tampilkanRincianKlikDialog(
+                      context,
+                      judul: 'Rincian Barang Keluar Terbanyak',
+                      subjudul: 'Total Barang Keluar: ${_formatAngka.format(d['barangKeluar'] ?? 0)}',
+                      kolom: const ['No', 'Nama Produk', 'Qty Keluar'],
+                      baris: top5
+                          .asMap()
+                          .entries
+                          .map((e) => <Object?>[
+                                e.key + 1,
+                                (e.value as Map)['nama'] ?? '-',
+                                _formatAngka.format((e.value as Map)['qty'] ?? 0),
+                              ])
+                          .toList(),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -520,6 +552,19 @@ class _TabMutasiStokState extends State<_TabMutasiStok> with JejakGalat {
                     warna: const Color(0xFF1E3A5F),
                     nilai: _formatAngka.format(d['totalStok'] ?? 0),
                     label: 'Total Stok',
+                    tooltip: 'Klik untuk melihat ringkasan stok',
+                    onTap: () => tampilkanRincianKlikDialog(
+                      context,
+                      judul: 'Ringkasan Total Stok Toko',
+                      subjudul: 'Total Stok: ${_formatAngka.format(d['totalStok'] ?? 0)}',
+                      kolom: const ['Indikator', 'Nilai'],
+                      baris: [
+                        ['Total Stok', _formatAngka.format(d['totalStok'] ?? 0)],
+                        ['Barang Masuk', _formatAngka.format(d['barangMasuk'] ?? 0)],
+                        ['Barang Keluar', _formatAngka.format(d['barangKeluar'] ?? 0)],
+                        ['Stok Kritis (<10)', '${d['stokKritis'] ?? 0}'],
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -530,6 +575,20 @@ class _TabMutasiStokState extends State<_TabMutasiStok> with JejakGalat {
                     warna: Colors.red,
                     nilai: '${d['stokKritis'] ?? 0}',
                     label: 'Stok Kritis (<10)',
+                    tooltip: 'Klik untuk melihat informasi stok kritis',
+                    onTap: () => tampilkanRincianKlikDialog(
+                      context,
+                      judul: 'Ringkasan Stok Kritis (< 10)',
+                      subjudul: 'Terdapat ${d['stokKritis'] ?? 0} produk dengan stok kritis (< 10)',
+                      kolom: const ['Indikator', 'Jumlah', 'Tindak Lanjut'],
+                      baris: [
+                        [
+                          'Produk Stok Kritis (< 10)',
+                          '${d['stokKritis'] ?? 0} Produk',
+                          'Buka tab PKM & Saran PO untuk membuat rekomendasi pemesanan ulang',
+                        ],
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -962,7 +1021,8 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> with JejakGalat {
 /// progres ketika berpindah tab. Angka stok tetap merupakan snapshot server;
 /// koreksi stok dilakukan melalui Input Opname/SO by Scan supaya audit utuh.
 class _TabSoHarian extends StatefulWidget {
-  const _TabSoHarian();
+  final VoidCallback? onBukaSoGrand;
+  const _TabSoHarian({this.onBukaSoGrand});
 
   @override
   State<_TabSoHarian> createState() => _TabSoHarianState();
@@ -1273,31 +1333,50 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
       padding: const EdgeInsets.all(16),
       children: [
         PenandaDataTersimpan(tampil: _dariCache),
-        Align(
-          alignment: Alignment.centerRight,
-          child: AksiBarisMenu(tooltip: 'Aksi SO Harian', aksi: [
-            AksiBaris(
-                ikon: Icons.calendar_today_outlined,
-                label:
-                    'Pilih tanggal · ${DateFormat('dd MMM yyyy', 'id_ID').format(_tanggal)}',
-                onTap: _pilihTanggal),
-            AksiBaris(
-                ikon: Icons.refresh,
-                label: 'Muat Ulang',
-                onTap: _memuat ? null : _muat),
-            AksiBaris(
-                ikon: Icons.download_outlined,
-                label: 'Unduh Excel',
-                onTap: _mengunduh ? null : _unduhExcel),
-            AksiBaris(
-                ikon: Icons.upload_file_outlined,
-                label: 'Unggah Excel',
-                onTap: _mengunggah ? null : _unggahExcel),
-            AksiBaris(
-                ikon: Icons.picture_as_pdf_outlined,
-                label: 'Cetak PDF',
-                onTap: _data.isEmpty ? null : _cetakPdf),
-          ]),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (widget.onBukaSoGrand != null)
+                  FilledButton.tonalIcon(
+                    onPressed: widget.onBukaSoGrand,
+                    icon: const Icon(Icons.fact_check_outlined, size: 17),
+                    label: const Text('Beralih ke Metode SO Grand (Audit Total 100% Barang)'),
+                  ),
+              ],
+            ),
+            AksiBarisMenu(tooltip: 'Aksi SO Harian', aksi: [
+              if (widget.onBukaSoGrand != null)
+                AksiBaris(
+                    ikon: Icons.fact_check_outlined,
+                    label: 'Buka Metode SO Grand (Audit Total)',
+                    onTap: widget.onBukaSoGrand),
+              AksiBaris(
+                  ikon: Icons.calendar_today_outlined,
+                  label:
+                      'Pilih tanggal · ${DateFormat('dd MMM yyyy', 'id_ID').format(_tanggal)}',
+                  onTap: _pilihTanggal),
+              AksiBaris(
+                  ikon: Icons.refresh,
+                  label: 'Muat Ulang',
+                  onTap: _memuat ? null : _muat),
+              AksiBaris(
+                  ikon: Icons.download_outlined,
+                  label: 'Unduh Excel',
+                  onTap: _mengunduh ? null : _unduhExcel),
+              AksiBaris(
+                  ikon: Icons.upload_file_outlined,
+                  label: 'Unggah Excel',
+                  onTap: _mengunggah ? null : _unggahExcel),
+              AksiBaris(
+                  ikon: Icons.picture_as_pdf_outlined,
+                  label: 'Cetak PDF',
+                  onTap: _data.isEmpty ? null : _cetakPdf),
+            ]),
+          ],
         ),
         const SizedBox(height: 12),
         Container(
@@ -1308,7 +1387,7 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
           ),
           child: Text(
             'Sebelum mulai, tekan Sinkronkan dan pastikan seluruh transaksi pending sudah terkirim; transaksi yang masih pending belum masuk laporan server. '
-            'Daftar ini hanya memuat produk yang terjual pada tanggal pilihan. '
+            'Daftar ini hanya memuat produk yang terjual pada tanggal pilihan (SO Harian / Partial). Untuk menghitung 100% barang toko gunakan tombol Metode SO Grand di atas. '
             'Terjual adalah penjualan bruto; Retur adalah barang yang kembali ke stok pada tanggal tersebut; Bersih adalah Terjual dikurangi Retur. '
             'Sisa Stok Saat Ini adalah snapshot saat daftar dimuat (${_dibuatPada.isEmpty ? '-' : _dibuatPada}), termasuk ketika tanggal yang dipilih adalah tanggal lampau. '
             'Checklist tersimpan di perangkat ini. Jika ditemukan selisih, catat koreksi melalui Input Opname atau SO by Scan agar audit stok tetap lengkap.',
@@ -1325,6 +1404,34 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
               warna: AppColors.info,
               nilai: '${_data.length}',
               label: 'Produk Terjual',
+              tooltip: 'Klik untuk melihat rincian produk terjual + Excel & PDF',
+              onTap: () => tampilkanRincianKlikDialog(
+                context,
+                judul: 'Rincian Produk Terjual (SO Harian $_tanggalTeks)',
+                subjudul: 'Total ${_data.length} produk terjual pada $_tanggalTeks',
+                kolom: const [
+                  'Kode',
+                  'Barcode',
+                  'Produk',
+                  'Satuan',
+                  'Terjual',
+                  'Retur',
+                  'Bersih',
+                  'Sisa Stok Saat Ini',
+                ],
+                baris: _data
+                    .map((r) => <Object?>[
+                          r['kode'] ?? '-',
+                          r['barcode'] ?? '-',
+                          r['nama'] ?? '-',
+                          r['satuan'] ?? '-',
+                          _formatAngka.format(r['qtyTerjual'] ?? 0),
+                          _formatAngka.format(r['qtyRetur'] ?? 0),
+                          _formatAngka.format(r['qtyTerjualBersih'] ?? 0),
+                          _formatAngka.format(r['stokSistem'] ?? 0),
+                        ])
+                    .toList(),
+              ),
             ),
           ),
           SizedBox(
@@ -1335,6 +1442,30 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
               warna: AppColors.success,
               nilai: _formatAngka.format(totalBersih),
               label: 'Qty Bersih',
+              tooltip: 'Klik untuk melihat rincian Qty Bersih + Excel & PDF',
+              onTap: () => tampilkanRincianKlikDialog(
+                context,
+                judul: 'Rincian Qty Terjual Bersih ($_tanggalTeks)',
+                subjudul: 'Total Qty Bersih: ${_formatAngka.format(totalBersih)}',
+                kolom: const [
+                  'Kode',
+                  'Produk',
+                  'Terjual',
+                  'Retur',
+                  'Qty Bersih',
+                  'Sisa Stok',
+                ],
+                baris: _data
+                    .map((r) => <Object?>[
+                          r['kode'] ?? '-',
+                          r['nama'] ?? '-',
+                          _formatAngka.format(r['qtyTerjual'] ?? 0),
+                          _formatAngka.format(r['qtyRetur'] ?? 0),
+                          _formatAngka.format(r['qtyTerjualBersih'] ?? 0),
+                          _formatAngka.format(r['stokSistem'] ?? 0),
+                        ])
+                    .toList(),
+              ),
             ),
           ),
           SizedBox(
@@ -1345,6 +1476,30 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
               warna: AppColors.warning,
               nilai: '$jumlahSelesai/${_data.length}',
               label: 'Sudah Dicek',
+              tooltip: 'Klik untuk melihat status pengecekan SO Harian + Excel & PDF',
+              onTap: () => tampilkanRincianKlikDialog(
+                context,
+                judul: 'Status Pengecekan SO Harian ($_tanggalTeks)',
+                subjudul: '$jumlahSelesai dari ${_data.length} produk sudah dicek',
+                kolom: const [
+                  'Kode',
+                  'Produk',
+                  'Qty Bersih',
+                  'Sisa Stok Saat Ini',
+                  'Status Cek',
+                ],
+                baris: _data
+                    .map((r) => <Object?>[
+                          r['kode'] ?? '-',
+                          r['nama'] ?? '-',
+                          _formatAngka.format(r['qtyTerjualBersih'] ?? 0),
+                          _formatAngka.format(r['stokSistem'] ?? 0),
+                          _selesai.contains((r['produkId'] as num?)?.toInt())
+                              ? 'Sudah Dicek'
+                              : 'Belum Dicek',
+                        ])
+                    .toList(),
+              ),
             ),
           ),
         ]),

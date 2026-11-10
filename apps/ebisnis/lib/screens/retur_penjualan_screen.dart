@@ -14,6 +14,7 @@ import '../widgets/safe_state.dart';
 import 'struk_retur_util.dart';
 import '../widgets/jejak_galat.dart';
 import '../widgets/aksi_baris_menu.dart';
+import '../widgets/rincian_intip_dialog.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -29,10 +30,37 @@ const _daftarAlasan = [
 const _daftarKondisi = ['Baik - Layak Jual Lagi', 'Rusak - Tidak Layak Jual'];
 const _daftarMetodePengembalian = [
   'Tunai',
+  'QRIS',
+  'Transfer Bank',
   'Saldo Member',
   'Tukar Barang',
   'Tanpa Pengembalian'
 ];
+
+/// Menggabungkan daftar Cara Pembayaran toko aktif (`Sesi.instance.caraBayar`)
+/// dengan pilihan pengembalian standar agar Metode Pengembalian / Cara Bayar Retur
+/// selalu sinkron dengan metode pembayaran yang terdaftar di toko.
+List<String> _opsiMetodePengembalianAktif([String? nilaiTambahan]) {
+  final hasil = <String>[];
+  void tambah(String s) {
+    final t = s.trim();
+    if (t.isEmpty) return;
+    if (!hasil.any((e) => e.toLowerCase() == t.toLowerCase())) {
+      hasil.add(t);
+    }
+  }
+
+  for (final cb in Sesi.instance.caraBayar) {
+    tambah(cb.nama);
+  }
+  for (final std in _daftarMetodePengembalian) {
+    tambah(std);
+  }
+  if (nilaiTambahan != null && nilaiTambahan.trim().isNotEmpty) {
+    tambah(nilaiTambahan);
+  }
+  return hasil;
+}
 
 /// Layar Retur Penjualan -- wizard 3 langkah (cari transaksi ->
 /// pilih barang -> metode pengembalian) + riwayat/edit/hapus (supervisor).
@@ -470,12 +498,13 @@ class _TabBuatReturState extends State<_TabBuatRetur> with JejakGalat {
           ),
         ),
         const SizedBox(height: 8),
-        const Text('Langkah 3: Metode Pengembalian',
+        const Text('Langkah 3: Metode Pengembalian / Cara Bayar Retur',
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
-          children: _daftarMetodePengembalian
+          runSpacing: 6,
+          children: _opsiMetodePengembalianAktif(_metodePengembalian)
               .map((m) => ChoiceChip(
                   label: Text(m),
                   selected: _metodePengembalian == m,
@@ -1013,6 +1042,14 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> with JejakGalat {
     var kondisi = _daftarKondisi.contains(r['kondisiBarang'])
         ? r['kondisiBarang'] as String
         : _daftarKondisi.first;
+    final daftarMetode =
+        _opsiMetodePengembalianAktif('${r['metodePengembalian'] ?? ''}');
+    var metodePengembalian = daftarMetode.firstWhere(
+      (m) =>
+          m.toLowerCase() ==
+          '${r['metodePengembalian'] ?? ''}'.trim().toLowerCase(),
+      orElse: () => daftarMetode.first,
+    );
     final disimpan = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -1064,6 +1101,18 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> with JejakGalat {
                     .toList(),
                 onChanged: (v) => setSheetState(() => kondisi = v ?? kondisi),
               ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: metodePengembalian,
+                decoration: AppFormStyle.fieldDecoration(context,
+                    labelText: 'Metode Pengembalian / Cara Bayar Retur',
+                    isDense: true),
+                items: daftarMetode
+                    .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                    .toList(),
+                onChanged: (v) => setSheetState(
+                    () => metodePengembalian = v ?? metodePengembalian),
+              ),
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
@@ -1091,6 +1140,7 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> with JejakGalat {
             'qty': parseDesimal(qtyController.text) ?? r['qty'],
             'hargaSatuan':
                 parseDesimal(hargaController.text) ?? r['hargaSatuan'],
+            'metodePengembalian': metodePengembalian,
           },
           body: {
             'id': r['id'],
@@ -1099,6 +1149,7 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> with JejakGalat {
                 parseDesimal(hargaController.text) ?? r['hargaSatuan'],
             'alasan': alasan,
             'kondisi_barang': kondisi,
+            'metode_pengembalian': metodePengembalian,
             'kembalikan_ke_stok': !kondisi.toLowerCase().contains('rusak'),
           });
       await _muat();
@@ -1111,6 +1162,57 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> with JejakGalat {
 
   int get _totalHalaman => (_total / _pageSize).ceil().clamp(1, 999999);
 
+  Future<void> _tampilkanRincianRetur(String judul) async {
+    final totalHal = _data.fold<num>(
+        0,
+        (a, r) =>
+            a +
+            ((r['totalNilai'] as num?) ??
+                (((r['qty'] as num?) ?? 0) *
+                    ((r['hargaSatuan'] as num?) ?? 0))));
+    await tampilkanRincianKlikDialog(
+      context,
+      judul: judul,
+      subjudul: 'Rincian riwayat retur penjualan',
+      ringkasanTeks:
+          '${_data.length} baris · Total: ${_formatRupiah.format(totalHal)}',
+      kolom: const [
+        'Waktu',
+        'Nomor Nota Asal',
+        'Produk',
+        'Pelanggan',
+        'Qty',
+        'Nilai Retur',
+        'Kondisi',
+        'Metode Pengembalian',
+      ],
+      baris: _data.map((r) {
+        final nilai = (r['totalNilai'] as num?) ??
+            (((r['qty'] as num?) ?? 0) * ((r['hargaSatuan'] as num?) ?? 0));
+        return <Object?>[
+          r['waktu'] ?? '-',
+          r['kodeTransaksiAsal'] ?? '-',
+          r['namaProduk'] ?? '-',
+          r['namaPembeli'] ?? 'Umum',
+          '${r['qty'] ?? 0}',
+          _formatRupiah.format(nilai),
+          r['kondisiBarang'] ?? '-',
+          r['metodePengembalian'] ?? '-',
+        ];
+      }).toList(),
+      barisTotal: [
+        'TOTAL',
+        '',
+        '',
+        '',
+        '${_data.fold<num>(0, (s, r) => s + ((r['qty'] as num?) ?? 0))}',
+        _formatRupiah.format(totalHal),
+        '',
+        '',
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
@@ -1118,35 +1220,66 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> with JejakGalat {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          SizedBox(
-            height: 96,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                SizedBox(
-                    width: 190,
-                    child: AppKpiCard(
-                        icon: Icons.assignment_return_outlined,
-                        warna: AppColors.primary,
-                        nilai: '$_total',
-                        label: 'Total Retur')),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 190,
-                  child: AppKpiCard(
-                    icon: Icons.payments_outlined,
-                    warna: AppColors.danger,
-                    nilai: _formatRupiah.format(_data.fold<num>(
-                        0,
-                        (a, r) =>
-                            a +
-                            (((r['qty'] as num?) ?? 0) *
-                                ((r['hargaSatuan'] as num?) ?? 0)))),
-                    label: 'Nilai (hal. ini)',
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 96,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      SizedBox(
+                          width: 200,
+                          child: AppKpiCard(
+                              icon: Icons.assignment_return_outlined,
+                              warna: AppColors.primary,
+                              nilai: '$_total',
+                              label: 'Total Retur',
+                              tooltip:
+                                  'Klik untuk rincian daftar retur (Excel & PDF)',
+                              onTap: () => _tampilkanRincianRetur(
+                                  'Rincian Total Retur ($_total Data)'))),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 210,
+                        child: AppKpiCard(
+                          icon: Icons.payments_outlined,
+                          warna: AppColors.danger,
+                          nilai: _formatRupiah.format(_data.fold<num>(
+                              0,
+                              (a, r) =>
+                                  a +
+                                  (((r['qty'] as num?) ?? 0) *
+                                      ((r['hargaSatuan'] as num?) ?? 0)))),
+                          label: 'Nilai (hal. ini)',
+                          tooltip:
+                              'Klik untuk rincian nilai retur & ekspor Excel/PDF',
+                          onTap: () => _tampilkanRincianRetur(
+                              'Rincian Nilai Retur Penjualan'),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () =>
+                        _tampilkanRincianRetur('Laporan Retur Penjualan'),
+                    icon: const Icon(Icons.download_outlined, size: 16),
+                    label: const Text('Excel & PDF'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.success,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           AppSearchField(

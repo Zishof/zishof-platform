@@ -796,24 +796,28 @@ class _RiwayatPenjualanAnalisisScreenState
       );
 
   Widget _kpiCards() {
+    final trenList = _daftar('tren');
+    final jmlHariAktif = math.max(1, trenList.length);
+    final spd = _angka(_kpi, 'omzet') / jmlHariAktif;
+    final std = _angka(_kpi, 'transaksi') / jmlHariAktif;
     final data = [
       (
         Icons.payments_outlined,
         AppColors.success,
         _rpAnalisis.format(_kpi['omzet'] ?? 0),
-        'Omzet · ${_persen(_pertumbuhan('omzet'))}'
+        'Omzet · ${_persen(_pertumbuhan('omzet'))} (SPD: ${_rpAnalisis.format(spd)}/hr)'
       ),
       (
         Icons.receipt_long_outlined,
         AppColors.primary,
         '${_kpi['transaksi'] ?? 0}',
-        'Transaksi · ${_persen(_pertumbuhan('transaksi'))}'
+        'STD (Transaksi) · ${_persen(_pertumbuhan('transaksi'))} (${std.toStringAsFixed(1)}/hr)'
       ),
       (
         Icons.shopping_basket_outlined,
         AppColors.teal,
         _rpAnalisis.format(_kpi['rataRata'] ?? 0),
-        'Rata-rata transaksi'
+        'APC (Rata-rata Struk)'
       ),
       (
         Icons.inventory_2_outlined,
@@ -863,13 +867,43 @@ class _RiwayatPenjualanAnalisisScreenState
             width: lebar,
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
-              onTap: () => _bukaDrilldown(
-                data[i].$4,
-                const ['Ukuran', 'Periode ini', 'Periode sebelumnya'],
-                [
-                  [data[i].$4, data[i].$3, i < 4 ? 'Lihat pembanding' : '-']
-                ],
-              ),
+              onTap: () {
+                if (i == 0 || i == 1 || i == 2) {
+                  _bukaDrilldown(
+                    data[i].$4,
+                    const ['Tanggal', 'Transaksi (STD)', 'Omzet (SPD)', 'Rata-rata Struk (APC)'],
+                    trenList
+                        .map((e) => <Object?>[
+                              e['tanggal'] ?? '-',
+                              e['transaksi'] ?? 0,
+                              _rpAnalisis.format(e['omzet'] ?? 0),
+                              _rpAnalisis.format(e['rataRata'] ?? 0),
+                            ])
+                        .toList(),
+                  );
+                } else if (i == 3) {
+                  _bukaDrilldown(
+                    'Rincian Barang Terjual per Produk',
+                    const ['Produk', 'Qty Terjual', 'Transaksi', 'Omzet'],
+                    _daftar('produk')
+                        .map((e) => <Object?>[
+                              e['nama'] ?? '-',
+                              e['qty'] ?? 0,
+                              e['transaksi'] ?? 0,
+                              _rpAnalisis.format(e['omzet'] ?? 0),
+                            ])
+                        .toList(),
+                  );
+                } else {
+                  _bukaDrilldown(
+                    data[i].$4,
+                    const ['Ukuran', 'Periode ini', 'Periode sebelumnya'],
+                    [
+                      [data[i].$4, data[i].$3, i < 4 ? 'Lihat pembanding' : '-']
+                    ],
+                  );
+                }
+              },
               child: AppKpiCard(
                   icon: data[i].$1,
                   warna: data[i].$2,

@@ -5,6 +5,7 @@ import '../../widgets/dashboard_charts.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
 import '../../widgets/penanda_data_tersimpan.dart';
+import '../../widgets/rincian_intip_dialog.dart';
 import 'muat_dashboard.dart';
 
 const _periodeOpsi = ['harian', 'mingguan', 'bulanan', 'semester', 'tahunan'];
@@ -229,6 +230,22 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> with JejakGalat
               nilai:
                   '★ ${((kepuasanPelanggan['rataRating'] as num?) ?? 0).toStringAsFixed(1)} · ${kepuasanPelanggan['jumlahResponden'] ?? 0} responden',
               warna: const Color(0xFFB8860B),
+              onTap: () => tampilkanRincianKlikDialog(
+                context,
+                judul: 'Rincian Produk Terlaris & Kepuasan Pelanggan',
+                subjudul:
+                    'Rating: ★ ${((kepuasanPelanggan['rataRating'] as num?) ?? 0).toStringAsFixed(1)} (${kepuasanPelanggan['jumlahResponden'] ?? 0} responden)',
+                kolom: const ['No', 'Nama Produk', 'Qty Terjual'],
+                baris: rekapTerlaris
+                    .asMap()
+                    .entries
+                    .map((e) => <Object?>[
+                          e.key + 1,
+                          e.value['nama'] ?? '-',
+                          e.value['qty'] ?? 0,
+                        ])
+                    .toList(),
+              ),
             ),
           ]),
           const SizedBox(height: 12),
@@ -287,19 +304,85 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> with JejakGalat
             KartuKpi(
                 label: 'Dipantau',
                 nilai: '${bahanKpi['dipantau'] ?? 0}',
-                warna: const Color(0xFF1E3A5F)),
+                warna: const Color(0xFF1E3A5F),
+                onTap: () => tampilkanRincianKlikDialog(
+                      context,
+                      judul: 'Rincian Bahan Baku & Estimasi Habis',
+                      subjudul: 'Total Dipantau: ${bahanKpi['dipantau'] ?? 0} item',
+                      kolom: const ['No', 'Nama Bahan / Produk', 'Estimasi Habis'],
+                      baris: bahanList
+                          .asMap()
+                          .entries
+                          .map((e) => <Object?>[
+                                e.key + 1,
+                                e.value['nama'] ?? '-',
+                                e.value['estimasiHari'] != null
+                                    ? '~${e.value['estimasiHari']} hari lagi'
+                                    : '-',
+                              ])
+                          .toList(),
+                    )),
             KartuKpi(
                 label: 'Segera Habis',
                 nilai: '${bahanKpi['segeraHabis'] ?? 0}',
-                warna: Colors.red),
+                warna: Colors.red,
+                onTap: () => tampilkanRincianKlikDialog(
+                      context,
+                      judul: 'Rincian Peringatan Stok Kritis & Habis',
+                      subjudul: 'Total Peringatan Stok: ${stok.length} produk',
+                      kolom: const ['No', 'Nama Produk', 'Sisa Stok', 'Status'],
+                      baris: stok
+                          .asMap()
+                          .entries
+                          .map((e) => <Object?>[
+                                e.key + 1,
+                                e.value['namaProduk'] ?? '-',
+                                e.value['sisaStok'] ?? 0,
+                                e.value['status'] ?? '-',
+                              ])
+                          .toList(),
+                    )),
             KartuKpi(
                 label: 'Paling Mendesak',
                 nilai: '${bahanKpi['palingMendesakNama'] ?? '-'}',
-                warna: Colors.orange),
+                warna: Colors.orange,
+                onTap: () => tampilkanRincianKlikDialog(
+                      context,
+                      judul: 'Rincian Peringatan Stok Mendesak',
+                      subjudul: 'Paling Mendesak: ${bahanKpi['palingMendesakNama'] ?? '-'}',
+                      kolom: const ['No', 'Nama Produk', 'Sisa Stok', 'Status'],
+                      baris: stok
+                          .asMap()
+                          .entries
+                          .map((e) => <Object?>[
+                                e.key + 1,
+                                e.value['namaProduk'] ?? '-',
+                                e.value['sisaStok'] ?? 0,
+                                e.value['status'] ?? '-',
+                              ])
+                          .toList(),
+                    )),
             KartuKpi(
                 label: 'Nilai Stok',
                 nilai: formatRupiahDasbor.format(bahanKpi['nilaiStok'] ?? 0),
-                warna: const Color(0xFF2E7D32)),
+                warna: const Color(0xFF2E7D32),
+                onTap: () => tampilkanRincianKlikDialog(
+                      context,
+                      judul: 'Rincian Perputaran Stok & Nilai Persediaan',
+                      subjudul:
+                          'Nilai Stok: ${formatRupiahDasbor.format(bahanKpi['nilaiStok'] ?? 0)}',
+                      kolom: const ['No', 'Nama Produk', 'Sisa Stok', 'Terjual'],
+                      baris: perputaranStok
+                          .asMap()
+                          .entries
+                          .map((e) => <Object?>[
+                                e.key + 1,
+                                e.value['nama'] ?? e.value['namaProduk'] ?? '-',
+                                e.value['stok'] ?? e.value['sisaStok'] ?? 0,
+                                e.value['terjual'] ?? e.value['qty'] ?? 0,
+                              ])
+                          .toList(),
+                    )),
           ]),
           const SizedBox(height: 12),
           if (bahanList.isNotEmpty)

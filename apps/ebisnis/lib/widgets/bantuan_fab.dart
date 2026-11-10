@@ -100,16 +100,16 @@ class BantuanFab extends StatelessWidget {
         button: true,
         label: 'Bantuan',
         child: Container(
-          width: 48,
-          height: 48,
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(
             color: const Color(0xFF1D4ED8),
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF1D4ED8).withValues(alpha: .38),
-                blurRadius: 18,
-                offset: const Offset(0, 6),
+                color: const Color(0xFF1D4ED8).withValues(alpha: .32),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -118,7 +118,7 @@ class BantuanFab extends StatelessWidget {
             '?',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 20,
+              fontSize: 17,
               fontWeight: FontWeight.w700,
             ),
           ),

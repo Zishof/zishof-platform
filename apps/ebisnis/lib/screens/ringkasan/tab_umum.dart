@@ -17,6 +17,7 @@ import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/safe_state.dart';
 import '../struk_screen.dart';
 import '../../widgets/jejak_galat.dart';
+import '../../widgets/rincian_intip_dialog.dart';
 
 final _formatTanggalServer = DateFormat('yyyy-MM-dd');
 
@@ -1638,40 +1639,47 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> with JejakGalat {
   }
 
   Future<void> _lihatRingkasanKartu(
-      String judul, Map<String, dynamic> baris) async {
+      String judul, Map<String, dynamic> baris, List<Map<String, dynamic>> semuaBaris) async {
     final label = '${baris['label'] ?? 'Tidak diketahui'}';
     final qty = (baris['qty'] as num?)?.toDouble();
     final trx = (baris['trx'] as num?)?.toInt();
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(judul),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label,
-                style:
-                    const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 12),
-            Text('Omzet: ${formatRupiahDasbor.format(baris['nilai'] ?? 0)}'),
-            if (trx != null) Text('Jumlah transaksi: $trx'),
-            if (qty != null)
-              Text(
-                  'Jumlah barang: ${qty.toStringAsFixed(qty % 1 == 0 ? 0 : 2)}'),
-            const SizedBox(height: 12),
-            Text(
-              'Angka mengikuti periode, toko, dan filter yang sedang dipilih pada dashboard.',
-              style: TextStyle(color: AppColors.textSecondaryOf(context)),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Tutup')),
-        ],
-      ),
+    final nilai = (baris['nilai'] as num?)?.toDouble() ?? 0;
+    final apc = (trx != null && trx > 0) ? (nilai / trx) : 0.0;
+    await tampilkanRincianKlikDialog(
+      context,
+      judul: '$judul · $label',
+      subjudul:
+          'Omzet: ${formatRupiahDasbor.format(nilai)}'
+          '${trx != null ? ' | STD: $trx struk' : ''}'
+          '${apc > 0 ? ' | APC: ${formatRupiahDasbor.format(apc)}' : ''}'
+          '${qty != null ? ' | Qty: ${qty.toStringAsFixed(0)} item' : ''}',
+      kolom: const [
+        'No',
+        'Kategori / Nama',
+        'Transaksi (STD)',
+        'Qty Item',
+        'Omzet (SPD)',
+        'Rata-rata Struk (APC)',
+      ],
+      baris: semuaBaris
+          .asMap()
+          .entries
+          .map((e) {
+            final r = e.value;
+            final rNilai = (r['nilai'] as num?)?.toDouble() ?? 0;
+            final rTrx = (r['trx'] as num?)?.toInt() ?? 0;
+            final rQty = (r['qty'] as num?)?.toDouble() ?? 0;
+            final rApc = rTrx > 0 ? (rNilai / rTrx) : 0.0;
+            return <Object?>[
+              e.key + 1,
+              r['label'] ?? '-',
+              rTrx > 0 ? rTrx : '-',
+              rQty > 0 ? rQty.toStringAsFixed(0) : '-',
+              formatRupiahDasbor.format(rNilai),
+              rApc > 0 ? formatRupiahDasbor.format(rApc) : '-',
+            ];
+          })
+          .toList(),
     );
   }
 
@@ -1720,8 +1728,8 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> with JejakGalat {
                         '${data[i]['trx'] != null ? ' • ${data[i]['trx']} trx' : ''}'
                         '${data[i]['qty'] != null ? ' • ${(data[i]['qty'] as num).toStringAsFixed(0)} item' : ''}'
                         '$sufiks',
-                    tooltip: 'Klik untuk melihat ringkasan $judul',
-                    onTap: () => _lihatRingkasanKartu(judul, data[i]),
+                    tooltip: 'Klik untuk melihat rincian $judul + Excel & PDF',
+                    onTap: () => _lihatRingkasanKartu(judul, data[i], data),
                   ),
               ],
             );
@@ -1809,8 +1817,35 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> with JejakGalat {
               tampil: _dariCache, diperbaruiPada: _cacheDisimpanPada),
           LayoutBuilder(builder: (context, c) {
             final lebar = c.maxWidth;
-            final kolom = lebar >= 1000 ? 5 : (lebar >= 700 ? 3 : 2);
+            final kolom = lebar >= 1100 ? 6 : (lebar >= 700 ? 3 : 2);
             final lebarKolom = (lebar - (12 * (kolom - 1))) / kolom;
+            final trxHariIni = (k('hariIni')['trx'] as num?)?.toInt() ?? 0;
+            final rpHariIni = (k('hariIni')['rp'] as num?)?.toDouble() ?? 0;
+            final apcHariIni = trxHariIni > 0 ? (rpHariIni / trxHariIni) : 0.0;
+            List<List<Object?>> barisTransaksiPopup() => data
+                .asMap()
+                .entries
+                .map((e) => <Object?>[
+                      e.key + 1,
+                      _formatWaktu(e.value['waktu']),
+                      e.value['nomorNota'] ?? e.value['kode'] ?? '-',
+                      e.value['pembeli'] ?? '-',
+                      e.value['barang'] ?? '-',
+                      StrukScreen.labelPembayaran(e.value),
+                      formatRupiahDasbor.format(e.value['total'] ?? 0),
+                      e.value['terlayani'] == true ? 'Terlayani' : 'Menunggu',
+                    ])
+                .toList();
+            const kolomTransaksiPopup = [
+              'No',
+              'Waktu',
+              'Nomor Nota',
+              'Pembeli',
+              'Barang',
+              'Metode',
+              'Total',
+              'Status',
+            ];
             return GridView.count(
               crossAxisCount: kolom,
               shrinkWrap: true,
@@ -1822,23 +1857,64 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> with JejakGalat {
                 AppKpiCard(
                     icon: Icons.receipt_long,
                     warna: AppColors.primary,
-                    nilai: '${k('hariIni')['trx'] ?? 0}',
+                    nilai: '$trxHariIni',
                     label:
-                        'Transaksi ${DateFormat('dd-MM-yyyy').format(_tanggalAcuan)}',
+                        'STD (Transaksi) ${DateFormat('dd-MM-yyyy').format(_tanggalAcuan)}',
                     tooltip:
-                        'Klik untuk menampilkan transaksi pada tanggal acuan',
-                    onTap: () {
-                      _terapkanRentangKartu(_tanggalAcuan, _tanggalAcuan);
+                        'Klik untuk melihat rincian transaksi + Download Excel & Cetak PDF',
+                    onTap: () async {
+                      await _terapkanRentangKartu(_tanggalAcuan, _tanggalAcuan);
+                      if (!context.mounted) return;
+                      await tampilkanRincianKlikDialog(
+                        context,
+                        judul:
+                            'Rincian STD (Sales Transaction per Day) · ${DateFormat('dd-MM-yyyy').format(_tanggalAcuan)}',
+                        subjudul:
+                            'STD: $trxHariIni struk | SPD: ${formatRupiahDasbor.format(rpHariIni)} | APC: ${formatRupiahDasbor.format(apcHariIni)}',
+                        kolom: kolomTransaksiPopup,
+                        baris: barisTransaksiPopup(),
+                      );
                     }),
                 AppKpiCard(
                     icon: Icons.payments_outlined,
                     warna: AppColors.success,
-                    nilai: formatRupiahDasbor.format(k('hariIni')['rp'] ?? 0),
+                    nilai: formatRupiahDasbor.format(rpHariIni),
                     label:
-                        'Omzet ${DateFormat('dd-MM-yyyy').format(_tanggalAcuan)}',
-                    tooltip: 'Klik untuk menampilkan omzet pada tanggal acuan',
-                    onTap: () {
-                      _terapkanRentangKartu(_tanggalAcuan, _tanggalAcuan);
+                        'SPD (Omzet) ${DateFormat('dd-MM-yyyy').format(_tanggalAcuan)}',
+                    tooltip: 'Klik untuk melihat rincian omzet + Download Excel & Cetak PDF',
+                    onTap: () async {
+                      await _terapkanRentangKartu(_tanggalAcuan, _tanggalAcuan);
+                      if (!context.mounted) return;
+                      await tampilkanRincianKlikDialog(
+                        context,
+                        judul:
+                            'Rincian SPD (Sales per Day) · ${DateFormat('dd-MM-yyyy').format(_tanggalAcuan)}',
+                        subjudul:
+                            'SPD: ${formatRupiahDasbor.format(rpHariIni)} | STD: $trxHariIni struk | APC: ${formatRupiahDasbor.format(apcHariIni)}',
+                        kolom: kolomTransaksiPopup,
+                        baris: barisTransaksiPopup(),
+                      );
+                    }),
+                AppKpiCard(
+                    icon: Icons.shopping_cart_checkout_outlined,
+                    warna: Colors.indigo,
+                    nilai: formatRupiahDasbor.format(apcHariIni),
+                    label:
+                        'APC (Rata Struk) ${DateFormat('dd-MM-yyyy').format(_tanggalAcuan)}',
+                    tooltip:
+                        'APC (Average Purchase Customer) = SPD ÷ STD · Klik untuk rincian + Excel & PDF',
+                    onTap: () async {
+                      await _terapkanRentangKartu(_tanggalAcuan, _tanggalAcuan);
+                      if (!context.mounted) return;
+                      await tampilkanRincianKlikDialog(
+                        context,
+                        judul:
+                            'Rincian APC (Average Purchase Customer) · ${DateFormat('dd-MM-yyyy').format(_tanggalAcuan)}',
+                        subjudul:
+                            'APC: ${formatRupiahDasbor.format(apcHariIni)} (Rumus: SPD ${formatRupiahDasbor.format(rpHariIni)} ÷ STD $trxHariIni struk)',
+                        kolom: kolomTransaksiPopup,
+                        baris: barisTransaksiPopup(),
+                      );
                     }),
                 AppKpiCard(
                     icon: Icons.calendar_view_week_outlined,
@@ -1846,11 +1922,20 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> with JejakGalat {
                     nilai: formatRupiahDasbor.format(k('mingguIni')['rp'] ?? 0),
                     label: 'Omzet Minggu Acuan$_sufiksAcuan',
                     tooltip:
-                        'Klik untuk menampilkan transaksi dari awal minggu sampai tanggal acuan',
-                    onTap: () {
+                        'Klik untuk menampilkan transaksi minggu acuan + Excel & PDF',
+                    onTap: () async {
                       final n = _tanggalAcuan;
                       final awal = n.subtract(Duration(days: n.weekday - 1));
-                      _terapkanRentangKartu(awal, n);
+                      await _terapkanRentangKartu(awal, n);
+                      if (!context.mounted) return;
+                      await tampilkanRincianKlikDialog(
+                        context,
+                        judul: 'Rincian Omzet Minggu Acuan',
+                        subjudul:
+                            'Total Omzet: ${formatRupiahDasbor.format(k('mingguIni')['rp'] ?? 0)}',
+                        kolom: kolomTransaksiPopup,
+                        baris: barisTransaksiPopup(),
+                      );
                     }),
                 AppKpiCard(
                     icon: Icons.calendar_month_outlined,
@@ -1858,10 +1943,19 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> with JejakGalat {
                     nilai: formatRupiahDasbor.format(k('bulanIni')['rp'] ?? 0),
                     label: 'Omzet Bulan Acuan$_sufiksAcuan',
                     tooltip:
-                        'Klik untuk menampilkan transaksi dari awal bulan sampai tanggal acuan',
-                    onTap: () {
+                        'Klik untuk menampilkan transaksi bulan acuan + Excel & PDF',
+                    onTap: () async {
                       final n = _tanggalAcuan;
-                      _terapkanRentangKartu(DateTime(n.year, n.month, 1), n);
+                      await _terapkanRentangKartu(DateTime(n.year, n.month, 1), n);
+                      if (!context.mounted) return;
+                      await tampilkanRincianKlikDialog(
+                        context,
+                        judul: 'Rincian Omzet Bulan Acuan',
+                        subjudul:
+                            'Total Omzet: ${formatRupiahDasbor.format(k('bulanIni')['rp'] ?? 0)}',
+                        kolom: kolomTransaksiPopup,
+                        baris: barisTransaksiPopup(),
+                      );
                     }),
                 AppKpiCard(
                     icon: Icons.stacked_line_chart,
@@ -1870,11 +1964,20 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> with JejakGalat {
                         formatRupiahDasbor.format(k('semesterIni')['rp'] ?? 0),
                     label: 'Omzet 6 Bulan Acuan$_sufiksAcuan',
                     tooltip:
-                        'Klik untuk menampilkan transaksi enam bulan sampai tanggal acuan',
-                    onTap: () {
+                        'Klik untuk menampilkan transaksi 6 bulan acuan + Excel & PDF',
+                    onTap: () async {
                       final n = _tanggalAcuan;
-                      _terapkanRentangKartu(
+                      await _terapkanRentangKartu(
                           DateTime(n.year, n.month - 6, n.day), n);
+                      if (!context.mounted) return;
+                      await tampilkanRincianKlikDialog(
+                        context,
+                        judul: 'Rincian Omzet 6 Bulan Acuan',
+                        subjudul:
+                            'Total Omzet: ${formatRupiahDasbor.format(k('semesterIni')['rp'] ?? 0)}',
+                        kolom: kolomTransaksiPopup,
+                        baris: barisTransaksiPopup(),
+                      );
                     }),
               ],
             );

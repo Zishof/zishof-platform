@@ -10,9 +10,9 @@ import 'package:printing/printing.dart';
 
 import '../api_client.dart';
 import '../sesi.dart';
-import '../theme.dart';
 import '../widgets/aksi_baris_menu.dart';
-import '../widgets/app_data_table.dart';
+import '../widgets/app_components.dart';
+import '../widgets/rincian_intip_dialog.dart';
 import '../widgets/safe_state.dart';
 
 /// Tab PKM (Penentuan Kuantitas Maksimum & Rekomendasi Purchase Order)
@@ -59,6 +59,9 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
 
   int _totalPerluOrder = 0;
   double _totalEstBiayaPo = 0;
+  int _totalFastMoving = 0;
+  int _totalSlowMoving = 0;
+  int _totalDeadStock = 0;
 
   @override
   void initState() {
@@ -84,8 +87,7 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
 
     try {
       final tokoId = Sesi.instance.idTokoTerpilih;
-      final payload = {
-        'action': 'pkm_daftar',
+      final payload = <String, dynamic>{
         if (tokoId != null && tokoId > 0) 'toko_id': tokoId,
         'leadTime': double.tryParse(_ltController.text) ?? 3.0,
         'safetyStock': double.tryParse(_ssController.text) ?? 2.0,
@@ -93,37 +95,33 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
         'hariKerja': int.tryParse(_hariKerjaController.text) ?? 69,
       };
 
-      final res = await ApiClient.instance.post('pos', payload);
-      if (res['status'] == '00') {
-        final list = (res['data'] as List<dynamic>? ?? [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
+      final res = await ApiClient.instance.aksi('pkm_daftar', payload);
+      final list = (res['data'] as List<dynamic>? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
 
-        final Set<String> katSet = {};
-        for (final p in list) {
-          final k = (p['kategori'] ?? '').toString().trim();
-          if (k.isNotEmpty) katSet.add(k);
-        }
-
-        final katList = katSet.toList()..sort();
-
-        setStateIfMounted(() {
-          _semuaProduk = list;
-          _daftarKategori = katList;
-          _totalPerluOrder = (res['totalPerluOrder'] as num?)?.toInt() ?? 0;
-          _totalEstBiayaPo = (res['totalEstBiayaPo'] as num?)?.toDouble() ?? 0.0;
-          _memuat = false;
-        });
-        _terapkanFilter();
-      } else {
-        setStateIfMounted(() {
-          _pesanError = res['description']?.toString() ?? 'Gagal memuat data PKM.';
-          _memuat = false;
-        });
+      final Set<String> katSet = {};
+      for (final p in list) {
+        final k = (p['kategori'] ?? '').toString().trim();
+        if (k.isNotEmpty) katSet.add(k);
       }
+
+      final katList = katSet.toList()..sort();
+
+      setStateIfMounted(() {
+        _semuaProduk = list;
+        _daftarKategori = katList;
+        _totalPerluOrder = (res['totalPerluOrder'] as num?)?.toInt() ?? 0;
+        _totalEstBiayaPo = (res['totalEstBiayaPo'] as num?)?.toDouble() ?? 0.0;
+        _totalFastMoving = (res['totalFastMoving'] as num?)?.toInt() ?? 0;
+        _totalSlowMoving = (res['totalSlowMoving'] as num?)?.toInt() ?? 0;
+        _totalDeadStock = (res['totalDeadStock'] as num?)?.toInt() ?? 0;
+        _memuat = false;
+      });
+      _terapkanFilter();
     } catch (e) {
       setStateIfMounted(() {
-        _pesanError = 'Gagal terhubung ke server: $e';
+        _pesanError = 'Gagal memuat data PKM: $e';
         _memuat = false;
       });
     }
@@ -162,8 +160,7 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
     setStateIfMounted(() => _mengunduh = true);
     try {
       final tokoId = Sesi.instance.idTokoTerpilih;
-      final payload = {
-        'action': 'pkm_download_excel',
+      final payload = <String, dynamic>{
         if (tokoId != null && tokoId > 0) 'toko_id': tokoId,
         'leadTime': double.tryParse(_ltController.text) ?? 3.0,
         'safetyStock': double.tryParse(_ssController.text) ?? 2.0,
@@ -171,33 +168,33 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
         'hariKerja': int.tryParse(_hariKerjaController.text) ?? 69,
       };
 
-      final res = await ApiClient.instance.post('pos', payload);
-      if (res['status'] == '00') {
-        final base64Str = res['fileBase64'] as String;
-        final namaFile = res['namaFile'] as String? ?? 'Format-PKM-TokoQu.xlsx';
-        final bytes = base64Decode(base64Str);
+      final res = await ApiClient.instance.aksi('pkm_download_excel', payload);
+      final base64Str = res['fileBase64'] as String? ?? '';
+      if (base64Str.isEmpty) {
+        throw Exception('Server tidak mengembalikan berkas Excel PKM.');
+      }
+      final namaFile = res['namaFile'] as String? ?? 'Format-PKM-TokoQu.xlsx';
+      final bytes = base64Decode(base64Str);
 
-        final result = await FilePicker.platform.saveFile(
-          dialogTitle: 'Simpan Lembar Kerja PKM Excel',
-          fileName: namaFile,
-          type: FileType.custom,
-          allowedExtensions: ['xlsx'],
-        );
+      final result = await FilePicker.platform.saveFile(
+        dialogTitle: 'Simpan Lembar Kerja PKM Excel',
+        fileName: namaFile,
+        bytes: bytes,
+        type: FileType.custom,
+        allowedExtensions: ['xlsx'],
+      );
 
-        if (result != null) {
-          final file = File(result);
-          await file.writeAsBytes(bytes);
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Format PKM berhasil disimpan di $result'),
-                backgroundColor: Colors.green.shade700,
-              ),
-            );
-          }
+      if (result != null) {
+        final file = File(result);
+        await file.writeAsBytes(bytes);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Format PKM berhasil disimpan di $result'),
+              backgroundColor: Colors.green.shade700,
+            ),
+          );
         }
-      } else {
-        throw Exception(res['description'] ?? 'Gagal mengunduh Excel');
       }
     } catch (e) {
       if (mounted) {
@@ -213,8 +210,8 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
   Future<void> _cetakPdf() async {
     final doc = pw.Document();
     final items = _filteredProduk;
-    final tokoNama = Sesi.instance.tenantNama.isNotEmpty
-        ? Sesi.instance.tenantNama
+    final tokoNama = Sesi.instance.tokoNama.isNotEmpty
+        ? Sesi.instance.tokoNama
         : 'Toko Al-Bahjah';
 
     doc.addPage(pw.MultiPage(
@@ -299,8 +296,47 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
     );
   }
 
+  void _intipProdukPkm(String judul, List<Map<String, dynamic>> daftar) {
+    tampilkanRincianKlikDialog(
+      context,
+      judul: judul,
+      subjudul: 'Total ${daftar.length} produk · Rumus PKM = AVG × (LT + SS) + Minor',
+      kolom: const [
+        'Kode',
+        'Nama Barang',
+        'Kategori',
+        'Klasifikasi ABC',
+        'Total Jual (3 Bln)',
+        'AVG Sales/Hari',
+        'Stok Toko',
+        'DSI (Hari)',
+        'PKM (Max)',
+        'Saran PO',
+        'Est. Biaya PO',
+        'Status',
+      ],
+      baris: daftar
+          .map((p) => <Object?>[
+                p['kode'] ?? '-',
+                p['nama'] ?? '-',
+                p['kategori'] ?? '-',
+                p['klasifikasiAbc'] ?? '-',
+                _formatAngka.format(p['totalJual'] ?? 0),
+                _formatAngka.format(p['avgSales'] ?? 0),
+                _formatAngka.format(p['stokSistem'] ?? 0),
+                _formatAngka.format(p['dsiHari'] ?? 0),
+                _formatAngka.format(p['pkm'] ?? 0),
+                _formatAngka.format(p['rekomendasiPo'] ?? 0),
+                _formatRupiah.format(p['estimasiBiayaPo'] ?? 0),
+                p['statusStok'] ?? '-',
+              ])
+          .toList(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final tokoNama = Sesi.instance.tokoNama;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -494,32 +530,42 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
         ),
         const SizedBox(height: 12),
 
-        // Ringkasan Kartu
-        Row(
+        // Ringkasan Kartu (Klik untuk rincian + Excel & PDF)
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
           children: [
-            Expanded(
+            SizedBox(
+              width: 240,
               child: _kartuInfo(
                 judul: 'Total Produk Dianalisis',
                 nilai: _formatAngka.format(_semuaProduk.length),
-                sub: 'Item aktif di katalog toko',
+                sub: 'Klik rincian katalog ($tokoNama)',
                 warna: Colors.blue.shade700,
                 latar: Colors.blue.shade50,
                 ikon: Icons.inventory_2_outlined,
+                onTap: () => _intipProdukPkm('Semua Produk Analisis PKM', _semuaProduk),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
+            SizedBox(
+              width: 240,
               child: _kartuInfo(
-                judul: 'Produk Perlu Reorder',
+                judul: 'Wajib Reorder (PO > 0)',
                 nilai: '$_totalPerluOrder Item',
                 sub: 'Stok di bawah batas PKM',
                 warna: Colors.orange.shade800,
                 latar: Colors.orange.shade50,
                 ikon: Icons.warning_amber_rounded,
+                onTap: () => _intipProdukPkm(
+                  'Produk Wajib Reorder (PO > 0)',
+                  _semuaProduk
+                      .where((p) => ((p['rekomendasiPo'] as num?) ?? 0) > 0)
+                      .toList(),
+                ),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
+            SizedBox(
+              width: 260,
               child: _kartuInfo(
                 judul: 'Estimasi Kebutuhan Biaya PO',
                 nilai: _formatRupiah.format(_totalEstBiayaPo),
@@ -527,6 +573,48 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
                 warna: Colors.green.shade800,
                 latar: Colors.green.shade50,
                 ikon: Icons.payments_outlined,
+                onTap: () => _intipProdukPkm(
+                  'Rincian Estimasi Biaya PO',
+                  _semuaProduk
+                      .where((p) => ((p['estimasiBiayaPo'] as num?) ?? 0) > 0)
+                      .toList(),
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 220,
+              child: _kartuInfo(
+                judul: 'Fast Moving (Kelas A)',
+                nilai: '$_totalFastMoving Item',
+                sub: 'Kontribusi penjualan 80% teratas',
+                warna: Colors.teal.shade800,
+                latar: Colors.teal.shade50,
+                ikon: Icons.bolt_outlined,
+                onTap: () => _intipProdukPkm(
+                  'Produk Fast Moving (Kelas A)',
+                  _semuaProduk
+                      .where((p) => '${p['klasifikasiAbc'] ?? ''}'.startsWith('A'))
+                      .toList(),
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 220,
+              child: _kartuInfo(
+                judul: 'Slow / Dead Stock (C & D)',
+                nilai: '${_totalSlowMoving + _totalDeadStock} Item',
+                sub: 'Perlu evaluasi / retur supplier',
+                warna: Colors.purple.shade800,
+                latar: Colors.purple.shade50,
+                ikon: Icons.hourglass_bottom_outlined,
+                onTap: () => _intipProdukPkm(
+                  'Produk Slow Moving & Dead Stock (Kelas C & D)',
+                  _semuaProduk
+                      .where((p) =>
+                          '${p['klasifikasiAbc'] ?? ''}'.startsWith('C') ||
+                          '${p['klasifikasiAbc'] ?? ''}'.startsWith('D'))
+                      .toList(),
+                ),
               ),
             ),
           ],
@@ -561,23 +649,28 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
           )
         else
           AppDataTable(
-            kolom: const [
-              DataColumn(label: Text('KODE / BARCODE')),
-              DataColumn(label: Text('NAMA BARANG')),
-              DataColumn(label: Text('KATEGORI')),
-              DataColumn(label: Text('TOTAL JUAL (3 BLN)', textAlign: TextAlign.right)),
-              DataColumn(label: Text('AVG SALES/HARI', textAlign: TextAlign.right)),
-              DataColumn(label: Text('STOK TOKO', textAlign: TextAlign.right)),
-              DataColumn(label: Text('PKM (MAX)', textAlign: TextAlign.right)),
-              DataColumn(label: Text('SARAN PO', textAlign: TextAlign.right)),
-              DataColumn(label: Text('EST. BIAYA PO', textAlign: TextAlign.right)),
-              DataColumn(label: Text('STATUS')),
+            minWidth: 1280,
+            emptyText: 'Tidak ada produk yang cocok dengan filter.',
+            columns: const [
+              AppTableColumn('Kode / Barcode', flex: 2),
+              AppTableColumn('Nama Barang', flex: 4),
+              AppTableColumn('Kategori / ABC', flex: 2),
+              AppTableColumn('Jual (3 Bln)', flex: 2, align: TextAlign.right),
+              AppTableColumn('AVG / Hari', flex: 2, align: TextAlign.right),
+              AppTableColumn('Stok Toko', flex: 2, align: TextAlign.right),
+              AppTableColumn('DSI (Hari)', flex: 1, align: TextAlign.right),
+              AppTableColumn('PKM (Max)', flex: 2, align: TextAlign.right),
+              AppTableColumn('Saran PO', flex: 2, align: TextAlign.right),
+              AppTableColumn('Est. Biaya PO', flex: 2, align: TextAlign.right),
+              AppTableColumn('Status', flex: 2, align: TextAlign.center),
             ],
-            baris: _filteredProduk.map((p) {
+            rows: _filteredProduk.map((p) {
               final po = (p['rekomendasiPo'] as num?)?.toDouble() ?? 0.0;
               final stok = (p['stokSistem'] as num?)?.toDouble() ?? 0.0;
               final pkm = (p['pkm'] as num?)?.toDouble() ?? 0.0;
               final biaya = (p['estimasiBiayaPo'] as num?)?.toDouble() ?? 0.0;
+              final dsi = (p['dsiHari'] as num?)?.toDouble() ?? 0.0;
+              final abc = (p['klasifikasiAbc'] ?? '-').toString();
 
               Color chipBg = Colors.grey.shade100;
               Color chipFg = Colors.grey.shade800;
@@ -597,48 +690,49 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
                 statusLabel = 'CUKUP';
               }
 
-              return DataRow(
+              return AppTableRowData(
+                onTap: () => _intipProdukPkm('Rincian PKM: ${p['nama'] ?? '-'}', [p]),
                 cells: [
-                  DataCell(
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text((p['kode'] ?? '').toString(),
-                            style: const TextStyle(fontWeight: FontWeight.w600)),
-                        if ((p['barcode'] ?? '').toString().isNotEmpty)
-                          Text((p['barcode'] ?? '').toString(),
-                              style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
-                      ],
-                    ),
+                  AppTableCell.text(
+                    '${p['kode'] ?? ''}${('${p['barcode'] ?? ''}').isEmpty ? '' : '\n${p['barcode']}'}',
+                    flex: 2,
+                    maxLines: 2,
                   ),
-                  DataCell(Text((p['nama'] ?? '-').toString(),
-                      style: const TextStyle(fontWeight: FontWeight.w500))),
-                  DataCell(Text((p['kategori'] ?? '-').toString())),
-                  DataCell(Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(_formatAngka.format(p['totalJual'] ?? 0)),
-                  )),
-                  DataCell(Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(_formatAngka.format(p['avgSales'] ?? 0),
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
-                  )),
-                  DataCell(Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(_formatAngka.format(stok),
-                        style: TextStyle(
-                            color: stok <= 0 ? Colors.red.shade700 : null,
-                            fontWeight: FontWeight.w600)),
-                  )),
-                  DataCell(Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(_formatAngka.format(pkm),
-                        style: const TextStyle(
-                            color: Color(0xFF1D4ED8), fontWeight: FontWeight.bold)),
-                  )),
-                  DataCell(Align(
-                    alignment: Alignment.centerRight,
+                  AppTableCell.text('${p['nama'] ?? '-'}',
+                      flex: 4,
+                      maxLines: 2,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  AppTableCell.text('${p['kategori'] ?? '-'}\n[$abc]',
+                      flex: 2, maxLines: 2),
+                  AppTableCell.text(_formatAngka.format(p['totalJual'] ?? 0),
+                      flex: 2, align: TextAlign.right),
+                  AppTableCell.text(_formatAngka.format(p['avgSales'] ?? 0),
+                      flex: 2,
+                      align: TextAlign.right,
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  AppTableCell.text(
+                    _formatAngka.format(stok),
+                    flex: 2,
+                    align: TextAlign.right,
+                    style: TextStyle(
+                        color: stok <= 0 ? Colors.red.shade700 : null,
+                        fontWeight: FontWeight.w600),
+                  ),
+                  AppTableCell.text(
+                    dsi >= 999 ? '∞' : _formatAngka.format(dsi),
+                    flex: 1,
+                    align: TextAlign.right,
+                  ),
+                  AppTableCell.text(
+                    _formatAngka.format(pkm),
+                    flex: 2,
+                    align: TextAlign.right,
+                    style: const TextStyle(
+                        color: Color(0xFF1D4ED8), fontWeight: FontWeight.bold),
+                  ),
+                  AppTableCell(
+                    flex: 2,
+                    align: TextAlign.right,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
@@ -647,19 +741,23 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
                       ),
                       child: Text(
                         po > 0 ? _formatAngka.format(po) : '0',
+                        textAlign: TextAlign.right,
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: po > 0 ? Colors.orange.shade900 : Colors.grey.shade600,
                         ),
                       ),
                     ),
-                  )),
-                  DataCell(Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(biaya > 0 ? _formatRupiah.format(biaya) : '-'),
-                  )),
-                  DataCell(
-                    Container(
+                  ),
+                  AppTableCell.text(
+                    biaya > 0 ? _formatRupiah.format(biaya) : '-',
+                    flex: 2,
+                    align: TextAlign.right,
+                  ),
+                  AppTableCell(
+                    flex: 2,
+                    align: TextAlign.center,
+                    child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: chipBg,
@@ -667,6 +765,7 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
                       ),
                       child: Text(
                         statusLabel,
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                             fontSize: 11, fontWeight: FontWeight.bold, color: chipFg),
                       ),
@@ -687,40 +786,45 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
     required Color warna,
     required Color latar,
     required IconData ikon,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: latar,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: warna.withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: warna.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(8),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: latar,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: warna.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: warna.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(ikon, color: warna, size: 24),
             ),
-            child: Icon(ikon, color: warna, size: 24),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(judul, style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
-                const SizedBox(height: 2),
-                Text(nilai,
-                    style: TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold, color: warna)),
-                const SizedBox(height: 2),
-                Text(sub, style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
-              ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(judul, style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
+                  const SizedBox(height: 2),
+                  Text(nilai,
+                      style: TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold, color: warna)),
+                  const SizedBox(height: 2),
+                  Text(sub, style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

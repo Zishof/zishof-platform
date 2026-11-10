@@ -11,9 +11,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api_client.dart';
 import '../sesi.dart';
-import '../theme.dart';
+import '../theme/app_colors.dart';
 import '../widgets/aksi_baris_menu.dart';
-import '../widgets/app_data_table.dart';
+import '../widgets/app_components.dart';
+import '../widgets/rincian_intip_dialog.dart';
 import '../widgets/safe_state.dart';
 
 /// Tab SO Grand (Grand Stock Opname) &mdash; Audit Total Seluruh Fisik Barang Toko.
@@ -394,8 +395,8 @@ class _TabSoGrandState extends State<TabSoGrand> {
   Future<void> _cetakPdf() async {
     final doc = pw.Document();
     final items = _filteredProduk;
-    final tokoNama = Sesi.instance.tenantNama.isNotEmpty
-        ? Sesi.instance.tenantNama
+    final tokoNama = Sesi.instance.tokoNama.isNotEmpty
+        ? Sesi.instance.tokoNama
         : 'Toko Al-Bahjah';
 
     doc.addPage(pw.MultiPage(
@@ -591,31 +592,61 @@ class _TabSoGrandState extends State<TabSoGrand> {
         ),
         const SizedBox(height: 12),
 
-        // Kartu Ringkasan & Progres
+        // Kartu Ringkasan & Progres (Klik untuk rincian + Excel & PDF)
         Row(
           children: [
             Expanded(
               child: Card(
                 elevation: 0,
                 color: AppColors.latarLembut(AppColors.primary),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Total Produk Aktif',
-                          style: TextStyle(fontSize: 12)),
-                      const SizedBox(height: 4),
-                      Text(
-                        '$_formatAngka.format(totalProduk) Item',
-                        style: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        'Menampilkan ${_filteredProduk.length} item',
-                        style: const TextStyle(fontSize: 11, color: Colors.grey),
-                      ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => tampilkanRincianKlikDialog(
+                    context,
+                    judul: 'Rincian Total Produk Aktif SO Grand',
+                    subjudul: 'Total ${_semuaProduk.length} produk aktif di toko',
+                    kolom: const [
+                      'Kode',
+                      'Barcode',
+                      'Nama Produk',
+                      'Kategori',
+                      'Satuan',
+                      'Stok Sistem',
+                      'Status Cek',
                     ],
+                    baris: _semuaProduk
+                        .map((p) => <Object?>[
+                              p['kode'] ?? '-',
+                              p['barcode'] ?? '-',
+                              p['nama'] ?? '-',
+                              p['kategori'] ?? '-',
+                              p['satuan'] ?? '-',
+                              _formatAngka.format(p['stokSistem'] ?? 0),
+                              _checklistSelesai.contains((p['produkId'] as num).toInt())
+                                  ? 'Sudah Dicek'
+                                  : 'Belum Dicek',
+                            ])
+                        .toList(),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Total Produk Aktif',
+                            style: TextStyle(fontSize: 12)),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${_formatAngka.format(totalProduk)} Item',
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          'Menampilkan ${_filteredProduk.length} item · Klik rincian',
+                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -625,24 +656,55 @@ class _TabSoGrandState extends State<TabSoGrand> {
               child: Card(
                 elevation: 0,
                 color: AppColors.latarLembut(AppColors.warning),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Total Stok Sistem',
-                          style: TextStyle(fontSize: 12)),
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatAngka.format(_totalStokSistem),
-                        style: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        'Estimasi Nilai: ${_formatRupiah.format(_totalNilaiAset)}',
-                        style: const TextStyle(fontSize: 11, color: Colors.grey),
-                      ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => tampilkanRincianKlikDialog(
+                    context,
+                    judul: 'Rincian Stok Sistem & Nilai Aset SO Grand',
+                    subjudul:
+                        'Total Stok: ${_formatAngka.format(_totalStokSistem)} | Nilai Aset: ${_formatRupiah.format(_totalNilaiAset)}',
+                    kolom: const [
+                      'Kode',
+                      'Nama Produk',
+                      'Kategori',
+                      'Stok Sistem',
+                      'Harga Beli',
+                      'Nilai Persediaan',
                     ],
+                    baris: _semuaProduk
+                        .map((p) {
+                          final stok = (p['stokSistem'] as num?)?.toDouble() ?? 0;
+                          final hb = (p['hargaBeli'] as num?)?.toDouble() ?? 0;
+                          return <Object?>[
+                            p['kode'] ?? '-',
+                            p['nama'] ?? '-',
+                            p['kategori'] ?? '-',
+                            _formatAngka.format(stok),
+                            _formatRupiah.format(hb),
+                            _formatRupiah.format(stok * hb),
+                          ];
+                        })
+                        .toList(),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Total Stok Sistem',
+                            style: TextStyle(fontSize: 12)),
+                        const SizedBox(height: 4),
+                        Text(
+                          _formatAngka.format(_totalStokSistem),
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          'Estimasi Nilai: ${_formatRupiah.format(_totalNilaiAset)}',
+                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -652,26 +714,55 @@ class _TabSoGrandState extends State<TabSoGrand> {
               child: Card(
                 elevation: 0,
                 color: AppColors.latarLembut(AppColors.success),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Progres Penghitungan Fisik',
-                          style: TextStyle(fontSize: 12)),
-                      const SizedBox(height: 4),
-                      Text(
-                        '$jumlahDicek / $totalProduk (${persenSelesai.toStringAsFixed(1)}%)',
-                        style: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 4),
-                      LinearProgressIndicator(
-                        value: totalProduk > 0 ? (jumlahDicek / totalProduk) : 0,
-                        backgroundColor: Colors.grey.shade200,
-                        color: AppColors.success,
-                      ),
-                    ],
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () {
+                    final sudah = _semuaProduk
+                        .where((p) => _checklistSelesai.contains((p['produkId'] as num).toInt()))
+                        .toList();
+                    tampilkanRincianKlikDialog(
+                      context,
+                      judul: 'Rincian Progres Penghitungan Fisik SO Grand',
+                      subjudul: '$jumlahDicek dari $totalProduk produk sudah dicek (${persenSelesai.toStringAsFixed(1)}%)',
+                      kolom: const [
+                        'Kode',
+                        'Nama Produk',
+                        'Kategori',
+                        'Stok Sistem',
+                        'Status',
+                      ],
+                      baris: sudah
+                          .map((p) => <Object?>[
+                                p['kode'] ?? '-',
+                                p['nama'] ?? '-',
+                                p['kategori'] ?? '-',
+                                _formatAngka.format(p['stokSistem'] ?? 0),
+                                'Sudah Dicek',
+                              ])
+                          .toList(),
+                    );
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Progres Penghitungan Fisik',
+                            style: TextStyle(fontSize: 12)),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$jumlahDicek / $totalProduk (${persenSelesai.toStringAsFixed(1)}%)',
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 4),
+                        LinearProgressIndicator(
+                          value: totalProduk > 0 ? (jumlahDicek / totalProduk) : 0,
+                          backgroundColor: Colors.grey.shade200,
+                          color: AppColors.success,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -718,7 +809,7 @@ class _TabSoGrandState extends State<TabSoGrand> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
-                  dense: true,
+                  visualDensity: VisualDensity.compact,
                 ),
                 onPressed: _menyimpan ? null : _simpanBatchEntry,
               ),

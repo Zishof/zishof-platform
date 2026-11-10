@@ -17,6 +17,7 @@ import '../widgets/kilau_perubahan.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
 import '../widgets/aksi_baris_menu.dart';
+import '../widgets/rincian_intip_dialog.dart';
 import 'pergerakan_stok_tab.dart';
 
 final _mutasiRp =
@@ -25,7 +26,11 @@ final _mutasiAngka = NumberFormat('#,##0.##', 'id_ID');
 final _mutasiTanggal = DateFormat('yyyy-MM-dd');
 
 class ProdukMutasiBarangTab extends StatefulWidget {
-  const ProdukMutasiBarangTab({super.key});
+  final bool modePerTanggalLengkap;
+  const ProdukMutasiBarangTab({
+    super.key,
+    this.modePerTanggalLengkap = false,
+  });
 
   @override
   State<ProdukMutasiBarangTab> createState() => _ProdukMutasiBarangTabState();
@@ -156,6 +161,10 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
     'Nilai Masuk',
     'Keluar',
     'Nilai Keluar',
+    'Retur',
+    'Nilai Retur',
+    'Koreksi SO (Ajusmen)',
+    'Nilai Ajusmen',
     'Saldo Akhir',
     'Nilai Akhir',
   ];
@@ -171,6 +180,10 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
         r['nilaiMasuk'] ?? 0,
         r['keluar'] ?? 0,
         r['nilaiKeluar'] ?? 0,
+        r['retur'] ?? 0,
+        r['nilaiRetur'] ?? 0,
+        r['penyesuaian'] ?? 0,
+        r['nilaiPenyesuaian'] ?? 0,
         r['saldoAkhir'] ?? 0,
         r['nilaiAkhir'] ?? 0,
       ];
@@ -186,6 +199,10 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
         _summary['nilaiMasuk'] ?? 0,
         _summary['keluar'] ?? 0,
         _summary['nilaiKeluar'] ?? 0,
+        _summary['retur'] ?? 0,
+        _summary['nilaiRetur'] ?? 0,
+        _summary['penyesuaian'] ?? 0,
+        _summary['nilaiPenyesuaian'] ?? 0,
         _summary['saldoAkhir'] ?? 0,
         _summary['nilaiAkhir'] ?? 0,
       ];
@@ -333,14 +350,70 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
     );
   }
 
-  AppTableCell _angkaCell(dynamic v, {bool rupiah = false}) =>
-      AppTableCell.text(
-        rupiah
-            ? _mutasiRp.format((v as num?) ?? 0)
-            : _mutasiAngka.format((v as num?) ?? 0),
+  Future<void> _tampilkanRincianKolomTotal(String labelKolom, String keyQty, String keyNilai) async {
+    await tampilkanRincianKlikDialog(
+      context,
+      judul: 'Rincian $labelKolom (${_mutasiTanggal.format(_dari)} s/d ${_mutasiTanggal.format(_sampai)})',
+      subjudul: 'Daftar produk pada halaman ini beserta $labelKolom',
+      kolom: [
+        'Kategori',
+        'Kode Barang',
+        'Nama Barang & Jasa',
+        labelKolom,
+        'Nilai (Rp)',
+      ],
+      baris: _data.map((r) => <Object?>[
+        r['kategori'] ?? '-',
+        r['kode'] ?? '-',
+        r['nama'] ?? '-',
+        _mutasiAngka.format((r[keyQty] as num?) ?? 0),
+        _mutasiRp.format((r[keyNilai] as num?) ?? 0),
+      ]).toList(),
+      barisTotal: [
+        'TOTAL KESELURUHAN',
+        '',
+        '',
+        _mutasiAngka.format((_summary[keyQty] as num?) ?? 0),
+        _mutasiRp.format((_summary[keyNilai] as num?) ?? 0),
+      ],
+    );
+  }
+
+  AppTableCell _angkaCell(dynamic v,
+          {bool rupiah = false, VoidCallback? onTap}) =>
+      AppTableCell(
         width: 105,
         align: TextAlign.right,
-        style: const TextStyle(fontSize: 11.5),
+        child: onTap == null
+            ? Text(
+                rupiah
+                    ? _mutasiRp.format((v as num?) ?? 0)
+                    : _mutasiAngka.format((v as num?) ?? 0),
+                textAlign: TextAlign.right,
+                style: const TextStyle(fontSize: 11.5),
+              )
+            : InkWell(
+                borderRadius: BorderRadius.circular(4),
+                onTap: onTap,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                  child: Text(
+                    rupiah
+                        ? _mutasiRp.format((v as num?) ?? 0)
+                        : _mutasiAngka.format((v as num?) ?? 0),
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.underline,
+                      decorationColor:
+                          AppColors.primary.withValues(alpha: 0.35),
+                    ),
+                  ),
+                ),
+              ),
       );
 
   @override
@@ -361,15 +434,39 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
           ),
           AppTableCell.text('${r['kode'] ?? '-'}', width: 95),
           AppTableCell.text('${r['barcode'] ?? '-'}', width: 110),
-          AppTableCell.text('${r['nama'] ?? '-'}', width: 220),
-          _angkaCell(r['saldoAwal']),
-          _angkaCell(r['nilaiAwal'], rupiah: true),
-          _angkaCell(r['masuk']),
-          _angkaCell(r['nilaiMasuk'], rupiah: true),
-          _angkaCell(r['keluar']),
-          _angkaCell(r['nilaiKeluar'], rupiah: true),
-          _angkaCell(r['saldoAkhir']),
-          _angkaCell(r['nilaiAkhir'], rupiah: true),
+          AppTableCell(
+            width: 220,
+            child: InkWell(
+              onTap: () => _bukaRincian(r),
+              child: Text(
+                '${r['nama'] ?? '-'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+          ),
+          _angkaCell(r['saldoAwal'], onTap: () => _bukaRincian(r)),
+          _angkaCell(r['nilaiAwal'], rupiah: true, onTap: () => _bukaRincian(r)),
+          _angkaCell(r['masuk'], onTap: () => _bukaRincian(r)),
+          _angkaCell(r['nilaiMasuk'],
+              rupiah: true, onTap: () => _bukaRincian(r)),
+          _angkaCell(r['keluar'], onTap: () => _bukaRincian(r)),
+          _angkaCell(r['nilaiKeluar'],
+              rupiah: true, onTap: () => _bukaRincian(r)),
+          _angkaCell(r['retur'] ?? 0, onTap: () => _bukaRincian(r)),
+          _angkaCell(r['nilaiRetur'] ?? 0,
+              rupiah: true, onTap: () => _bukaRincian(r)),
+          _angkaCell(r['penyesuaian'] ?? 0, onTap: () => _bukaRincian(r)),
+          _angkaCell(r['nilaiPenyesuaian'] ?? 0,
+              rupiah: true, onTap: () => _bukaRincian(r)),
+          _angkaCell(r['saldoAkhir'], onTap: () => _bukaRincian(r)),
+          _angkaCell(r['nilaiAkhir'],
+              rupiah: true, onTap: () => _bukaRincian(r)),
           AppTableCell(
             width: 64,
             align: TextAlign.center,
@@ -394,14 +491,48 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
       const AppTableCell(width: 95, child: SizedBox.shrink()),
       const AppTableCell(width: 110, child: SizedBox.shrink()),
       const AppTableCell(width: 220, child: SizedBox.shrink()),
-      _angkaCell(_summary['saldoAwal']),
-      _angkaCell(_summary['nilaiAwal'], rupiah: true),
-      _angkaCell(_summary['masuk']),
-      _angkaCell(_summary['nilaiMasuk'], rupiah: true),
-      _angkaCell(_summary['keluar']),
-      _angkaCell(_summary['nilaiKeluar'], rupiah: true),
-      _angkaCell(_summary['saldoAkhir']),
-      _angkaCell(_summary['nilaiAkhir'], rupiah: true),
+      _angkaCell(_summary['saldoAwal'],
+          onTap: () => _tampilkanRincianKolomTotal(
+              'Saldo Awal', 'saldoAwal', 'nilaiAwal')),
+      _angkaCell(_summary['nilaiAwal'],
+          rupiah: true,
+          onTap: () => _tampilkanRincianKolomTotal(
+              'Saldo Awal', 'saldoAwal', 'nilaiAwal')),
+      _angkaCell(_summary['masuk'],
+          onTap: () =>
+              _tampilkanRincianKolomTotal('Barang Masuk', 'masuk', 'nilaiMasuk')),
+      _angkaCell(_summary['nilaiMasuk'],
+          rupiah: true,
+          onTap: () =>
+              _tampilkanRincianKolomTotal('Barang Masuk', 'masuk', 'nilaiMasuk')),
+      _angkaCell(_summary['keluar'],
+          onTap: () => _tampilkanRincianKolomTotal(
+              'Barang Keluar', 'keluar', 'nilaiKeluar')),
+      _angkaCell(_summary['nilaiKeluar'],
+          rupiah: true,
+          onTap: () => _tampilkanRincianKolomTotal(
+              'Barang Keluar', 'keluar', 'nilaiKeluar')),
+      _angkaCell(_summary['retur'] ?? 0,
+          onTap: () =>
+              _tampilkanRincianKolomTotal('Retur', 'retur', 'nilaiRetur')),
+      _angkaCell(_summary['nilaiRetur'] ?? 0,
+          rupiah: true,
+          onTap: () =>
+              _tampilkanRincianKolomTotal('Retur', 'retur', 'nilaiRetur')),
+      _angkaCell(_summary['penyesuaian'] ?? 0,
+          onTap: () => _tampilkanRincianKolomTotal(
+              'Koreksi SO (Ajusmen)', 'penyesuaian', 'nilaiPenyesuaian')),
+      _angkaCell(_summary['nilaiPenyesuaian'] ?? 0,
+          rupiah: true,
+          onTap: () => _tampilkanRincianKolomTotal(
+              'Koreksi SO (Ajusmen)', 'penyesuaian', 'nilaiPenyesuaian')),
+      _angkaCell(_summary['saldoAkhir'],
+          onTap: () => _tampilkanRincianKolomTotal(
+              'Saldo Akhir', 'saldoAkhir', 'nilaiAkhir')),
+      _angkaCell(_summary['nilaiAkhir'],
+          rupiah: true,
+          onTap: () => _tampilkanRincianKolomTotal(
+              'Saldo Akhir', 'saldoAkhir', 'nilaiAkhir')),
       const AppTableCell(width: 64, child: SizedBox.shrink()),
     ]);
 
@@ -458,52 +589,59 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
                       TextButton(
                           onPressed: _muat, child: const Text('Coba Lagi')),
                     ]))
-                  : SingleChildScrollView(
-                      child: AppDataTable(
-                        minWidth: 1524,
-                        emptyText: 'Belum ada data mutasi barang.',
-                        columns: const [
-                          AppTableColumn('Kategori Barang', width: 130),
-                          AppTableColumn('Kode Barang', width: 95),
-                          AppTableColumn('UPC/Barcode', width: 110),
-                          AppTableColumn('Nama Barang & Jasa', width: 220),
-                          AppTableColumn('Saldo Awal',
-                              width: 105, align: TextAlign.right),
-                          AppTableColumn('Nilai Awal',
-                              width: 105, align: TextAlign.right),
-                          AppTableColumn('Masuk',
-                              width: 105, align: TextAlign.right),
-                          AppTableColumn('Nilai Masuk',
-                              width: 105, align: TextAlign.right),
-                          AppTableColumn('Keluar',
-                              width: 105, align: TextAlign.right),
-                          AppTableColumn('Nilai Keluar',
-                              width: 105, align: TextAlign.right),
-                          AppTableColumn('Saldo Akhir',
-                              width: 105, align: TextAlign.right),
-                          AppTableColumn('Nilai Akhir',
-                              width: 105, align: TextAlign.right),
-                          AppTableColumn('Aksi', width: 64, align: TextAlign.center),
-                        ],
-                        rows: [...rows, if (_data.isNotEmpty) totalRow],
-                        pagination: AppTablePagination(
-                          halaman: _halaman,
-                          totalHalaman: totalHalaman,
-                          totalData: _total,
-                          labelData: 'produk',
-                          onSebelumnya: _halaman > 1
-                              ? () {
-                                  _halaman--;
-                                  _muat();
-                                }
-                              : null,
-                          onBerikutnya: _halaman < totalHalaman
-                              ? () {
-                                  _halaman++;
-                                  _muat();
-                                }
-                              : null,
-                        ),
+                  : AppDataTable(
+                      minWidth: 1944,
+                      horizontalScroll: true,
+                      emptyText: 'Belum ada data mutasi barang.',
+                      columns: const [
+                        AppTableColumn('Kategori Barang', width: 130),
+                        AppTableColumn('Kode Barang', width: 95),
+                        AppTableColumn('UPC/Barcode', width: 110),
+                        AppTableColumn('Nama Barang & Jasa', width: 220),
+                        AppTableColumn('Saldo Awal',
+                            width: 105, align: TextAlign.right),
+                        AppTableColumn('Nilai Awal',
+                            width: 105, align: TextAlign.right),
+                        AppTableColumn('Masuk',
+                            width: 105, align: TextAlign.right),
+                        AppTableColumn('Nilai Masuk',
+                            width: 105, align: TextAlign.right),
+                        AppTableColumn('Keluar',
+                            width: 105, align: TextAlign.right),
+                        AppTableColumn('Nilai Keluar',
+                            width: 105, align: TextAlign.right),
+                        AppTableColumn('Retur',
+                            width: 105, align: TextAlign.right),
+                        AppTableColumn('Nilai Retur',
+                            width: 105, align: TextAlign.right),
+                        AppTableColumn('Ajusmen SO',
+                            width: 105, align: TextAlign.right),
+                        AppTableColumn('Nilai Ajusmen',
+                            width: 105, align: TextAlign.right),
+                        AppTableColumn('Saldo Akhir',
+                            width: 105, align: TextAlign.right),
+                        AppTableColumn('Nilai Akhir',
+                            width: 105, align: TextAlign.right),
+                        AppTableColumn('Aksi', width: 64, align: TextAlign.center),
+                      ],
+                      rows: [...rows, if (_data.isNotEmpty) totalRow],
+                      pagination: AppTablePagination(
+                        halaman: _halaman,
+                        totalHalaman: totalHalaman,
+                        totalData: _total,
+                        labelData: 'produk',
+                        onSebelumnya: _halaman > 1
+                            ? () {
+                                _halaman--;
+                                _muat();
+                              }
+                            : null,
+                        onBerikutnya: _halaman < totalHalaman
+                            ? () {
+                                _halaman++;
+                                _muat();
+                              }
+                            : null,
                       ),
                     ),
         ),

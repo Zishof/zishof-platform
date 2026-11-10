@@ -368,6 +368,135 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
     _setStateEntri(() => _itemsFaktur.removeAt(index));
   }
 
+  void _ubahQtyDaftar(int index, double delta) {
+    if (index < 0 || index >= _itemsFaktur.length) return;
+    final lama = _itemsFaktur[index];
+    final baruQty = lama.qty + delta;
+    if (baruQty <= 0) {
+      _hapusDariDaftar(index);
+      return;
+    }
+    _setStateEntri(() {
+      _itemsFaktur[index] = _ItemFaktur(
+        produkId: lama.produkId,
+        nama: lama.nama,
+        kode: lama.kode,
+        qty: baruQty,
+        harga: lama.harga,
+        satuanInputId: lama.satuanInputId,
+        satuanInputNama: lama.satuanInputNama,
+        satuanDasarNama: lama.satuanDasarNama,
+        faktorKonversi: lama.faktorKonversi,
+        nomorBatch: lama.nomorBatch,
+        tanggalProduksi: lama.tanggalProduksi,
+        tanggalExpired: lama.tanggalExpired,
+      );
+    });
+  }
+
+  Future<void> _editItemDaftar(int index) async {
+    if (index < 0 || index >= _itemsFaktur.length) return;
+    final lama = _itemsFaktur[index];
+    final qtyCtrl = TextEditingController(
+        text: lama.qty == lama.qty.roundToDouble()
+            ? lama.qty.toInt().toString()
+            : lama.qty.toString());
+    final hargaCtrl = TextEditingController(text: lama.harga.toStringAsFixed(0));
+    final batchCtrl = TextEditingController(text: lama.nomorBatch ?? '');
+
+    final simpan = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('Ubah Jumlah / Harga — ${lama.nama}',
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        content: SizedBox(
+          width: 380,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: qtyCtrl,
+                autofocus: true,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText:
+                      'Jumlah (${lama.satuanInputNama.isEmpty ? 'Qty' : lama.satuanInputNama}) *',
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (Sesi.instance.bolehUbahHarga)
+                TextField(
+                  controller: hargaCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Harga Beli Satuan (Rp) *',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+              if (lama.nomorBatch != null) ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: batchCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Nomor Batch / Lot',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(c, true),
+            icon: const Icon(Icons.check, size: 16),
+            label: const Text('Terapkan'),
+          ),
+        ],
+      ),
+    );
+
+    if (simpan == true && mounted) {
+      final qBaru = parseDesimal(qtyCtrl.text) ?? lama.qty;
+      final hBaru = Sesi.instance.bolehUbahHarga
+          ? (parseDesimal(hargaCtrl.text) ?? lama.harga)
+          : lama.harga;
+      if (qBaru <= 0) {
+        _hapusDariDaftar(index);
+        return;
+      }
+      _setStateEntri(() {
+        _itemsFaktur[index] = _ItemFaktur(
+          produkId: lama.produkId,
+          nama: lama.nama,
+          kode: lama.kode,
+          qty: qBaru,
+          harga: hBaru,
+          satuanInputId: lama.satuanInputId,
+          satuanInputNama: lama.satuanInputNama,
+          satuanDasarNama: lama.satuanDasarNama,
+          faktorKonversi: lama.faktorKonversi,
+          nomorBatch: lama.nomorBatch == null
+              ? null
+              : (batchCtrl.text.trim().isEmpty
+                  ? lama.nomorBatch
+                  : batchCtrl.text.trim()),
+          tanggalProduksi: lama.tanggalProduksi,
+          tanggalExpired: lama.tanggalExpired,
+        );
+      });
+    }
+  }
+
   double get _totalHitung =>
       _itemsFaktur.fold<double>(0, (a, it) => a + it.total);
 
@@ -819,10 +948,55 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          tooltip: 'Kurangi jumlah (-1)',
+                          icon: const Icon(Icons.remove_circle_outline,
+                              size: 18),
+                          onPressed: () => _ubahQtyDaftar(e.key, -1),
+                        ),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(6),
+                          onTap: () => _editItemDaftar(e.key),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                  color:
+                                      AppColors.primary.withValues(alpha: 0.3)),
+                            ),
+                            child: Text(
+                              _formatAngka.format(it.qty),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          tooltip: 'Tambah jumlah (+1)',
+                          icon: const Icon(Icons.add_circle_outline, size: 18),
+                          onPressed: () => _ubahQtyDaftar(e.key, 1),
+                        ),
+                        const SizedBox(width: 6),
                         Text(_formatRupiah.format(it.total),
                             style: const TextStyle(
                                 fontWeight: FontWeight.w700, fontSize: 12.5)),
                         IconButton(
+                            visualDensity: VisualDensity.compact,
+                            tooltip: 'Ubah Jumlah / Harga Beli',
+                            icon: Icon(Icons.edit_outlined,
+                                size: 18, color: AppColors.primary),
+                            onPressed: () => _editItemDaftar(e.key)),
+                        IconButton(
+                            visualDensity: VisualDensity.compact,
+                            tooltip: 'Hapus dari faktur',
                             icon: const Icon(Icons.close, size: 18),
                             onPressed: () => _hapusDariDaftar(e.key)),
                       ],

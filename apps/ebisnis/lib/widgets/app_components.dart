@@ -1772,6 +1772,9 @@ class _AppTableFooter extends StatelessWidget {
             icon: const Icon(Icons.chevron_right),
             onPressed: pagination.onBerikutnya,
           ),
+          // Ruang aman kanan 56px agar tombol Next (>) tidak pernah tertutup
+          // tombol bantuan mengambang (?) di pojok kanan bawah layar.
+          const SizedBox(width: 56),
         ],
       ),
     );

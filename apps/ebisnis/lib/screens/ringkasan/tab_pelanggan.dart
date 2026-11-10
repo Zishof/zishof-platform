@@ -5,6 +5,7 @@ import '../../widgets/dashboard_charts.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
 import '../../widgets/penanda_data_tersimpan.dart';
+import '../../widgets/rincian_intip_dialog.dart';
 import 'muat_dashboard.dart';
 
 const _periodeOpsi = ['harian', 'mingguan', 'bulanan', 'semester', 'tahunan'];
@@ -188,23 +189,45 @@ class _RingkasanTabPelangganState extends State<RingkasanTabPelanggan> with Jeja
                       ),
                     )
                   else
-                    ...rekapTerloyal.take(30).map((r) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 3),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                  child: Text('${r['nama']}',
-                                      style: const TextStyle(fontSize: 12),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis)),
-                              Text('${r['frekuensi']}x',
-                                  style: const TextStyle(fontSize: 12)),
-                              const SizedBox(width: 8),
-                              Text(formatRupiahDasbor.format(r['total'] ?? 0),
-                                  style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600)),
-                            ],
+                    ...rekapTerloyal.take(30).map((r) => InkWell(
+                          onTap: () => tampilkanRincianKlikDialog(
+                            context,
+                            judul: 'Rincian Pelanggan Terloyal ($_periode)',
+                            subjudul: 'Daftar ${rekapTerloyal.length} pelanggan terloyal',
+                            kolom: const ['No', 'Nama Pelanggan', 'Frekuensi Belanja', 'Total Belanja'],
+                            baris: rekapTerloyal
+                                .asMap()
+                                .entries
+                                .map((e) => <Object?>[
+                                      e.key + 1,
+                                      e.value['nama'] ?? '-',
+                                      '${e.value['frekuensi'] ?? 0}x',
+                                      formatRupiahDasbor.format(e.value['total'] ?? 0),
+                                    ])
+                                .toList(),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                    child: Text('${r['nama']}',
+                                        style: const TextStyle(fontSize: 12),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis)),
+                                Text('${r['frekuensi']}x',
+                                    style: const TextStyle(fontSize: 12)),
+                                const SizedBox(width: 8),
+                                Text(formatRupiahDasbor.format(r['total'] ?? 0),
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600)),
+                                const SizedBox(width: 4),
+                                Icon(Icons.open_in_new,
+                                    size: 13,
+                                    color: AppColors.textSecondaryOf(context)),
+                              ],
+                            ),
                           ),
                         )),
                 ],

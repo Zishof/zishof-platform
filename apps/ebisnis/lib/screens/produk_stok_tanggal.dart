@@ -155,28 +155,103 @@ class HasilStokTanggal {
   /// Jumlah produk pada hasil yang sedang ditampilkan setelah filter pencarian.
   int get jumlahProduk => baris.length;
 
+  int get _indeksStok {
+    for (var i = 0; i < kolom.length; i++) {
+      final normal = kolom[i].toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      if (normal == 'stok' || normal.startsWith('stok')) return i;
+    }
+    return -1;
+  }
+
+  int get _indeksHargaBeli {
+    for (var i = 0; i < kolom.length; i++) {
+      final normal = kolom[i].toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      if (normal.contains('hargabeli') || normal.contains('hpp')) return i;
+    }
+    return -1;
+  }
+
+  int get _indeksNilai {
+    for (var i = 0; i < kolom.length; i++) {
+      final normal = kolom[i].toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      if (normal == 'nilai' ||
+          normal == 'nilaistok' ||
+          normal == 'nilaipersediaan' ||
+          normal == 'totalnilaipersediaan') {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /// Jumlah produk yang memiliki stok > 0 pada tanggal pilihan.
+  int get jumlahStokTersedia {
+    final iStok = _indeksStok;
+    if (iStok < 0) return 0;
+    var n = 0;
+    for (final row in baris) {
+      if (iStok < row.length && (_angkaOpsional(row[iStok]) ?? 0) > 0) n++;
+    }
+    return n;
+  }
+
+  /// Jumlah produk dengan stok menipis (0 < stok <= 5) pada tanggal pilihan.
+  int get jumlahStokMenipis {
+    final iStok = _indeksStok;
+    if (iStok < 0) return 0;
+    var n = 0;
+    for (final row in baris) {
+      final s = iStok < row.length ? (_angkaOpsional(row[iStok]) ?? 0) : 0.0;
+      if (s > 0 && s <= 5) n++;
+    }
+    return n;
+  }
+
+  /// Jumlah produk dengan stok habis (= 0) pada tanggal pilihan.
+  int get jumlahStokHabis {
+    final iStok = _indeksStok;
+    if (iStok < 0) return 0;
+    var n = 0;
+    for (final row in baris) {
+      final s = iStok < row.length ? (_angkaOpsional(row[iStok]) ?? 0) : 0.0;
+      if (s == 0) n++;
+    }
+    return n;
+  }
+
+  /// Jumlah produk dengan stok minus (< 0) pada tanggal pilihan.
+  int get jumlahStokMinus {
+    final iStok = _indeksStok;
+    if (iStok < 0) return 0;
+    var n = 0;
+    for (final row in baris) {
+      final s = iStok < row.length ? (_angkaOpsional(row[iStok]) ?? 0) : 0.0;
+      if (s < 0) n++;
+    }
+    return n;
+  }
+
   /// Jumlah nilai persediaan yang dikirim bersama baris laporan.
   ///
-  /// Nilai tidak dihitung ulang dari stok di perangkat, agar ringkasan sama
-  /// dengan rincian dan berkas ekspor. Laporan server menghargai stok historis
-  /// menggunakan harga beli master produk saat ini; untuk tanggal lampau,
-  /// hasilnya merupakan perkiraan dan bukan rekaman harga historis tersimpan.
-  /// null berarti kolom nilai tidak tersedia atau ada nilai yang tidak dapat
-  /// dibaca, sehingga layar tidak boleh menampilkan angka yang menyesatkan.
+  /// Mendukung kolom `Nilai` / `Nilai Stok` / `Nilai Persediaan` maupun fallback
+  /// perkalian `Stok * Harga Beli` per baris apabila kolom nilai kosong.
   double? get totalNilaiPersediaan {
-    final indeks = kolom.indexWhere((judul) {
-      final normal = judul.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-      return normal == 'nilaistok' ||
-          normal == 'nilaipersediaan' ||
-          normal == 'totalnilaipersediaan';
-    });
-    if (indeks < 0) return null;
+    final indeks = _indeksNilai;
+    final iStok = _indeksStok;
+    final iHrgBeli = _indeksHargaBeli;
+    if (indeks < 0 && (iStok < 0 || iHrgBeli < 0)) return null;
     var jumlah = 0.0;
     for (final row in baris) {
-      if (indeks >= row.length) return null;
-      final nilai = _angkaOpsional(row[indeks]);
-      if (nilai == null) return null;
-      jumlah += nilai;
+      double? nilaiBaris;
+      if (indeks >= 0 && indeks < row.length) {
+        nilaiBaris = _angkaOpsional(row[indeks]);
+      }
+      if (nilaiBaris == null && iStok >= 0 && iHrgBeli >= 0 && iStok < row.length && iHrgBeli < row.length) {
+        final s = _angkaOpsional(row[iStok]) ?? 0;
+        final hb = _angkaOpsional(row[iHrgBeli]) ?? 0;
+        nilaiBaris = s * hb;
+      }
+      jumlah += nilaiBaris ?? 0;
     }
     return jumlah;
   }
