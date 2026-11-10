@@ -11,6 +11,7 @@ import '../widgets/app_error_info.dart';
 import '../widgets/app_version_label.dart';
 import '../services/transaksi_outbox_service.dart';
 import '../services/pengikatan_tenant.dart';
+import '../widgets/app_shell.dart';
 import '../widgets/pemilih_tenant.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -101,6 +102,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // cache lokal-dulu HRD menolak pembacaan walaupun login serta tenant sah.
       final konfig = await ApiClient.instance.aksi('konfigurasi');
       Sesi.instance.terapkanKonfig(konfig);
+      await muatKonfigurasiSesiAwal(konfigAwal: konfig);
 
       // Bukti kata sandi disimpan HANYA sesudah server menerimanya, supaya
       // jalur luring tidak pernah lebih longgar daripada keputusan server.

@@ -7,6 +7,7 @@ import '../app_variant.dart';
 import '../sesi.dart';
 import '../services/pesanan_poller.dart';
 import '../services/layar_pelanggan_launcher.dart';
+import '../services/master_offline.dart';
 import '../services/toko_aktif_lokal.dart';
 import 'penawaran_sinkronisasi_versi.dart';
 import '../theme/app_colors.dart';
@@ -536,6 +537,162 @@ bool bolehTampilMenu(MenuEBisnis kunci) {
   }
   final kunciServer = _kunciAksesMenu[kunci];
   return kunciServer == null || Sesi.instance.bolehMenu(kunciServer);
+}
+
+/// Menentukan menu awal (`MenuEBisnis`) untuk varian POS berdasarkan hak akses
+/// peran pengguna yang aktif di [Sesi.instance].
+///
+/// Aturan bisnis:
+/// 1. Jika pengguna memiliki hak akses ke menu Kasir (`bolehTampilMenu(MenuEBisnis.kasir)`),
+///    layar awal tetap [MenuEBisnis.kasir] agar kasir toko langsung siap melayani transaksi.
+/// 2. Jika pengguna TIDAK memiliki hak akses ke Kasir (misalnya peran Finance Accounting /
+///    Admin Toko / Manajemen seperti `facrb1`, `amtqcrb1`, `ksudtkqu`, `keu`), maka saat
+///    pertama kali login atau membuka aplikasi, pengguna diarahkan langsung ke halaman
+///    **Dashboard** ([MenuEBisnis.ringkasan]) agar tidak tertahan oleh layar Kasir atau
+///    modal penguncian sesi kas (*"Kas Aktif di Perangkat Lain"* / *Buka Kas*).
+/// 3. Jika karena konfigurasi khusus menu Dashboard juga dimatikan untuk peran tersebut,
+///    sistem memilih menu pertama pada daftar menu yang diizinkan bagi peran tersebut,
+///    dengan fallback aman ke [MenuEBisnis.ringkasan].
+MenuEBisnis menuAwalPosSesuaiHakAkses() {
+  if (bolehTampilMenu(MenuEBisnis.kasir)) {
+    return MenuEBisnis.kasir;
+  }
+  if (bolehTampilMenu(MenuEBisnis.ringkasan)) {
+    return MenuEBisnis.ringkasan;
+  }
+  for (final item in _daftarMenu) {
+    if (item.kunci == MenuEBisnis.kasir) continue;
+    if (item.builder != null && bolehTampilMenu(item.kunci)) {
+      return item.kunci;
+    }
+  }
+  return MenuEBisnis.ringkasan;
+}
+
+/// Membangun widget layar awal varian POS sesuai hak akses pengguna aktif
+/// serta menyinkronkan notifier navigasi sidebar/drawer agar selaras dengan
+/// layar yang dibuka.
+Widget layarAwalPosSesuaiHakAkses() {
+  final target = menuAwalPosSesuaiHakAkses();
+  _menuAktifNotifier.value = target;
+  AppDrawer.menuAktifNotifier.value = _labelDrawer(target);
+  if (target == MenuEBisnis.kasir) {
+    return const KasirScreen();
+  }
+  if (target == MenuEBisnis.ringkasan) {
+    return const RingkasanScreen();
+  }
+  final item = _itemMenu(target);
+  if (item?.builder != null) {
+    return Builder(builder: (ctx) => item!.builder!(ctx));
+  }
+  return const RingkasanScreen();
+}
+
+/// Memuat dan menerapkan konfigurasi sesi pengguna (`konfigurasi`) baik dari
+/// cache lokal maupun server, termasuk pemulihan klaim toko aktif per perangkat
+/// ([TokoAktifLokal]), sebelum layar awal ditentukan setelah login, buka kunci,
+/// atau startup aplikasi.
+///
+/// Dengan memanggil fungsi ini sebelum `AppProductProfile.aktif.buatLayarAwal()`,
+/// [Sesi.instance.aksesMenu] dan [Sesi.instance.tokoId] sudah terisi penuh
+/// bahkan bagi pengguna non-kasir yang langsung diarahkan ke [RingkasanScreen]
+/// tanpa melewati [KasirScreen].
+Future<void> muatKonfigurasiSesiAwal({
+  Map<String, dynamic>? konfigAwal,
+  bool klaimBaru = false,
+}) async {
+  try {
+    Map<String, dynamic> konfig = konfigAwal ?? const <String, dynamic>{};
+    if (konfig.isNotEmpty) {
+      try {
+        await CoreDb.instance
+            .simpanCacheReferensi('konfigurasi', jsonEncode(konfig));
+      } catch (_) {}
+    } else {
+      final lokal = await MasterOffline.ambilObjekTersimpan('konfigurasi');
+      if (lokal != null && lokal.isNotEmpty) {
+        konfig = lokal;
+      }
+      try {
+        final terbaru = await MasterOffline.objekDenganCache(
+            'konfigurasi', const {}, 'konfigurasi');
+        if (terbaru.isNotEmpty) {
+          konfig = terbaru;
+        }
+      } catch (_) {}
+    }
+    if (konfig.isEmpty) return;
+
+    Sesi.instance.terapkanKonfig(konfig);
+    await ApiClient.instance.simpanUserIdAktif(Sesi.instance.userId);
+
+    final userId = Sesi.instance.userId;
+    if (userId.isEmpty) return;
+
+    if (!Sesi.instance.multiToko) {
+      if (Sesi.instance.tokoId != null) {
+        await TokoAktifLokal.instance.simpan(userId, Sesi.instance.tokoId!);
+      }
+      return;
+    }
+
+    if (klaimBaru) {
+      if (Sesi.instance.tokoId != null) {
+        await TokoAktifLokal.instance.simpan(userId, Sesi.instance.tokoId!);
+      }
+      return;
+    }
+
+    final idKlaimLokal = await TokoAktifLokal.instance.muat(userId);
+    if (idKlaimLokal == null) {
+      if (Sesi.instance.tokoId != null) {
+        await TokoAktifLokal.instance.simpan(userId, Sesi.instance.tokoId!);
+        try {
+          await ApiClient.instance
+              .aksi('pilih_toko_aktif', {'id_toko': Sesi.instance.tokoId!});
+        } catch (_) {}
+      } else if (Sesi.instance.daftarToko.isNotEmpty) {
+        final idPertama = (Sesi.instance.daftarToko.first['id'] as num?)?.toInt();
+        if (idPertama != null) {
+          Sesi.instance.tokoId = idPertama;
+          Sesi.instance.tokoNama =
+              '${Sesi.instance.daftarToko.first['nama'] ?? ''}';
+          await TokoAktifLokal.instance.simpan(userId, idPertama);
+          try {
+            await ApiClient.instance
+                .aksi('pilih_toko_aktif', {'id_toko': idPertama});
+          } catch (_) {}
+        }
+      }
+      return;
+    }
+
+    final tokoKlaim =
+        Sesi.instance.daftarToko.where((t) => t['id'] == idKlaimLokal);
+    if (tokoKlaim.isEmpty) {
+      if (Sesi.instance.tokoId != null) {
+        await TokoAktifLokal.instance.simpan(userId, Sesi.instance.tokoId!);
+        try {
+          await ApiClient.instance
+              .aksi('pilih_toko_aktif', {'id_toko': Sesi.instance.tokoId!});
+        } catch (_) {}
+      } else {
+        await TokoAktifLokal.instance.hapus(userId);
+      }
+      return;
+    }
+
+    final idDariServer = Sesi.instance.tokoId;
+    Sesi.instance.tokoId = idKlaimLokal;
+    Sesi.instance.tokoNama = '${tokoKlaim.first['nama'] ?? ''}';
+    if (idDariServer != idKlaimLokal) {
+      try {
+        await ApiClient.instance
+            .aksi('pilih_toko_aktif', {'id_toko': idKlaimLokal});
+      } catch (_) {}
+    }
+  } catch (_) {}
 }
 
 const _daftarMenu = <_ItemMenuShell>[
@@ -2048,10 +2205,14 @@ class _AppShellState extends State<AppShell> {
       // balik pemanggilan ini menjaga agar dialog hanya muncul sekali per
       // versi/build dan tenant, serta menundanya bila server masih offline.
       PenawaranSinkronisasiVersi.tawarkanJikaPerlu(context);
-      if (_menuAktifNotifier.value != widget.menuAktif) {
-        _menuAktifNotifier.value = widget.menuAktif;
+      final menuEfektif = (widget.menuAktif == MenuEBisnis.kasir &&
+              !bolehTampilMenu(MenuEBisnis.kasir))
+          ? menuAwalPosSesuaiHakAkses()
+          : widget.menuAktif;
+      if (_menuAktifNotifier.value != menuEfektif) {
+        _menuAktifNotifier.value = menuEfektif;
       }
-      AppDrawer.menuAktifNotifier.value = _labelDrawer(widget.menuAktif);
+      AppDrawer.menuAktifNotifier.value = _labelDrawer(menuEfektif);
       if (mounted) {
         setStateIfMounted(() => _notifierSudahSinkron = true);
       }
@@ -2090,6 +2251,16 @@ class _AppShellState extends State<AppShell> {
     return ValueListenableBuilder<MenuEBisnis>(
       valueListenable: _menuAktifNotifier,
       builder: (context, menuTerpilih, _) {
+        if (widget.menuAktif == MenuEBisnis.kasir &&
+            !bolehTampilMenu(MenuEBisnis.kasir)) {
+          final pengalihan = menuAwalPosSesuaiHakAkses();
+          if (pengalihan != MenuEBisnis.kasir) {
+            final itemPengalihan = _itemMenu(pengalihan);
+            if (itemPengalihan?.builder != null) {
+              return itemPengalihan!.builder!(context);
+            }
+          }
+        }
         if (_notifierSudahSinkron && menuTerpilih != widget.menuAktif) {
           final item = _itemMenu(menuTerpilih);
           if (item?.builder != null) return item!.builder!(context);
@@ -2431,7 +2602,14 @@ class _SidebarGroupState extends State<_SidebarGroup> {
     if (!widget.grup.dapatDilipat) return true;
     // Menu aktif SELALU membuka grupnya, bahkan bila bawaannya tertutup --
     // kalau tidak, pengguna kehilangan petunjuk posisinya sendiri.
-    return _dibukaPengguna ?? (widget.grup.terbukaBawaan || _berisiMenuAktif);
+    // Selain itu, jika pengguna tidak memiliki hak akses ke Kasir, grup
+    // Dashboard dibuka secara bawaan agar menu Ringkasan langsung terlihat.
+    final bukaDashboardNonKasir = widget.grup.label == 'Dashboard' &&
+        !bolehTampilMenu(MenuEBisnis.kasir);
+    return _dibukaPengguna ??
+        (widget.grup.terbukaBawaan ||
+            _berisiMenuAktif ||
+            bukaDashboardNonKasir);
   }
 
   @override
@@ -2717,7 +2895,12 @@ class _AppTopbarState extends State<_AppTopbar> {
   @override
   Widget build(BuildContext context) {
     final kasTerbuka = _kasAktif != null;
-    final tampilkanStatusKas = Sesi.instance.wajibSesiKas || kasTerbuka;
+    // Indikator "Kas Tertutup" / "Kas Aktif" hanya relevan bagi peran yang
+    // memiliki hak akses ke Kasir/POS. Pengguna non-kasir (mis. Finance /
+    // Admin Toko / Manajemen) tidak menjalankan sesi kasir.
+    final tampilkanStatusKas =
+        (Sesi.instance.wajibSesiKas || kasTerbuka) &&
+            bolehTampilMenu(MenuEBisnis.kasir);
     return Container(
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 20),

@@ -324,6 +324,18 @@ class _KasirScreenState extends State<KasirScreen> {
     try {
       await _sinkronKatalogDanKonfigurasi(
           tampilkanErrorJikaKosong: _semuaProduk.isEmpty);
+      // Jika setelah sinkronisasi konfigurasi diketahui pengguna ini tidak
+      // memiliki hak akses ke Kasir (mis. dialihkan sebelum sesi terhidrasi),
+      // hentikan alur kasir (jangan periksa/buka sesi kas) dan alihkan ke
+      // layar Dashboard / menu pertama yang diizinkan.
+      if (!Sesi.instance.bolehMenu('kasir')) {
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => layarAwalPosSesuaiHakAkses()),
+          );
+        }
+        return;
+      }
       await _muatHargaKanal(_jenisPenjualan);
       try {
         await _periksaSesiKas();
@@ -661,6 +673,9 @@ class _KasirScreenState extends State<KasirScreen> {
           'konfigurasi', const {}, 'konfigurasi');
       konfig = await _pastikanTokoDipilih(konfig);
       await _terapkanKonfigDenganGuardToko(konfig);
+      if (!Sesi.instance.bolehMenu('kasir')) {
+        return;
+      }
 
       await _muatKatalogLazy();
     } catch (e) {
@@ -2530,7 +2545,9 @@ class _KasirScreenState extends State<KasirScreen> {
                       : defaultTargetPlatform == TargetPlatform.windows
                           ? _bodyDesktop()
                           : _kontenKatalog(),
-              if (_kasTerbuka == false && Sesi.instance.wajibSesiKas)
+              if (_kasTerbuka == false &&
+                  Sesi.instance.wajibSesiKas &&
+                  Sesi.instance.bolehMenu('kasir'))
                 _OverlayBukaKas(
                     sesiDiPerangkatLain: _sesiKasDiPerangkatLain,
                     namaPerangkatLain: _namaPerangkatSesiLain,

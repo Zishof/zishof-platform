@@ -7,6 +7,7 @@ import '../product_profile.dart';
 import '../services/pengaturan_sesi_lokal.dart';
 import '../services/transaksi_outbox_service.dart';
 import '../widgets/app_error_info.dart';
+import '../widgets/app_shell.dart';
 import '../widgets/app_version_label.dart';
 import '../widgets/safe_state.dart';
 import 'login_screen.dart';
@@ -146,6 +147,7 @@ class _LayarKunciScreenState extends State<LayarKunciScreen> {
 
   Future<void> _lanjutMasuk() async {
     await PengaturanSesiLokal.instance.catatAktifSekarang();
+    await muatKonfigurasiSesiAwal();
     TransaksiOutboxService.instance.mulai();
     if (!mounted) return;
     Navigator.of(context).pushReplacement(

@@ -13,9 +13,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'app_setting.dart';
 import 'app_variant.dart';
 import 'api_client.dart';
+import 'product_profile.dart';
 import 'screens/layar_kunci_screen.dart';
 import 'screens/login_screen.dart';
-import 'screens/kasir_screen.dart';
 import 'screens/layar_pelanggan_screen.dart';
 import 'screens/pengaturan_server_screen.dart';
 import 'services/face_onnx/pasang_provider_wajah.dart';
@@ -25,6 +25,7 @@ import 'services/transaksi_outbox_service.dart';
 import 'services/prefs_guard.dart';
 import 'services/server_config.dart';
 import 'theme/app_theme.dart';
+import 'widgets/app_shell.dart';
 import 'widgets/safe_state.dart';
 
 /// Penangkap error global (padanan error-capture.js Electron) -- setiap
@@ -292,6 +293,7 @@ class _GerbangAwalState extends State<_GerbangAwal> {
           setStateIfMounted(() => _terkunci = true);
         } else {
           await PengaturanSesiLokal.instance.catatAktifSekarang();
+          await muatKonfigurasiSesiAwal();
           TransaksiOutboxService.instance.mulai();
         }
       }
@@ -370,7 +372,7 @@ class _GerbangAwalState extends State<_GerbangAwal> {
         ? const LoginScreen()
         : _terkunci
             ? const LayarKunciScreen()
-            : const KasirScreen();
+            : AppProductProfile.aktif.buatLayarAwal();
     if (_infoUpdate == null) return layar;
     return Stack(
       children: [

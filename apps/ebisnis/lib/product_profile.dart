@@ -1,12 +1,12 @@
 import 'package:flutter/widgets.dart';
 
 import 'app_variant.dart';
-import 'screens/kasir_screen.dart';
 import 'screens/inventory_sales/beranda_is_screen.dart';
 import 'screens/apotik/beranda_apotik_screen.dart';
 import 'screens/mitrainap/beranda_mitrainap_screen.dart';
 import 'screens/abchicken/operasi_abchicken_screen.dart';
 import 'sesi.dart';
+import 'widgets/app_shell.dart';
 
 /// Grup fitur yang bisa diaktifkan per produk -- gerbang level VARIAN (bukan
 /// pengganti hak akses per-role: server tetap satu-satunya sumber kebenaran
@@ -231,9 +231,17 @@ class AppProductProfile {
   bool cocokDenganDartDefine() =>
       kode == AppProductProfile.dariDartDefine().kode;
 
-  /// Layar pertama setelah login sukses. Varian Inventory & Sales SELALU lewat
-  /// beranda per-aktor (Admin/Pemilik -> dasbor modul; Sales -> "Sesi Hari
-  /// Ini") -- landing POS existing (KasirScreen) TIDAK berubah utk varian lama.
+  /// Layar pertama setelah login sukses, buka kunci sesi, atau startup dengan
+  /// token aktif.
+  ///
+  /// Untuk varian POS (`ebisnis`, `albahjah`, `nahl`, `petra`, `frozenfood`),
+  /// penentuan layar awal menghormati hak akses peran pengguna:
+  /// - Jika pengguna memiliki hak akses ke menu Kasir (`bolehMenu('kasir')`),
+  ///   layar awal adalah `KasirScreen`.
+  /// - Jika pengguna TIDAK memiliki hak akses ke Kasir (misalnya Finance
+  ///   Accounting / Admin Toko / Manajemen), layar awal diarahkan langsung ke
+  ///   halaman **Dashboard** (`RingkasanScreen` / `MenuEBisnis.ringkasan`)
+  ///   melalui [layarAwalPosSesuaiHakAkses].
   Widget buatLayarAwal() {
     if (isAbChicken) {
       return const OperasiRantaiPasokScreen();
@@ -250,7 +258,7 @@ class AppProductProfile {
     if (isMitraInap) {
       return const BerandaMitraInapScreen();
     }
-    return const KasirScreen();
+    return layarAwalPosSesuaiHakAkses();
   }
 
   /// Gerbang menu level-varian (dipanggil `bolehTampilMenu` app_shell) --
