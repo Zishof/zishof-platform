@@ -409,7 +409,7 @@ class _TabSoGrandState extends State<TabSoGrand> {
             pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text('LEMBAR KERJA SO GRAND (AUDIT TOTAL STOK)',
+                pw.Text('KERTAS KERJA STOK OPNAME (KKSO) - SO GRAND',
                     style: pw.TextStyle(
                         fontSize: 14, fontWeight: pw.FontWeight.bold)),
                 pw.Text('Toko: $tokoNama · Total Item: ${items.length}',
@@ -545,7 +545,7 @@ class _TabSoGrandState extends State<TabSoGrand> {
                 ),
                 AksiBaris(
                   ikon: Icons.picture_as_pdf_outlined,
-                  label: 'Cetak Blanko PDF',
+                  label: 'Cetak KKSO (Kertas Kerja SO PDF)',
                   onTap: _filteredProduk.isEmpty ? null : _cetakPdf,
                 ),
               ],
@@ -554,7 +554,7 @@ class _TabSoGrandState extends State<TabSoGrand> {
         ),
         const SizedBox(height: 12),
 
-        // Banner Penjelasan SO Grand
+        // Banner Penjelasan SO Grand & Alur 3 Tahap Standar TokoQu
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -571,7 +571,7 @@ class _TabSoGrandState extends State<TabSoGrand> {
                       color: Color(0xFF15803D), size: 20),
                   SizedBox(width: 8),
                   Text(
-                    'SO Grand (Grand Stock Opname) &mdash; Audit Total Seluruh Fisik Toko',
+                    'SO Grand (Grand Stock Opname) \u2014 Standar Audit 3 Tahap TokoQu',
                     style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF15803D)),
@@ -580,9 +580,10 @@ class _TabSoGrandState extends State<TabSoGrand> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Metode SO Grand mencakup SELURUH katalog barang aktif toko (bukan hanya barang yang terjual hari ini). '
-                'Dapat dilakukan dengan menginput langsung angka fisik pada kolom tabel di bawah lalu klik Simpan Entri Fisik, '
-                'atau menggunakan Unduh Excel untuk penghitungan massal offline dan diunggah kembali.',
+                'Mencakup 100% barang aktif toko untuk rekonsiliasi total. Mengacu pada SOP Ritel TokoQu: '
+                '(1) Persiapan: Jadwalkan, bekukan mutasi, cetak KKSO per kategori/rak; '
+                '(2) Pelaksanaan: Hitung detail per pcs, beri tanda rak sudah dihitung, input fisik; '
+                '(3) Rekonsiliasi: Cocokkan sistem vs fisik, investigasi selisih, dan simpan adjustment.',
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade800),
               ),
             ],
