@@ -2069,13 +2069,19 @@ class _AppShellState extends State<AppShell> {
     final bantuan =
         BantuanFab(menuId: widget.menuAktif.name, judul: widget.judul);
     final milikLayar = widget.floatingActionButton;
+    // Beri jarak bawah ekstra (bottom margin 36px) agar tombol mengambang (?)
+    // tidak menutupi kontrol navigasi, tombol next, atau pagination tabel di pojok kanan bawah.
+    final bantuanBerjarak = Padding(
+      padding: const EdgeInsets.only(bottom: 36, right: 6),
+      child: bantuan,
+    );
     if (milikLayar == null) {
-      return bantuan;
+      return bantuanBerjarak;
     }
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
-      children: [milikLayar, const SizedBox(height: 12), bantuan],
+      children: [milikLayar, const SizedBox(height: 12), bantuanBerjarak],
     );
   }
 

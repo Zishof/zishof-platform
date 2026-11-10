@@ -83,7 +83,12 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
   /// mengisinya secara offline lalu mengunggahnya via tombol "Unggah Excel".
   Future<void> _unduhTemplateExcel() async {
     try {
-      final hasil = await ApiClient.instance.aksi('so_template_excel', {});
+      final payload = <String, dynamic>{};
+      final tokoId = Sesi.instance.idTokoTerpilih;
+      if (tokoId != null && tokoId > 0) {
+        payload['toko_id'] = tokoId;
+      }
+      final hasil = await ApiClient.instance.aksi('so_template_excel', payload);
       final b64 = hasil['fileBase64'] as String?;
       if (b64 == null || b64.isEmpty) {
         throw Exception('Server tidak mengembalikan berkas template.');
@@ -111,7 +116,12 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
 
   Future<void> _eksporExcel() async {
     try {
-      final hasil = await ApiClient.instance.aksi('so_ekspor_excel', {});
+      final payload = <String, dynamic>{};
+      final tokoId = Sesi.instance.idTokoTerpilih;
+      if (tokoId != null && tokoId > 0) {
+        payload['toko_id'] = tokoId;
+      }
+      final hasil = await ApiClient.instance.aksi('so_ekspor_excel', payload);
       final b64 = hasil['fileBase64'] as String?;
       if (b64 == null || b64.isEmpty) {
         throw Exception('Server tidak mengembalikan berkas.');
@@ -158,8 +168,12 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
         return;
       }
       final bytes = hasilPilih.files.first.bytes!;
-      final hasil = await ApiClient.instance
-          .aksi('so_impor_excel', {'file_base64': base64Encode(bytes)});
+      final payload = <String, dynamic>{'file_base64': base64Encode(bytes)};
+      final tokoId = Sesi.instance.idTokoTerpilih;
+      if (tokoId != null && tokoId > 0) {
+        payload['toko_id'] = tokoId;
+      }
+      final hasil = await ApiClient.instance.aksi('so_impor_excel', payload);
       final disimpan = (hasil['disimpan'] as num?)?.toInt() ?? 0;
       final dilewati = (hasil['dilewati'] as num?)?.toInt() ?? 0;
       final masalahRaw = hasil['masalah'];
