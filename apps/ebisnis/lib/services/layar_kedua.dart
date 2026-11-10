@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:ffi';
 import 'dart:ui';
 
+import 'package:core_device/core_device.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:ffi/ffi.dart';
 import 'package:screen_retriever/screen_retriever.dart';
@@ -48,6 +49,7 @@ Future<void> bukaLayarPelangganJendelaKedua() async {
     'tokoId': Sesi.instance.tokoId,
     'tokoNama': Sesi.instance.tokoNama,
     'pesanTerimaKasih': Sesi.instance.pesanTerimaKasih,
+    'idMesin': IdentitasMesin.instance.idMesin,
   });
 
   final sebelum = _semuaHwndProsesIni();

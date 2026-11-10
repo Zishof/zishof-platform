@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:core_device/core_device.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 
 import '../api_client.dart';
@@ -43,6 +44,7 @@ class LayarPelangganBroadcaster {
       'versi': ++_versi,
       'aktif': true,
       'toko_id': Sesi.instance.tokoId,
+      'id_mesin': IdentitasMesin.instance.idMesin,
       'items': items,
       'subtotal': subtotal,
       'diskon': diskon,
@@ -80,6 +82,7 @@ class LayarPelangganBroadcaster {
       'versi': ++_versi,
       'aktif': true,
       'toko_id': Sesi.instance.tokoId,
+      'id_mesin': IdentitasMesin.instance.idMesin,
       'items': const [],
       'subtotal': 0,
       'diskon': 0,

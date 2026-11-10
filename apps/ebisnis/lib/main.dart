@@ -138,6 +138,7 @@ class _LayarPelangganWindowAppState extends State<_LayarPelangganWindowApp> {
     try {
       await ServerConfig.instance.muat();
       await ApiClient.instance.muatTokenTersimpan();
+      await IdentitasMesin.instance.muat();
     } catch (e, stack) {
       // Jangan biarkan jendela ini macet selamanya di spinner kalau ada apa
       // pun yg gagal (mis. token lokal korup) -- lanjut tanpa data, layar
@@ -168,6 +169,7 @@ class _LayarPelangganWindowAppState extends State<_LayarPelangganWindowApp> {
               tokoNamaOverride: widget.argumen['tokoNama'] as String?,
               pesanTerimaKasihOverride:
                   widget.argumen['pesanTerimaKasih'] as String?,
+              idMesinOverride: widget.argumen['idMesin'] as String?,
             ),
     );
   }

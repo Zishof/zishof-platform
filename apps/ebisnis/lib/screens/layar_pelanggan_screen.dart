@@ -32,12 +32,18 @@ class LayarPelangganScreen extends StatefulWidget {
   final String? tokoNamaOverride;
   final String? pesanTerimaKasihOverride;
 
+  /// Identitas mesin (`id_mesin`) tempat Layar Pelanggan ini berjalan.
+  /// Memastikan polling ke server hanya mengambil siaran dari PC/meja kasir
+  /// yang sama, sehingga tidak tertukar antar kasir di toko yang sama.
+  final String? idMesinOverride;
+
   const LayarPelangganScreen(
       {super.key,
       this.jendelaKedua = false,
       this.tokoIdOverride,
       this.tokoNamaOverride,
-      this.pesanTerimaKasihOverride});
+      this.pesanTerimaKasihOverride,
+      this.idMesinOverride});
 
   @override
   State<LayarPelangganScreen> createState() => _LayarPelangganScreenState();
@@ -89,7 +95,15 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
     _daftarkanLiveChannel();
     _ambil();
     _muatKontenScreensaver();
-    _timer = Timer.periodic(const Duration(milliseconds: 500), (_) => _ambil());
+    // Jika berjalan sebagai jendela kedua pada PC yang sama dengan kasir
+    // (`jendelaKedua == true`), pembaruan utama dikirim secara lokal dan instan
+    // melalui `WindowMethodChannel` (`ebisnis/layar_pelanggan_live`) di dalam
+    // proses PC yang sama. Polling cadangan pada `jendelaKedua` dibuat lebih
+    // jarang (2000ms vs 500ms pada perangkat terpisah) dan WAJIB terkunci pada
+    // `id_mesin` PC kasir ini agar tidak pernah tertukar dengan kasir di PC lain.
+    _timer = Timer.periodic(
+        Duration(milliseconds: widget.jendelaKedua ? 2000 : 500),
+        (_) => _ambil());
   }
 
   @override
@@ -120,12 +134,17 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
   /// (mengisi durasi idle utk siklus pertama) DAN setiap kali
   /// [_mulaiTimerIdleScreensaver] benar-benar habis (menyegarkan konten
   /// sebelum tampil) -- lihat catatan di deklarasi field di atas.
+  String get _idMesinEfektif =>
+      (widget.idMesinOverride != null && widget.idMesinOverride!.trim().isNotEmpty)
+          ? widget.idMesinOverride!.trim()
+          : IdentitasMesin.instance.idMesin;
+
   Future<void> _muatKontenScreensaver() async {
     try {
       final hasil =
           await ApiClient.instance.aksi('layar_pelanggan_slide_untuk_tampil', {
         'toko_id': widget.tokoIdOverride ?? Sesi.instance.tokoId,
-        'id_mesin': IdentitasMesin.instance.idMesin,
+        'id_mesin': _idMesinEfektif,
       });
       if (!mounted) return;
       final cfg = (hasil['config'] as Map?) != null
@@ -193,6 +212,14 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
       if (liveUpdateTerakhir != null &&
           DateTime.now().difference(liveUpdateTerakhir) <
               const Duration(milliseconds: 900)) {
+        return;
+      }
+    }
+    final idMesinLokal = _idMesinEfektif;
+    if (idMesinLokal.isNotEmpty) {
+      final idMesinSumber =
+          ((hasil['idMesin'] ?? hasil['id_mesin']) as String?)?.trim() ?? '';
+      if (idMesinSumber.isNotEmpty && idMesinSumber != idMesinLokal) {
         return;
       }
     }
@@ -296,8 +323,17 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
     if (_sedangAmbil) return;
     _sedangAmbil = true;
     try {
-      final hasil = await ApiClient.instance.aksi('layar_pelanggan_ambil',
-          {'toko_id': widget.tokoIdOverride ?? Sesi.instance.tokoId});
+      final idMesin = _idMesinEfektif;
+      final hasil = await ApiClient.instance.aksi('layar_pelanggan_ambil', {
+        'toko_id': widget.tokoIdOverride ?? Sesi.instance.tokoId,
+        if (idMesin.isNotEmpty) 'id_mesin': idMesin,
+      });
+      if (idMesin.isNotEmpty) {
+        final idMesinHasil = (hasil['idMesin'] as String?)?.trim() ?? '';
+        if (idMesinHasil.isNotEmpty && idMesinHasil != idMesin) {
+          return;
+        }
+      }
       _terapkanData(hasil);
     } catch (_) {
       // Gagal poll (mis. offline sesaat) -- biarkan tampilan terakhir yang
