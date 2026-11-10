@@ -709,8 +709,8 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
     // Pratinjau/ekspor setelah kegagalan tetap harus memakai tanggal yang
     // dipilih. Tanpa parameter tanggal, hasilnya diam-diam menjadi stok hari ini.
     final tanggal = _tanggalStok;
-    final hasil = await StokPerTanggal.ambil(
-        tanggal: tanggal, kataKunci: _kataKunci);
+    final hasil =
+        await StokPerTanggal.ambil(tanggal: tanggal, kataKunci: _kataKunci);
     if (mounted && tanggal == _tanggalStok) {
       setStateIfMounted(() {
         _stokTanggal = hasil;
@@ -746,9 +746,12 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
   Future<void> _tampilkanRincianStokTanggalFilter(String filter) async {
     final hasil = _stokTanggal;
     if (hasil == null) return;
-    final iStok = hasil.kolom.indexWhere(
-        (k) => k.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '').startsWith('stok'));
-    final barisTampil = hasil.baris.where((r) {
+    final iStok = hasil.kolom.indexWhere((k) => k
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]'), '')
+        .startsWith('stok'));
+    final barisTampil = hasil.baris
+        .where((r) {
       if (iStok < 0 || iStok >= r.length) return true;
       final v = r[iStok];
       final s = v is num
@@ -766,7 +769,9 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
         default:
           return true;
       }
-    }).map((r) => r.map<Object?>((c) => c).toList()).toList();
+        })
+        .map((r) => r.map<Object?>((c) => c).toList())
+        .toList();
 
     await tampilkanRincianKlikDialog(
       context,
@@ -803,7 +808,8 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
             if (_galatStokTanggal != null) ...[
               const SizedBox(height: 10),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.errorContainer,
                   borderRadius: BorderRadius.circular(8),
@@ -816,7 +822,9 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                     Expanded(
                       child: Text(_galatStokTanggal!,
                           style: TextStyle(
-                              color: Theme.of(context).colorScheme.onErrorContainer)),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onErrorContainer)),
                     ),
                     PopupMenuButton<String>(
                       tooltip: 'Aksi laporan persediaan',
@@ -1042,32 +1050,37 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
             ),
           ),
         const SizedBox(width: 4),
-        OutlinedButton.icon(
-          onPressed:
+        AksiBarisMenu(
+          tooltip: 'Aksi laporan persediaan',
+          aksi: [
+            AksiBaris(
+              ikon: Icons.visibility_outlined,
+              label: 'Preview',
+              onTap:
               sibuk ? null : () => _aturAtauPreviewLaporan(preview: true),
-          icon: const Icon(Icons.visibility_outlined, size: 18),
-          label: const Text('Preview'),
         ),
-        OutlinedButton.icon(
-          onPressed:
+            AksiBaris(
+              ikon: Icons.tune,
+              label: 'Atur Model',
+              onTap:
               sibuk ? null : () => _aturAtauPreviewLaporan(preview: false),
-          icon: const Icon(Icons.tune, size: 18),
-          label: const Text('Atur Model'),
         ),
-        OutlinedButton.icon(
-          onPressed: sibuk ? null : () => _eksporLaporan('pdf'),
-          icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-          label: const Text('PDF'),
+            AksiBaris(
+              ikon: Icons.picture_as_pdf_outlined,
+              label: 'PDF',
+              onTap: sibuk ? null : () => _eksporLaporan('pdf'),
         ),
-        OutlinedButton.icon(
-          onPressed: sibuk ? null : () => _eksporLaporan('excel'),
-          icon: const Icon(Icons.table_view_outlined, size: 18),
-          label: const Text('Excel'),
+            AksiBaris(
+              ikon: Icons.table_view_outlined,
+              label: 'Excel',
+              onTap: sibuk ? null : () => _eksporLaporan('excel'),
         ),
-        OutlinedButton.icon(
-          onPressed: sibuk ? null : () => _eksporLaporan('word'),
-          icon: const Icon(Icons.description_outlined, size: 18),
-          label: const Text('Word'),
+            AksiBaris(
+              ikon: Icons.description_outlined,
+              label: 'Word',
+              onTap: sibuk ? null : () => _eksporLaporan('word'),
+            ),
+          ],
         ),
       ],
     );
@@ -1093,7 +1106,8 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
           Icon(
             Icons.local_shipping_outlined,
             size: 16,
-            color: aktif ? AppColors.primary : AppColors.textSecondaryOf(context),
+            color:
+                aktif ? AppColors.primary : AppColors.textSecondaryOf(context),
           ),
           const SizedBox(width: 6),
           InkWell(
@@ -1589,71 +1603,66 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
 
   @override
   Widget build(BuildContext context) {
-    final tombolAksi = [
+    final tombolAksi = <AksiBaris>[
       if (Sesi.instance.bolehDataSample)
-        HeaderActionButton(
-          icon: Icons.science_outlined,
+        AksiBaris(
+          ikon: Icons.science_outlined,
           label: _memulaiDataSample
               ? 'Memulai...'
               : 'Sample 1K Supplier + 600 Jenis + 50K Produk',
-          onPressed: _memulaiDataSample ? null : _mulaiDataSampleProduk,
+          onTap: _memulaiDataSample ? null : _mulaiDataSampleProduk,
         ),
-      HeaderActionButton(
-        icon: Icons.sync_alt,
+      AksiBaris(
+        ikon: Icons.sync_alt,
         label: _menyinkronProduk ? 'Menyinkron...' : 'Sinkron Produk',
-        onPressed: _menyinkronProduk ? null : _sinkronProdukKeLokal,
-        loading: _menyinkronProduk
-            ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2))
-            : null,
+        onTap: _menyinkronProduk ? null : _sinkronProdukKeLokal,
       ),
-      HeaderActionButton(
-        icon: Icons.sell_outlined,
+      AksiBaris(
+        ikon: Icons.sell_outlined,
         label: 'Price Tag',
-        onPressed: () => Navigator.of(context)
+        onTap: () => Navigator.of(context)
             .push(MaterialPageRoute(builder: (_) => const PriceTagScreen())),
       ),
-      HeaderActionButton(
-        icon: Icons.download_outlined,
+      AksiBaris(
+        ikon: Icons.download_outlined,
         label: 'Ekspor',
-        onPressed: _eksporExcel,
+        onTap: _eksporExcel,
       ),
-      HeaderActionButton(
-        icon: Icons.upload_file_outlined,
+      AksiBaris(
+        ikon: Icons.upload_file_outlined,
         label: 'Impor',
-        onPressed: _bukaImporExcel,
+        onTap: _bukaImporExcel,
       ),
       if (Sesi.instance.bolehKelola)
-        PopupMenuButton<String>(
-          tooltip: 'Bersihkan Duplikat',
-          onSelected: (jenis) =>
-              _bersihkanDuplikat(jenis, _labelJenisDuplikat[jenis]!),
-          itemBuilder: (_) => _labelJenisDuplikat.entries
-              .map((e) => PopupMenuItem(value: e.key, child: Text(e.value)))
-              .toList(),
-          child: const HeaderActionSurface(
-            icon: Icons.cleaning_services_outlined,
-            label: 'Bersihkan',
-          ),
-        ),
+        ..._labelJenisDuplikat.entries.map((e) => AksiBaris(
+              ikon: Icons.cleaning_services_outlined,
+              label: 'Bersihkan: ${e.value}',
+              merusak: true,
+              onTap: () => _bersihkanDuplikat(e.key, e.value),
+            )),
       if (Sesi.instance.bolehKelola)
-        HeaderActionButton(
-          icon: Icons.local_shipping_outlined,
+        AksiBaris(
+          ikon: Icons.local_shipping_outlined,
           label: 'Isi Pemasok',
-          onPressed: _isiPemasokDariKulakan,
+          onTap: _isiPemasokDariKulakan,
         ),
       if (_tabAktif == 0 && _bolehProduk('update'))
-        HeaderActionButton(
-          icon: Icons.playlist_remove,
+        AksiBaris(
+          ikon: Icons.playlist_remove,
           label: 'Aksi Massal',
-          onPressed: _produkHalamanIni.isEmpty ? null : _aksiRelasiMassal,
+          onTap: _produkHalamanIni.isEmpty ? null : _aksiRelasiMassal,
         ),
-      HeaderActionButton(
-        icon: Icons.refresh,
+      if ((_tabAktif == 0 && _bolehProduk('create')) || _tabAktif == 4)
+        AksiBaris(
+          ikon: Icons.add,
+          label: _tabAktif == 0 ? 'Tambah Produk' : 'Tambah Kebijakan',
+          onTap: () =>
+              _tabAktif == 0 ? _bukaFormProduk() : _bukaFormKebijakan(),
+        ),
+      AksiBaris(
+        ikon: Icons.refresh,
         label: 'Muat Ulang',
-        onPressed: _muatSemua,
+        onTap: _muatSemua,
       ),
     ];
     return DefaultTabController(
@@ -1663,32 +1672,19 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
           menuAktif: MenuEBisnis.produk,
           judul: 'Manajemen Produk',
           subjudul: 'Kelola katalog produk toko Anda',
-          aksiHeader: Wrap(
-            alignment: WrapAlignment.end,
-            runSpacing: 8,
-            children: tombolAksi,
+          aksiHeader: AksiBarisMenu(
+            aksi: tombolAksi,
+            tooltip: 'Aksi manajemen produk',
           ),
-          actionsAppBar: [const IndikatorSinkronMaster(), ...tombolAksi],
-          scrollable: false,
-          floatingActionButton: _tabAktif == 1 ||
-                  _tabAktif == 2 ||
-                  _tabAktif == 3 ||
-                  _tabAktif == 5 ||
-                  (_tabAktif == 0 && !_bolehProduk('create'))
-              ? null
-              : FloatingActionButton.extended(
-                  onPressed: () =>
-                      _tabAktif == 0 ? _bukaFormProduk() : _bukaFormKebijakan(),
-                  icon: const Icon(
-                    Icons.add,
-                    color: AppColors.darkTextPrimary,
-                  ),
-                  label: Text(
-                    _tabAktif == 0 ? 'Tambah Produk' : 'Tambah Kebijakan',
-                    style: TextStyle(color: AppColors.darkTextPrimary),
-                  ),
-                  backgroundColor: AppColors.primary,
+          actionsAppBar: [
+            const IndikatorSinkronMaster(),
+            AksiBarisMenu(
+              aksi: tombolAksi,
+              tooltip: 'Aksi manajemen produk',
                 ),
+          ],
+          scrollable: false,
+          floatingActionButton: null,
           body: Column(children: [
             Material(
               color: Theme.of(context).cardColor,
@@ -1741,22 +1737,26 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                             _semuaProduk.isEmpty
                                         ? Center(
                                             child: Padding(
-                                              padding: const EdgeInsets.all(24),
+                                                  padding:
+                                                      const EdgeInsets.all(24),
                                               child: Column(
-                                                mainAxisSize: MainAxisSize.min,
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
                                                 children: [
                                                   const Icon(
                                                       Icons.error_outline,
                                                       size: 48,
                                                       color: Colors.red),
-                                                  const SizedBox(height: 12),
+                                                      const SizedBox(
+                                                          height: 12),
                                                   Text(_pesanError!,
                                                       textAlign:
                                                           TextAlign.center),
                                                   AppDetailGalatOpsional(
                                                       detail: detailUntuk(
                                                           _pesanError)),
-                                                  const SizedBox(height: 16),
+                                                      const SizedBox(
+                                                          height: 16),
                                                   ElevatedButton(
                                                       onPressed: _muatSemua,
                                                       child: const Text(
@@ -1775,15 +1775,16 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                                 PenandaDataTersimpan(
                                                     tampil:
                                                         _statistikDariCache),
-                                                if (_pesanError != null) ...[
+                                                    if (_pesanError !=
+                                                        null) ...[
                                                   Card(
                                                     color: Theme.of(context)
                                                         .colorScheme
                                                         .errorContainer,
                                                     child: Padding(
                                                       padding:
-                                                          const EdgeInsets.all(
-                                                              12),
+                                                              const EdgeInsets
+                                                                  .all(12),
                                                       child: Row(
                                                         crossAxisAlignment:
                                                             CrossAxisAlignment
@@ -1802,7 +1803,8 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                                           Expanded(
                                                             child: Text(
                                                               _pesanError!,
-                                                              style: TextStyle(
+                                                                  style:
+                                                                      TextStyle(
                                                                 color: Theme.of(
                                                                         context)
                                                                     .colorScheme
@@ -1814,7 +1816,8 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                                             onPressed: _memuat
                                                                 ? null
                                                                 : _muatSemua,
-                                                            icon: const Icon(Icons
+                                                                icon: const Icon(
+                                                                    Icons
                                                                 .refresh_outlined),
                                                             label: const Text(
                                                                 'Coba Lagi'),
@@ -1830,7 +1833,8 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                                 else if (_statistik != null)
                                                   _KartuStatistik(
                                                     statistik: _statistik!,
-                                                    onTap: _bukaDetailStatistik,
+                                                        onTap:
+                                                            _bukaDetailStatistik,
                                                   ),
                                                 const SizedBox(height: 12),
                                                 AppSearchField(
@@ -1859,23 +1863,25 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                                 Align(
                                                   alignment:
                                                       Alignment.centerLeft,
-                                                  child:
-                                                      SegmentedButton<String>(
+                                                      child: SegmentedButton<
+                                                          String>(
                                                     segments: const [
                                                       ButtonSegment(
                                                           value: 'SEMUA',
-                                                          label: Text('Semua')),
+                                                              label: Text(
+                                                                  'Semua')),
                                                       ButtonSegment(
                                                           value: 'JUAL',
-                                                          label:
-                                                              Text('Produk')),
+                                                              label: Text(
+                                                                  'Produk')),
                                                       ButtonSegment(
                                                           value: 'BAHAN',
-                                                          label: Text('Bahan')),
+                                                              label: Text(
+                                                                  'Bahan')),
                                                       ButtonSegment(
                                                           value: 'EKSTRA',
-                                                          label:
-                                                              Text('Ekstra')),
+                                                              label: Text(
+                                                                  'Ekstra')),
                                                       ButtonSegment(
                                                           value: 'PAKET',
                                                           label: Text(
@@ -1884,7 +1890,8 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                                     selected: {
                                                       _filterJenisItem
                                                     },
-                                                    onSelectionChanged: (s) {
+                                                        onSelectionChanged:
+                                                            (s) {
                                                       setStateIfMounted(() {
                                                         _filterJenisItem =
                                                             s.first;
@@ -1899,7 +1906,8 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                                   spacing: 8,
                                                   runSpacing: 8,
                                                   crossAxisAlignment:
-                                                      WrapCrossAlignment.center,
+                                                          WrapCrossAlignment
+                                                              .center,
                                                   children: [
                                                     _pemilihFilterPemasok(),
                                                   ],
@@ -1914,7 +1922,8 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                                       Padding(
                                                         padding:
                                                             const EdgeInsets
-                                                                .only(right: 8),
+                                                                    .only(
+                                                                    right: 8),
                                                         child: ChoiceChip(
                                                           label: const Text(
                                                               'Semua'),
@@ -1932,23 +1941,24 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                                           },
                                                         ),
                                                       ),
-                                                      ..._kategori.map((k) =>
+                                                          ..._kategori
+                                                              .map(
+                                                                  (k) =>
                                                           Padding(
-                                                            padding:
-                                                                const EdgeInsets
+                                                                        padding: const EdgeInsets
                                                                     .only(
-                                                                    right: 8),
-                                                            child: ChoiceChip(
+                                                                            right:
+                                                                                8),
+                                                                        child:
+                                                                            ChoiceChip(
                                                               label:
                                                                   Text(k.nama),
                                                               selected:
-                                                                  _kategoriTerpilih ==
-                                                                      k.id,
-                                                              onSelected: (_) {
-                                                                setStateIfMounted(
-                                                                    () {
-                                                                  _kategoriTerpilih =
-                                                                      k.id;
+                                                                              _kategoriTerpilih == k.id,
+                                                                          onSelected:
+                                                                              (_) {
+                                                                            setStateIfMounted(() {
+                                                                              _kategoriTerpilih = k.id;
                                                                   _halaman = 0;
                                                                 });
                                                                 _muatSemua();
@@ -1963,18 +1973,21 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                                   key: ValueKey(
                                                       'perubahan:$_versiPerubahan'),
                                                   baru: _idBaru.length,
-                                                  berubah: _idBerubah.length,
+                                                      berubah:
+                                                          _idBerubah.length,
                                                   dihapus: _jumlahHapus,
                                                 ),
                                                 if (_memuat) ...[
                                                   const LinearProgressIndicator(
                                                       minHeight: 2),
-                                                  const SizedBox(height: 10),
+                                                      const SizedBox(
+                                                          height: 10),
                                                 ],
-                                                if (_produkTersaring.isEmpty)
+                                                    if (_produkTersaring
+                                                        .isEmpty)
                                                   const Padding(
-                                                    padding:
-                                                        EdgeInsets.symmetric(
+                                                        padding: EdgeInsets
+                                                            .symmetric(
                                                             vertical: 40),
                                                     child: Center(
                                                         child: Text(
@@ -1988,32 +2001,30 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                                         ? _TabelProduk(
                                                             produkList:
                                                                 _produkHalamanIni,
-                                                            stokPerKode: _stokTanggal
+                                                                stokPerKode:
+                                                                    _stokTanggal
                                                                 ?.stokPerKode,
                                                             stokTanggalBelumTersedia:
                                                                 _tanggalStok != null &&
-                                                                    _stokTanggal == null,
+                                                                        _stokTanggal ==
+                                                                            null,
                                                             idBaru: _idBaru,
                                                             idBerubah:
                                                                 _idBerubah,
                                                             onTap: (p) =>
                                                                 _bukaFormProduk(
-                                                                    produk: p),
+                                                                        produk:
+                                                                            p),
                                                             onRiwayat:
                                                                 _riwayatProduk)
                                                         : Column(
                                                             children: _produkHalamanIni
                                                                 .map((p) => _BarisProduk(
                                                                     produk: p,
-                                                                    stokTanggal: _stokTanggal?.stokPerKode[
-                                                                        p.kode],
-                                                                    stokTanggalBelumTersedia:
-                                                                        _tanggalStok != null &&
-                                                                            _stokTanggal == null,
-                                                                    idBaru:
-                                                                        _idBaru,
-                                                                    idBerubah:
-                                                                        _idBerubah,
+                                                                        stokTanggal: _stokTanggal?.stokPerKode[p.kode],
+                                                                        stokTanggalBelumTersedia: _tanggalStok != null && _stokTanggal == null,
+                                                                        idBaru: _idBaru,
+                                                                        idBerubah: _idBerubah,
                                                                     onTap: () => _bukaFormProduk(produk: p),
                                                                     onRiwayat: () => _riwayatProduk(p)))
                                                                 .toList()),
@@ -2021,7 +2032,8 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                                 if (_totalProduk >
                                                     _itemPerHalaman)
                                                   Padding(
-                                                    padding: const EdgeInsets
+                                                        padding:
+                                                            const EdgeInsets
                                                         .symmetric(
                                                         vertical: 12),
                                                     child: Row(
@@ -2035,8 +2047,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                                           onPressed:
                                                               _halaman > 0
                                                                   ? () {
-                                                                      setStateIfMounted(
-                                                                          () =>
+                                                                          setStateIfMounted(() =>
                                                                               _halaman--);
                                                                       _muatSemua();
                                                                     }
@@ -2114,7 +2125,8 @@ class _KartuRingkasanStok extends StatelessWidget {
                 ),
                 if (onTap != null)
                   Icon(Icons.open_in_new,
-                      size: 15, color: AppColors.primary.withValues(alpha: 0.7)),
+                      size: 15,
+                      color: AppColors.primary.withValues(alpha: 0.7)),
               ],
             ),
           ),
@@ -2380,34 +2392,33 @@ class _DialogDetailStatistikProdukState
                           ],
                         ),
                       ),
-                      IconButton(
-                        tooltip: 'Tutup',
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close),
+                      AksiBarisMenu(
+                        tooltip: 'Aksi daftar produk',
+                        aksi: [
+                          AksiBaris(
+                            ikon: Icons.picture_as_pdf_outlined,
+                            label: 'Cetak PDF',
+                            onTap: _mengekspor || _produk.isEmpty
+                            ? null
+                            : () => _ekspor('pdf'),
+                      ),
+                          AksiBaris(
+                            ikon: Icons.table_view_outlined,
+                            label: 'Download Excel',
+                            onTap: _mengekspor || _produk.isEmpty
+                            ? null
+                            : () => _ekspor('excel'),
+                          ),
+                          AksiBaris(
+                            ikon: Icons.close,
+                            label: 'Tutup',
+                            onTap: () => Navigator.pop(context),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: _mengekspor || _produk.isEmpty
-                            ? null
-                            : () => _ekspor('pdf'),
-                        icon: const Icon(Icons.picture_as_pdf_outlined),
-                        label: const Text('Cetak PDF'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _mengekspor || _produk.isEmpty
-                            ? null
-                            : () => _ekspor('excel'),
-                        icon: const Icon(Icons.table_view_outlined),
-                        label: const Text('Download Excel'),
-                      ),
-                    ],
-                  ),
                   if (_produk.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Row(
@@ -2686,9 +2697,7 @@ class _BarisProduk extends StatelessWidget {
                   StatusPill(
                       label: stokTanggalBelumTersedia
                           ? 'Belum dimuat'
-                          : (habis
-                              ? 'Habis'
-                              : 'Stok ${_teksStok(stokTampil)}'),
+                          : (habis ? 'Habis' : 'Stok ${_teksStok(stokTampil)}'),
                       warna: stokTanggalBelumTersedia
                           ? AppColors.textSecondaryOf(context)
                           : (habis
@@ -2956,9 +2965,8 @@ class _BarisTabelProduk extends StatelessWidget {
               flex: 2,
               child: Center(
                 child: StatusPill(
-                    label: stokTanggalBelumTersedia
-                        ? '—'
-                        : _teksStok(stokTampil),
+                    label:
+                        stokTanggalBelumTersedia ? '—' : _teksStok(stokTampil),
                     warna: stokTanggalBelumTersedia
                         ? AppColors.textSecondaryOf(context)
                         : (habis
@@ -5117,7 +5125,8 @@ class _TeksSorotPemasok extends StatelessWidget {
         break;
       }
       if (index > start) {
-        spans.add(TextSpan(text: teks.substring(start, index), style: defaultStyle));
+        spans.add(
+            TextSpan(text: teks.substring(start, index), style: defaultStyle));
       }
       spans.add(TextSpan(
         text: teks.substring(index, index + kata.length),
@@ -5221,17 +5230,21 @@ class _DialogPilihPemasokState extends State<_DialogPilihPemasok> {
                         final terpilih = widget.pemasokSaatIni == nama;
                         return ListTile(
                           dense: true,
-                          leading: const Icon(Icons.local_shipping_outlined, size: 18),
+                          leading: const Icon(Icons.local_shipping_outlined,
+                              size: 18),
                           title: _TeksSorotPemasok(
                             teks: nama,
                             kataKunci: _kataKunci,
                             style: TextStyle(
-                              fontWeight: terpilih ? FontWeight.bold : FontWeight.normal,
+                              fontWeight: terpilih
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
                               color: terpilih ? AppColors.primary : null,
                             ),
                           ),
                           trailing: terpilih
-                              ? Icon(Icons.check, color: AppColors.primary, size: 20)
+                              ? Icon(Icons.check,
+                                  color: AppColors.primary, size: 20)
                               : null,
                           onTap: () => Navigator.of(context).pop(nama),
                         );
@@ -5265,7 +5278,8 @@ class _InputAutocompletePemasok extends StatefulWidget {
   });
 
   @override
-  State<_InputAutocompletePemasok> createState() => _InputAutocompletePemasokState();
+  State<_InputAutocompletePemasok> createState() =>
+      _InputAutocompletePemasokState();
 }
 
 class _InputAutocompletePemasokState extends State<_InputAutocompletePemasok> {
@@ -5300,7 +5314,8 @@ class _InputAutocompletePemasokState extends State<_InputAutocompletePemasok> {
       onSelected: (String pilihan) {
         widget.controller.text = pilihan;
       },
-      fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+      fieldViewBuilder:
+          (context, textEditingController, focusNode, onFieldSubmitted) {
         return TextFormField(
           controller: textEditingController,
           focusNode: focusNode,
@@ -5335,10 +5350,12 @@ class _InputAutocompletePemasokState extends State<_InputAutocompletePemasok> {
                   return InkWell(
                     onTap: () => onSelected(option),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
                       child: Row(
                         children: [
-                          const Icon(Icons.local_shipping_outlined, size: 16, color: Colors.grey),
+                          const Icon(Icons.local_shipping_outlined,
+                              size: 16, color: Colors.grey),
                           const SizedBox(width: 8),
                           Expanded(
                             child: _TeksSorotPemasok(
@@ -5346,7 +5363,10 @@ class _InputAutocompletePemasokState extends State<_InputAutocompletePemasok> {
                               kataKunci: widget.controller.text,
                               style: TextStyle(
                                 fontSize: 13,
-                                color: Theme.of(context).textTheme.bodyMedium?.color,
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color,
                               ),
                             ),
                           ),
@@ -5363,4 +5383,3 @@ class _InputAutocompletePemasokState extends State<_InputAutocompletePemasok> {
     );
   }
 }
-

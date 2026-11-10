@@ -149,8 +149,7 @@ class _DialogRincianKlikState extends State<_DialogRincianKlik> {
       final landscape = widget.kolom.length >= 6;
       doc.addPage(
         pw.MultiPage(
-          pageFormat:
-              landscape ? PdfPageFormat.a4.landscape : PdfPageFormat.a4,
+          pageFormat: landscape ? PdfPageFormat.a4.landscape : PdfPageFormat.a4,
           margin: const pw.EdgeInsets.all(24),
           header: (_) => pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -277,30 +276,49 @@ class _DialogRincianKlikState extends State<_DialogRincianKlik> {
                       ],
                     ),
                   ),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: _mengekspor ? null : _unduhExcel,
-                        icon: const Icon(Icons.download_outlined, size: 16),
-                        label: const Text('Download Excel'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.success,
-                          foregroundColor: Colors.white,
+                  PopupMenuButton<String>(
+                    tooltip: 'Pilih tindakan rincian',
+                    icon: const Icon(Icons.more_vert),
+                    onSelected: (aksi) async {
+                      switch (aksi) {
+                        case 'excel':
+                          await _unduhExcel();
+                          break;
+                        case 'pdf':
+                          await _cetakPdf();
+                          break;
+                        case 'tutup':
+                          Navigator.pop(context);
+                          break;
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem<String>(
+                        value: 'excel',
+                        enabled: !_mengekspor,
+                        child: const ListTile(
+                          dense: true,
+                          leading: Icon(Icons.download_outlined),
+                          title: Text('Download Excel'),
                         ),
                       ),
-                      OutlinedButton.icon(
-                        onPressed: _mengekspor ? null : _cetakPdf,
-                        icon: const Icon(Icons.picture_as_pdf_outlined,
-                            size: 16),
-                        label: const Text('Cetak PDF'),
+                      PopupMenuItem<String>(
+                        value: 'pdf',
+                        enabled: !_mengekspor,
+                        child: const ListTile(
+                          dense: true,
+                          leading: Icon(Icons.picture_as_pdf_outlined),
+                          title: Text('Cetak PDF'),
+                        ),
                       ),
-                      IconButton(
-                        tooltip: 'Tutup',
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close),
+                      const PopupMenuDivider(),
+                      const PopupMenuItem<String>(
+                        value: 'tutup',
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.close),
+                          title: Text('Tutup'),
+                      ),
                       ),
                     ],
                   ),
@@ -636,7 +654,8 @@ class _DialogOtorisasiSupervisorState
                       strokeWidth: 2, color: Colors.white),
                 )
               : const Icon(Icons.check_circle_outline, size: 16),
-          label: Text(_memeriksa ? 'Memverifikasi...' : 'Otorisasi & Lanjutkan'),
+          label:
+              Text(_memeriksa ? 'Memverifikasi...' : 'Otorisasi & Lanjutkan'),
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,

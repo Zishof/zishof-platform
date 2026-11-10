@@ -298,7 +298,8 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
     final id = (produk['id'] as num?)?.toInt();
     if (id == null || id <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Rincian belum tersedia untuk produk ini. Muat ulang data lalu coba lagi.'),
+        content: Text(
+            'Rincian belum tersedia untuk produk ini. Muat ulang data lalu coba lagi.'),
       ));
       return;
     }
@@ -320,7 +321,8 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
     final id = (produk['id'] as num?)?.toInt();
     if (id == null || id <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Analisis belum tersedia untuk produk ini. Muat ulang data lalu coba lagi.'),
+        content: Text(
+            'Analisis belum tersedia untuk produk ini. Muat ulang data lalu coba lagi.'),
       ));
       return;
     }
@@ -350,10 +352,12 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
     );
   }
 
-  Future<void> _tampilkanRincianKolomTotal(String labelKolom, String keyQty, String keyNilai) async {
+  Future<void> _tampilkanRincianKolomTotal(
+      String labelKolom, String keyQty, String keyNilai) async {
     await tampilkanRincianKlikDialog(
       context,
-      judul: 'Rincian $labelKolom (${_mutasiTanggal.format(_dari)} s/d ${_mutasiTanggal.format(_sampai)})',
+      judul:
+          'Rincian $labelKolom (${_mutasiTanggal.format(_dari)} s/d ${_mutasiTanggal.format(_sampai)})',
       subjudul: 'Daftar produk pada halaman ini beserta $labelKolom',
       kolom: [
         'Kategori',
@@ -362,13 +366,15 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
         labelKolom,
         'Nilai (Rp)',
       ],
-      baris: _data.map((r) => <Object?>[
+      baris: _data
+          .map((r) => <Object?>[
         r['kategori'] ?? '-',
         r['kode'] ?? '-',
         r['nama'] ?? '-',
         _mutasiAngka.format((r[keyQty] as num?) ?? 0),
         _mutasiRp.format((r[keyNilai] as num?) ?? 0),
-      ]).toList(),
+              ])
+          .toList(),
       barisTotal: [
         'TOTAL KESELURUHAN',
         '',
@@ -451,7 +457,8 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
             ),
           ),
           _angkaCell(r['saldoAwal'], onTap: () => _bukaRincian(r)),
-          _angkaCell(r['nilaiAwal'], rupiah: true, onTap: () => _bukaRincian(r)),
+          _angkaCell(r['nilaiAwal'],
+              rupiah: true, onTap: () => _bukaRincian(r)),
           _angkaCell(r['masuk'], onTap: () => _bukaRincian(r)),
           _angkaCell(r['nilaiMasuk'],
               rupiah: true, onTap: () => _bukaRincian(r)),
@@ -499,12 +506,12 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
           onTap: () => _tampilkanRincianKolomTotal(
               'Saldo Awal', 'saldoAwal', 'nilaiAwal')),
       _angkaCell(_summary['masuk'],
-          onTap: () =>
-              _tampilkanRincianKolomTotal('Barang Masuk', 'masuk', 'nilaiMasuk')),
+          onTap: () => _tampilkanRincianKolomTotal(
+              'Barang Masuk', 'masuk', 'nilaiMasuk')),
       _angkaCell(_summary['nilaiMasuk'],
           rupiah: true,
-          onTap: () =>
-              _tampilkanRincianKolomTotal('Barang Masuk', 'masuk', 'nilaiMasuk')),
+          onTap: () => _tampilkanRincianKolomTotal(
+              'Barang Masuk', 'masuk', 'nilaiMasuk')),
       _angkaCell(_summary['keluar'],
           onTap: () => _tampilkanRincianKolomTotal(
               'Barang Keluar', 'keluar', 'nilaiKeluar')),
@@ -552,15 +559,35 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
               onPressed: _bukaAnalisisCerdasToko,
               icon: const Icon(Icons.auto_awesome, size: 18),
               label: const Text('Analisis Cerdas Toko')),
-          FilledButton.tonalIcon(
-              onPressed: _mengekspor ? null : _unduhExcel,
-              icon: const Icon(Icons.table_view_outlined, size: 18),
-              label: const Text('Download Excel')),
-          FilledButton.tonalIcon(
-              onPressed: _mengekspor ? null : _cetakPdf,
-              icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-              label: const Text('Cetak PDF')),
-          IconButton(onPressed: _muat, icon: const Icon(Icons.refresh)),
+          AksiBarisMenu(
+            tooltip: 'Aksi pergerakan produk',
+            aksi: [
+              AksiBaris(
+                ikon: Icons.auto_awesome,
+                label: 'Analisis Cerdas Toko',
+                onTap: _bukaAnalisisCerdasToko,
+              ),
+              AksiBaris(
+                ikon: Icons.table_view_outlined,
+                label: 'Download Excel',
+                onTap: () {
+                  if (!_mengekspor) _unduhExcel();
+                },
+              ),
+              AksiBaris(
+                ikon: Icons.picture_as_pdf_outlined,
+                label: 'Cetak PDF',
+                onTap: () {
+                  if (!_mengekspor) _cetakPdf();
+                },
+              ),
+              AksiBaris(
+                ikon: Icons.refresh,
+                label: 'Muat Ulang',
+                onTap: _muat,
+              ),
+            ],
+          ),
         ]),
         const SizedBox(height: 10),
         AppSearchField(
@@ -622,7 +649,8 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
                             width: 105, align: TextAlign.right),
                         AppTableColumn('Nilai Akhir',
                             width: 105, align: TextAlign.right),
-                        AppTableColumn('Aksi', width: 64, align: TextAlign.center),
+                        AppTableColumn('Aksi',
+                            width: 64, align: TextAlign.center),
                       ],
                       rows: [...rows, if (_data.isNotEmpty) totalRow],
                       pagination: AppTablePagination(
