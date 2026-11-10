@@ -780,7 +780,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
       kolom: hasil.kolom,
       baris: barisTampil,
       ringkasanTeks:
-          '${barisTampil.length} produk · Total Nilai: ${_formatRupiah.format(hasil.totalNilaiPersediaan ?? 0)}',
+          '${barisTampil.length} produk · Total Nilai: ${hasil.totalNilaiPersediaan == null ? 'Belum lengkap' : _formatRupiah.format(hasil.totalNilaiPersediaan!)}',
     );
   }
 
@@ -911,7 +911,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                 nilai: _memuatStokTanggal
                     ? 'Memuat…'
                     : nilai == null
-                        ? _formatRupiah.format(0)
+                        ? 'Belum lengkap'
                         : _formatRupiah.format(nilai),
                 ikon: Icons.account_balance_wallet_outlined,
                 onTap: hasil == null
@@ -921,7 +921,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
             ]),
             const SizedBox(height: 10),
             Text(
-              'Nilai dihitung dari stok pada tanggal pilihan dan harga beli produk saat ini. Klik kartu di atas untuk melihat rincian & ekspor Excel/PDF.',
+              'Nilai dihitung dari stok pada tanggal pilihan dan harga beli produk saat ini; nilai dapat menjadi perkiraan untuk tanggal lampau. Jika harga beli belum tersedia, total ditandai belum lengkap, bukan diganti dengan harga jual. Klik kartu di atas untuk melihat rincian dan unduh Excel atau cetak PDF.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],

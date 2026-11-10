@@ -1725,18 +1725,20 @@ class _DialogDetailPergerakanStokState
                             ),
                           ),
                           const SizedBox(width: 8),
-                          FilledButton.tonalIcon(
-                            onPressed: _salinAnalisisWaProduk,
-                            icon: const Icon(Icons.copy, size: 15),
-                            label: const Text('Salin Naskah WhatsApp',
-                                style: TextStyle(fontSize: 12)),
-                          ),
-                          const SizedBox(width: 6),
-                          OutlinedButton.icon(
-                            onPressed: _bukaAnalisisCerdas,
-                            icon: const Icon(Icons.open_in_new, size: 15),
-                            label: const Text('Layar Penuh',
-                                style: TextStyle(fontSize: 12)),
+                          AksiBarisMenu(
+                            tooltip: 'Aksi hasil analisis',
+                            aksi: [
+                              AksiBaris(
+                                ikon: Icons.copy,
+                                label: 'Salin Naskah WhatsApp',
+                                onTap: _salinAnalisisWaProduk,
+                              ),
+                              AksiBaris(
+                                ikon: Icons.open_in_full,
+                                label: 'Buka Analisis Lengkap',
+                                onTap: _bukaAnalisisCerdas,
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -2684,7 +2686,9 @@ class StokAnalisisCerdasLokal {
         statusAudit = '$statusAudit · Kode Ganda';
       }
 
-      if (statusFilter == 'dinolkan_so' && statusKode != 'DINOLKAN_SO') continue;
+      if (statusFilter == 'dinolkan_so' && statusKode != 'DINOLKAN_SO') {
+        continue;
+      }
       if (statusFilter == 'stok_minus' && sisa >= 0) continue;
       if (statusFilter == 'koreksi_opname' && opMasuk == 0 && opKeluar == 0) {
         continue;

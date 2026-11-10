@@ -36,4 +36,37 @@ void main() {
     expect(tanpaKolom.totalNilaiPersediaan, isNull);
     expect(nilaiTidakValid.totalNilaiPersediaan, isNull);
   });
+
+  test('harga jual tidak dipakai sebagai pengganti HPP untuk nilai stok', () {
+    const tanpaHpp = HasilStokTanggal(
+      kolom: ['Kode', 'Nama Produk', 'Stok', 'Harga Jual'],
+      baris: [
+        [101, 'Produk A', 4, 20000],
+      ],
+      stokPerKode: {},
+    );
+
+    expect(tanpaHpp.totalNilaiPersediaan, isNull);
+  });
+
+  test('nilai stok memakai HPP resmi dari laporan atau cache', () {
+    const dariLaporan = HasilStokTanggal(
+      kolom: ['Kode', 'Nama Produk', 'Stok', 'Harga Beli'],
+      baris: [
+        [101, 'Produk A', 4, 12500],
+      ],
+      stokPerKode: {},
+    );
+    const dariCache = HasilStokTanggal(
+      kolom: ['Kode', 'Nama Produk', 'Stok'],
+      baris: [
+        [101, 'Produk A', 4],
+      ],
+      stokPerKode: {},
+      hargaBeliPerKode: {'101': 12500},
+    );
+
+    expect(dariLaporan.totalNilaiPersediaan, 50000);
+    expect(dariCache.totalNilaiPersediaan, 50000);
+  });
 }

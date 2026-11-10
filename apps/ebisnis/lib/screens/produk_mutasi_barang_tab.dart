@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:core_db/core_db.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -10,6 +12,7 @@ import 'package:printing/printing.dart';
 import '../api_client.dart';
 import '../services/diff_daftar_lokal.dart';
 import '../services/master_offline.dart';
+import '../sesi.dart';
 import '../services/simple_xlsx.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
@@ -47,6 +50,7 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
   bool _mengekspor = false;
   String? _error;
   String _keyword = '';
+  DateTime? _waktuCacheMutasiPerTanggal;
   List<Map<String, dynamic>> _data = [];
   Map<String, dynamic> _summary = {};
   Map<String, Map<String, dynamic>> _summaryPerTanggalMap = {};
@@ -73,6 +77,57 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
         if (_keyword.trim().isNotEmpty) 'keyword': _keyword.trim(),
       };
 
+  /// Kunci salinan harian memuat cakupan pengguna, tenant, toko, tanggal,
+  /// filter, dan halaman agar cache lintas konteks tidak tercampur.
+  String get _cacheKeyMutasiPerTanggal =>
+      'master:mutasi_per_tanggal:${Sesi.instance.tenantId ?? 'umum'}:'
+      '${Sesi.instance.userId.trim().toLowerCase()}:'
+      '${Sesi.instance.idTokoTerpilih ?? 'semua'}:'
+      '${_mutasiTanggal.format(_dari)}:${_mutasiTanggal.format(_sampai)}:'
+      '${_keyword.trim().toLowerCase().isEmpty ? '-' : _keyword.trim().toLowerCase()}:'
+      '$_halaman:$_pageSize';
+
+  /// Memastikan kelompok dan subtotal hanya ditampilkan bila server memberi
+  /// tanggal setiap baris serta ringkasan lengkap untuk setiap tanggal.
+  Map<String, dynamic> _validasiHasilMutasiPerTanggal(
+      Map<String, dynamic> hasil) {
+    final data = ((hasil['data'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+    if (data.any((row) => '${row['tanggal'] ?? ''}'.trim().isEmpty)) {
+      throw const FormatException('Baris mutasi tanpa tanggal tidak sah.');
+    }
+    final tanggalRingkasan = {
+      for (final item in ((hasil['summaryPerTanggal'] as List?) ?? const [])
+          .whereType<Map>())
+        '${item['tanggal'] ?? ''}'.trim(),
+    };
+    if (data
+        .any((row) => !tanggalRingkasan.contains('${row['tanggal']}'.trim()))) {
+      throw const FormatException('Subtotal harian belum tersedia lengkap.');
+    }
+    return {
+      ...hasil,
+      'data': data,
+      'total': (hasil['total'] as num?)?.toInt() ?? data.length,
+      'summary': (hasil['summary'] as Map?)?.cast<String, dynamic>() ?? {},
+    };
+  }
+
+  void _terapkanHasilMutasiPerTanggal(
+    Map<String, dynamic> hasil, {
+    required bool dariCache,
+    DateTime? disimpanPada,
+  }) {
+    _data = (hasil['data'] as List).cast<Map<String, dynamic>>();
+    _total = (hasil['total'] as num?)?.toInt() ?? _data.length;
+    _summary = (hasil['summary'] as Map?)?.cast<String, dynamic>() ?? {};
+    _terapkanSummaryPerTanggal(hasil);
+    _waktuCacheMutasiPerTanggal = dariCache ? disimpanPada : null;
+    _memuat = false;
+  }
+
   String _formatLabelTanggalGrup(String tglIso) {
     try {
       final dt = DateTime.parse(tglIso);
@@ -94,88 +149,66 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
         }
       }
     }
-    if (map.isNotEmpty) {
-      _summaryPerTanggalMap = map;
-    } else if (_data.isNotEmpty) {
-      // Fallback perhitungan subtotal per tanggal dari baris halaman aktif
-      for (final r in _data) {
-        final tgl = '${r['tanggal'] ?? _mutasiTanggal.format(_sampai)}'.trim();
-        final cur = map.putIfAbsent(
-            tgl,
-            () => <String, dynamic>{
-                  'tanggal': tgl,
-                  'jumlahProduk': 0,
-                  'saldoAwal': 0.0,
-                  'nilaiAwal': 0.0,
-                  'masuk': 0.0,
-                  'nilaiMasuk': 0.0,
-                  'keluar': 0.0,
-                  'nilaiKeluar': 0.0,
-                  'retur': 0.0,
-                  'nilaiRetur': 0.0,
-                  'penyesuaian': 0.0,
-                  'nilaiPenyesuaian': 0.0,
-                  'saldoAkhir': 0.0,
-                  'nilaiAkhir': 0.0,
-                });
-        cur['jumlahProduk'] = ((cur['jumlahProduk'] as int?) ?? 0) + 1;
-        for (final k in const [
-          'saldoAwal',
-          'nilaiAwal',
-          'masuk',
-          'nilaiMasuk',
-          'keluar',
-          'nilaiKeluar',
-          'retur',
-          'nilaiRetur',
-          'penyesuaian',
-          'nilaiPenyesuaian',
-          'saldoAkhir',
-          'nilaiAkhir',
-        ]) {
-          cur[k] = ((cur[k] as num?)?.toDouble() ?? 0.0) +
-              ((r[k] as num?)?.toDouble() ?? 0.0);
-        }
-      }
-      _summaryPerTanggalMap = map;
-    }
+    _summaryPerTanggalMap = map;
   }
 
   Future<void> _muat() async {
     setStateIfMounted(() {
       _memuat = true;
       _error = null;
+      if (widget.modePerTanggalLengkap) {
+        _waktuCacheMutasiPerTanggal = null;
+      }
     });
     try {
       if (widget.modePerTanggalLengkap) {
-        Map<String, dynamic> hasil;
+        // Jangan mengganti rincian harian dengan ringkasan periode. Respons
+        // ringkasan tidak memiliki tanggal transaksi per baris; menambahkan
+        // tanggal akhir akan menghasilkan pengelompokan dan subtotal palsu.
+        Map<String, dynamic>? cacheLokal;
         try {
-          hasil = await ApiClient.instance
-              .aksi('produk_mutasi_per_tanggal', _payload());
-        } catch (_) {
-          // Fallback ke produk_mutasi_ringkasan bila server belum memuat produk_mutasi_per_tanggal
-          hasil = await ApiClient.instance
-              .aksi('produk_mutasi_ringkasan', _payload());
-        }
-        if (!mounted) return;
-        final tglDefault = _mutasiTanggal.format(_sampai);
-        final rawData = ((hasil['data'] as List?) ?? const [])
-            .whereType<Map>()
-            .map((e) {
-          final m = Map<String, dynamic>.from(e);
-          if ('${m['tanggal'] ?? ''}'.trim().isEmpty) {
-            m['tanggal'] = tglDefault;
+          final tersimpan = await CoreDb.instance
+              .ambilCacheReferensi(_cacheKeyMutasiPerTanggal);
+          if (tersimpan != null) {
+            final mentah = jsonDecode(tersimpan) as Map<String, dynamic>;
+            final waktu = DateTime.tryParse('${mentah['_cacheWaktu'] ?? ''}');
+            cacheLokal = _validasiHasilMutasiPerTanggal(mentah);
+            if (!mounted) return;
+            setStateIfMounted(() => _terapkanHasilMutasiPerTanggal(
+                  cacheLokal!,
+                  dariCache: true,
+                  disimpanPada: waktu,
+                ));
+            await Future<void>.delayed(Duration.zero);
           }
-          return m;
-        }).toList();
-        setStateIfMounted(() {
-          _data = rawData;
-          _total = (hasil['total'] as num?)?.toInt() ?? _data.length;
-          _summary =
-              (hasil['summary'] as Map?)?.cast<String, dynamic>() ?? {};
-          _terapkanSummaryPerTanggal(hasil);
-          _memuat = false;
-        });
+        } catch (_) {
+          cacheLokal = null; // cache rusak/tidak cocok: lanjut minta server.
+        }
+        try {
+          final hasilServer = await ApiClient.instance
+              .aksi('produk_mutasi_per_tanggal', _payload());
+          final hasil = _validasiHasilMutasiPerTanggal(hasilServer);
+          try {
+            await CoreDb.instance.simpanCacheReferensi(
+              _cacheKeyMutasiPerTanggal,
+              jsonEncode({
+                ...hasil,
+                '_cacheWaktu': DateTime.now().toIso8601String(),
+              }),
+            );
+          } catch (_) {
+            // Kegagalan menulis cache tidak boleh menyembunyikan hasil server
+            // yang sudah valid; layar tetap menampilkan data terbaru.
+          }
+          if (!mounted) return;
+          setStateIfMounted(() => _terapkanHasilMutasiPerTanggal(
+                hasil,
+                dariCache: false,
+              ));
+        } on ApiException catch (e) {
+          if (cacheLokal != null && e.offline) return;
+          rethrow;
+        }
         return;
       }
 
@@ -248,21 +281,20 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
         hasil = await ApiClient.instance
             .aksi(namaAksi, _payload(page: page, pageSize: 500));
       } catch (_) {
-        if (!widget.modePerTanggalLengkap) rethrow;
-        hasil = await ApiClient.instance.aksi(
-            'produk_mutasi_ringkasan', _payload(page: page, pageSize: 500));
+        // Ekspor harus mempertahankan tingkat rincian yang sama dengan layar.
+        // Ringkasan agregat bukan pengganti yang sah untuk ekspor per tanggal.
+        rethrow;
       }
-      final tglDefault = _mutasiTanggal.format(_sampai);
       final bagian = ((hasil['data'] as List?) ?? const [])
           .whereType<Map>()
-          .map((e) {
-        final m = Map<String, dynamic>.from(e);
-        if (widget.modePerTanggalLengkap &&
-            '${m['tanggal'] ?? ''}'.trim().isEmpty) {
-          m['tanggal'] = tglDefault;
-        }
-        return m;
-      }).toList();
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      if (widget.modePerTanggalLengkap &&
+          bagian.any((row) => '${row['tanggal'] ?? ''}'.trim().isEmpty)) {
+        throw const FormatException(
+          'Ekspor dihentikan karena ada baris mutasi tanpa tanggal.',
+        );
+      }
       semua.addAll(bagian);
       final total = (hasil['total'] as num?)?.toInt() ?? semua.length;
       if (bagian.isEmpty || semua.length >= total) break;
@@ -387,7 +419,8 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
       }
       hasil.add(_baris(r));
       final nextTgl = (i + 1 < semua.length)
-          ? '${semua[i + 1]['tanggal'] ?? _mutasiTanggal.format(_sampai)}'.trim()
+          ? '${semua[i + 1]['tanggal'] ?? _mutasiTanggal.format(_sampai)}'
+              .trim()
           : null;
       if (nextTgl != tgl) {
         final st = _summaryPerTanggalMap[tgl] ?? const <String, dynamic>{};
@@ -566,11 +599,11 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
       ],
       baris: _data
           .map((r) => <Object?>[
-        r['kategori'] ?? '-',
-        r['kode'] ?? '-',
-        r['nama'] ?? '-',
-        _mutasiAngka.format((r[keyQty] as num?) ?? 0),
-        _mutasiRp.format((r[keyNilai] as num?) ?? 0),
+                r['kategori'] ?? '-',
+                r['kode'] ?? '-',
+                r['nama'] ?? '-',
+                _mutasiAngka.format((r[keyQty] as num?) ?? 0),
+                _mutasiRp.format((r[keyNilai] as num?) ?? 0),
               ])
           .toList(),
       barisTotal: [
@@ -627,8 +660,8 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
               width: 105,
               child: Text(
                 '${r['tanggal'] ?? '-'}',
-                style: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w600),
+                style:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
               ),
             ),
           AppTableCell(
@@ -707,8 +740,7 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.calendar_month,
-                    size: 15, color: AppColors.primary),
+                Icon(Icons.calendar_month, size: 15, color: AppColors.primary),
                 const SizedBox(width: 4),
                 Flexible(
                   child: Text(
@@ -834,7 +866,8 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
       }
       hasil.add(_barisDataProduk(r));
       final nextTgl = (i + 1 < _data.length)
-          ? '${_data[i + 1]['tanggal'] ?? _mutasiTanggal.format(_sampai)}'.trim()
+          ? '${_data[i + 1]['tanggal'] ?? _mutasiTanggal.format(_sampai)}'
+              .trim()
           : null;
       if (nextTgl != tgl) {
         hasil.add(_barisSummaryGrupTanggal(tgl, st));
@@ -920,10 +953,6 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
               onPressed: () => _pilihTanggal(false),
               icon: const Icon(Icons.event_outlined, size: 17),
               label: Text('Sampai ${_mutasiTanggal.format(_sampai)}')),
-          FilledButton.tonalIcon(
-              onPressed: _bukaAnalisisCerdasToko,
-              icon: const Icon(Icons.auto_awesome, size: 18),
-              label: const Text('Analisis Cerdas Toko')),
           AksiBarisMenu(
             tooltip: 'Aksi pergerakan produk',
             aksi: [
@@ -966,6 +995,14 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
           },
         ),
         if (_mengekspor) const LinearProgressIndicator(),
+        if (widget.modePerTanggalLengkap && _waktuCacheMutasiPerTanggal != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              'Menampilkan salinan tersimpan (${DateFormat('dd/MM/yyyy HH:mm').format(_waktuCacheMutasiPerTanggal!)}); pembaruan terbaru belum tersedia.',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
         const SizedBox(height: 12),
         Expanded(
           child: _memuat

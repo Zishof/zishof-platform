@@ -108,8 +108,10 @@ class StokPerTanggal {
         final kd = '${p['kode'] ?? ''}'.trim();
         if (kd.isNotEmpty) {
           final hb = (p['harga_beli'] as num?)?.toDouble() ?? 0;
-          final hj = (p['harga_jual'] as num?)?.toDouble() ?? 0;
-          hargaBeliPerKode[kd] = hb > 0 ? hb : hj;
+          // Harga jual bukan pengganti HPP. Menggunakannya akan membuat
+          // nilai persediaan tampak tersedia tetapi keliru; tanpa HPP yang
+          // sahih, layar harus menyatakan nilainya belum lengkap.
+          if (hb > 0) hargaBeliPerKode[kd] = hb;
         }
       }
     } catch (_) {}
@@ -180,7 +182,8 @@ class HasilStokTanggal {
 
   int get _indeksStok {
     for (var i = 0; i < kolom.length; i++) {
-      final normal = kolom[i].toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      final normal =
+          kolom[i].toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
       if (normal == 'stok' || normal.startsWith('stok')) return i;
     }
     return -1;
@@ -188,7 +191,8 @@ class HasilStokTanggal {
 
   int get _indeksHargaBeli {
     for (var i = 0; i < kolom.length; i++) {
-      final normal = kolom[i].toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      final normal =
+          kolom[i].toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
       if (normal.contains('hargabeli') || normal.contains('hpp')) return i;
     }
     return -1;
@@ -196,7 +200,8 @@ class HasilStokTanggal {
 
   int get _indeksNilai {
     for (var i = 0; i < kolom.length; i++) {
-      final normal = kolom[i].toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      final normal =
+          kolom[i].toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
       if (normal == 'nilai' ||
           normal == 'nilaistok' ||
           normal == 'nilaipersediaan' ||
@@ -256,7 +261,8 @@ class HasilStokTanggal {
 
   int get _indeksKode {
     for (var i = 0; i < kolom.length; i++) {
-      final normal = kolom[i].toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      final normal =
+          kolom[i].toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
       if (normal == 'kode' || normal.contains('kode')) return i;
     }
     return -1;
@@ -266,14 +272,19 @@ class HasilStokTanggal {
   ///
   /// Mendukung kolom `Nilai` / `Nilai Stok` / `Nilai Persediaan`, fallback
   /// perkalian `Stok * Harga Beli` dari kolom laporan, serta fallback lapis ketiga
-  /// `Stok * hargaBeliPerKode[kode]` dari cache katalog lokal agar `totalNilaiPersediaan`
-  /// tidak pernah bernilai `null` ("Nilai belum tersedia").
+  /// `Stok * hargaBeliPerKode[kode]` dari cache katalog lokal bila HPP benar-benar
+  /// tersedia. Harga jual tidak boleh dipakai sebagai pengganti HPP.
   double? get totalNilaiPersediaan {
     final indeks = _indeksNilai;
     final iStok = _indeksStok;
     final iHrgBeli = _indeksHargaBeli;
     final iKode = _indeksKode;
     if (baris.isEmpty && stokPerKode.isNotEmpty) {
+      if (stokPerKode.entries.any((e) =>
+          e.value != 0 &&
+          (hargaBeliPerKode[e.key] == null || hargaBeliPerKode[e.key]! <= 0))) {
+        return null;
+      }
       var totalFallback = 0.0;
       stokPerKode.forEach((kd, st) {
         totalFallback += st * (hargaBeliPerKode[kd] ?? 0.0);
@@ -281,6 +292,7 @@ class HasilStokTanggal {
       return totalFallback;
     }
     var jumlah = 0.0;
+    var nilaiTidakDiketahui = false;
     for (final row in baris) {
       double? nilaiBaris;
       if (indeks >= 0 && indeks < row.length) {
@@ -289,20 +301,33 @@ class HasilStokTanggal {
       final s = (iStok >= 0 && iStok < row.length)
           ? (_angkaOpsional(row[iStok]) ?? 0.0)
           : 0.0;
-      if (nilaiBaris == null && iStok >= 0 && iHrgBeli >= 0 && iStok < row.length && iHrgBeli < row.length) {
+      if (nilaiBaris == null &&
+          iStok >= 0 &&
+          iHrgBeli >= 0 &&
+          iStok < row.length &&
+          iHrgBeli < row.length) {
         final hb = _angkaOpsional(row[iHrgBeli]) ?? 0.0;
         nilaiBaris = s * hb;
       }
-      if ((nilaiBaris == null || nilaiBaris == 0) && s != 0 && iKode >= 0 && iKode < row.length) {
+      if ((nilaiBaris == null || nilaiBaris == 0) &&
+          s != 0 &&
+          iKode >= 0 &&
+          iKode < row.length) {
         final kd = '${row[iKode] ?? ''}'.trim();
         final hbCache = hargaBeliPerKode[kd];
         if (hbCache != null && hbCache > 0) {
           nilaiBaris = s * hbCache;
         }
       }
+      // Nilai server yang hadir tetapi tidak terbaca, atau baris tanpa kolom
+      // stok/nilai untuk menghitungnya, berarti total parsial tidak boleh
+      // ditampilkan seolah-olah lengkap.
+      if (nilaiBaris == null && (s != 0 || indeks >= 0 || iStok < 0)) {
+        nilaiTidakDiketahui = true;
+      }
       jumlah += nilaiBaris ?? 0.0;
     }
-    return jumlah;
+    return nilaiTidakDiketahui ? null : jumlah;
   }
 
   static double? _angkaOpsional(Object? nilai) {
