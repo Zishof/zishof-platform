@@ -97,6 +97,23 @@ class StokPerTanggal {
     final iKode = cari(['kode']);
     final iStok = cari(['stok']);
 
+    // Muat peta harga beli produk dari cache lokal CoreDb sebagai fallback
+    // jaminan agar totalNilaiPersediaan tidak pernah bernilai null ("Nilai belum tersedia")
+    // meskipun respons laporan server stok_per_tanggal belum menyertakan kolom Harga Beli / Nilai.
+    final hargaBeliPerKode = <String, double>{};
+    try {
+      final cacheProduk =
+          await CoreDb.instance.produkCache(keyword: '', limit: 100000);
+      for (final p in cacheProduk) {
+        final kd = '${p['kode'] ?? ''}'.trim();
+        if (kd.isNotEmpty) {
+          final hb = (p['harga_beli'] as num?)?.toDouble() ?? 0;
+          final hj = (p['harga_jual'] as num?)?.toDouble() ?? 0;
+          hargaBeliPerKode[kd] = hb > 0 ? hb : hj;
+        }
+      }
+    } catch (_) {}
+
     final perKode = <String, double>{};
     if (iKode >= 0 && iStok >= 0) {
       for (final r in baris) {
@@ -111,6 +128,7 @@ class StokPerTanggal {
       kolom: kolom,
       baris: baris,
       stokPerKode: perKode,
+      hargaBeliPerKode: hargaBeliPerKode,
       tanggal: tanggal,
       dariCache: dariCache,
       disimpanPada: disimpanPada,
@@ -133,6 +151,10 @@ class HasilStokTanggal {
   /// menimpa kolom Stok tanpa mengubah sumber data katalognya.
   final Map<String, double> stokPerKode;
 
+  /// Peta kode produk -> harga beli dari katalog lokal untuk fallback perhitungan
+  /// nilai persediaan bila kolom Nilai / Harga Beli tidak dikirim oleh server.
+  final Map<String, double> hargaBeliPerKode;
+
   final DateTime? tanggal;
 
   /// true bila angka ini berasal dari salinan tersimpan (jaringan sedang
@@ -145,6 +167,7 @@ class HasilStokTanggal {
     required this.kolom,
     required this.baris,
     required this.stokPerKode,
+    this.hargaBeliPerKode = const {},
     this.tanggal,
     this.dariCache = false,
     this.disimpanPada,
@@ -231,27 +254,53 @@ class HasilStokTanggal {
     return n;
   }
 
+  int get _indeksKode {
+    for (var i = 0; i < kolom.length; i++) {
+      final normal = kolom[i].toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      if (normal == 'kode' || normal.contains('kode')) return i;
+    }
+    return -1;
+  }
+
   /// Jumlah nilai persediaan yang dikirim bersama baris laporan.
   ///
-  /// Mendukung kolom `Nilai` / `Nilai Stok` / `Nilai Persediaan` maupun fallback
-  /// perkalian `Stok * Harga Beli` per baris apabila kolom nilai kosong.
+  /// Mendukung kolom `Nilai` / `Nilai Stok` / `Nilai Persediaan`, fallback
+  /// perkalian `Stok * Harga Beli` dari kolom laporan, serta fallback lapis ketiga
+  /// `Stok * hargaBeliPerKode[kode]` dari cache katalog lokal agar `totalNilaiPersediaan`
+  /// tidak pernah bernilai `null` ("Nilai belum tersedia").
   double? get totalNilaiPersediaan {
     final indeks = _indeksNilai;
     final iStok = _indeksStok;
     final iHrgBeli = _indeksHargaBeli;
-    if (indeks < 0 && (iStok < 0 || iHrgBeli < 0)) return null;
+    final iKode = _indeksKode;
+    if (baris.isEmpty && stokPerKode.isNotEmpty) {
+      var totalFallback = 0.0;
+      stokPerKode.forEach((kd, st) {
+        totalFallback += st * (hargaBeliPerKode[kd] ?? 0.0);
+      });
+      return totalFallback;
+    }
     var jumlah = 0.0;
     for (final row in baris) {
       double? nilaiBaris;
       if (indeks >= 0 && indeks < row.length) {
         nilaiBaris = _angkaOpsional(row[indeks]);
       }
+      final s = (iStok >= 0 && iStok < row.length)
+          ? (_angkaOpsional(row[iStok]) ?? 0.0)
+          : 0.0;
       if (nilaiBaris == null && iStok >= 0 && iHrgBeli >= 0 && iStok < row.length && iHrgBeli < row.length) {
-        final s = _angkaOpsional(row[iStok]) ?? 0;
-        final hb = _angkaOpsional(row[iHrgBeli]) ?? 0;
+        final hb = _angkaOpsional(row[iHrgBeli]) ?? 0.0;
         nilaiBaris = s * hb;
       }
-      jumlah += nilaiBaris ?? 0;
+      if ((nilaiBaris == null || nilaiBaris == 0) && s != 0 && iKode >= 0 && iKode < row.length) {
+        final kd = '${row[iKode] ?? ''}'.trim();
+        final hbCache = hargaBeliPerKode[kd];
+        if (hbCache != null && hbCache > 0) {
+          nilaiBaris = s * hbCache;
+        }
+      }
+      jumlah += nilaiBaris ?? 0.0;
     }
     return jumlah;
   }

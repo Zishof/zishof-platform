@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:core_db/core_db.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -10,6 +12,7 @@ import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api_client.dart';
+import '../services/simple_xlsx.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/aksi_baris_menu.dart';
@@ -107,12 +110,76 @@ class _TabSoGrandState extends State<TabSoGrand> {
         payload['toko_id'] = tokoId;
       }
 
-      final res = await ApiClient.instance.aksi('so_grand_daftar', payload);
-      final rawList = (res['data'] as List?) ?? [];
-      final list = rawList
-          .whereType<Map>()
-          .map((m) => Map<String, dynamic>.from(m))
-          .toList();
+      List<Map<String, dynamic>> list = [];
+      double totalStok = 0;
+      double totalAset = 0;
+
+      try {
+        final res = await ApiClient.instance.aksi('so_grand_daftar', payload);
+        final rawList = (res['data'] as List?) ?? [];
+        list = rawList
+            .whereType<Map>()
+            .map((m) => Map<String, dynamic>.from(m))
+            .toList();
+        totalStok = (res['totalStokSistem'] as num?)?.toDouble() ?? 0;
+        totalAset = (res['totalNilaiAset'] as num?)?.toDouble() ?? 0;
+      } catch (_) {
+        // Fallback tangguh apabila server produksi belum memuat aksi so_grand_daftar
+        // atau sedang mengalami gangguan sementara: gunakan aksi katalog / CoreDb lokal.
+        try {
+          final resKat = await ApiClient.instance.aksi('katalog', payload);
+          final rawKat = (resKat['produk'] as List?) ?? (resKat['data'] as List?) ?? [];
+          for (final item in rawKat.whereType<Map>()) {
+            final m = Map<String, dynamic>.from(item);
+            final pId = (m['produkId'] as num?)?.toInt() ?? (m['id'] as num?)?.toInt() ?? 0;
+            if (pId <= 0) continue;
+            final stok = (m['stokSistem'] as num?)?.toDouble() ?? (m['stok'] as num?)?.toDouble() ?? 0;
+            final hb = (m['hargaBeli'] as num?)?.toDouble() ?? (m['harga_beli'] as num?)?.toDouble() ?? (m['harga'] as num?)?.toDouble() ?? 0;
+            final hj = (m['hargaJual'] as num?)?.toDouble() ?? (m['harga_jual'] as num?)?.toDouble() ?? (m['harga'] as num?)?.toDouble() ?? 0;
+            final nilai = stok * hb;
+            totalStok += stok;
+            totalAset += nilai;
+            list.add({
+              'produkId': pId,
+              'kode': '${m['kode'] ?? '-'}',
+              'barcode': '${m['barcode'] ?? ''}',
+              'nama': '${m['nama'] ?? '-'}',
+              'kategori': '${m['kategori'] ?? m['jenis'] ?? 'Umum'}',
+              'satuan': '${m['satuan'] ?? 'PCS'}',
+              'stokSistem': stok,
+              'hargaBeli': hb,
+              'hargaJual': hj,
+              'nilaiAset': nilai,
+            });
+          }
+        } catch (_) {
+          final cacheProduk =
+              await CoreDb.instance.produkCache(keyword: '', limit: 100000);
+          for (final p in cacheProduk) {
+            final pId = (p['id'] as num?)?.toInt() ?? 0;
+            if (pId <= 0) continue;
+            final stok = (p['stok'] as num?)?.toDouble() ?? 0;
+            final hb = (p['harga_beli'] as num?)?.toDouble() ?? 0;
+            final hj = (p['harga_jual'] as num?)?.toDouble() ?? 0;
+            final hbEfektif = hb > 0 ? hb : hj;
+            final nilai = stok * hbEfektif;
+            totalStok += stok;
+            totalAset += nilai;
+            list.add({
+              'produkId': pId,
+              'kode': '${p['kode'] ?? '-'}',
+              'barcode': '${p['barcode'] ?? ''}',
+              'nama': '${p['nama'] ?? '-'}',
+              'kategori': '${p['kategori_nama'] ?? p['jenis_nama'] ?? 'Umum'}',
+              'satuan': '${p['satuan_nama'] ?? 'PCS'}',
+              'stokSistem': stok,
+              'hargaBeli': hbEfektif,
+              'hargaJual': hj,
+              'nilaiAset': nilai,
+            });
+          }
+        }
+      }
 
       final kategoriSet = <String>{};
       for (final item in list) {
@@ -131,8 +198,8 @@ class _TabSoGrandState extends State<TabSoGrand> {
       if (!mounted) return;
       setStateIfMounted(() {
         _semuaProduk = list;
-        _totalStokSistem = (res['totalStokSistem'] as num?)?.toDouble() ?? 0;
-        _totalNilaiAset = (res['totalNilaiAset'] as num?)?.toDouble() ?? 0;
+        _totalStokSistem = totalStok;
+        _totalNilaiAset = totalAset;
         _daftarKategori = kategoriSet.toList()..sort();
         _terapkanFilter();
       });
@@ -268,15 +335,61 @@ class _TabSoGrandState extends State<TabSoGrand> {
         payload['toko_id'] = tokoId;
       }
 
-      final res =
-          await ApiClient.instance.aksi('so_grand_download_excel', payload);
-      final b64 = res['fileBase64'] as String?;
-      if (b64 == null || b64.isEmpty) {
-        throw Exception('Server tidak mengembalikan berkas SO Grand.');
+      Uint8List bytes;
+      String nama = 'SO-Grand-Toko.xlsx';
+      try {
+        final res =
+            await ApiClient.instance.aksi('so_grand_download_excel', payload);
+        final b64 = res['fileBase64'] as String?;
+        if (b64 == null || b64.isEmpty) {
+          throw Exception('Server tidak mengembalikan berkas SO Grand.');
+        }
+        bytes = base64Decode(b64);
+        nama = '${res['namaFile'] ?? 'SO-Grand-Toko.xlsx'}';
+      } catch (_) {
+        // Fallback pembangkitan Excel lokal dari daftar produk yang telah dimuat
+        // apabila server belum mendukung aksi so_grand_download_excel.
+        final headersXls = <String>[
+          'No',
+          'Produk ID',
+          'Kode Produk',
+          'Barcode',
+          'Nama Produk',
+          'Kategori',
+          'Satuan',
+          'Stok Sistem',
+          'Stok Fisik (Isi Hasil Hitung)',
+          'Harga Beli',
+          'Harga Jual',
+          'Keterangan',
+        ];
+        final rowsXls = <List<Object?>>[];
+        for (var i = 0; i < _semuaProduk.length; i++) {
+          final p = _semuaProduk[i];
+          final pId = (p['produkId'] as num?)?.toInt() ?? 0;
+          final teksFisik = _controllersFisik[pId]?.text.trim() ?? '';
+          final teksKet = _controllersKet[pId]?.text.trim() ?? '';
+          rowsXls.add([
+            i + 1,
+            pId,
+            '${p['kode'] ?? ''}',
+            '${p['barcode'] ?? ''}',
+            '${p['nama'] ?? ''}',
+            '${p['kategori'] ?? ''}',
+            '${p['satuan'] ?? 'PCS'}',
+            (p['stokSistem'] as num?)?.toDouble() ?? 0,
+            teksFisik.isNotEmpty ? (double.tryParse(teksFisik) ?? teksFisik) : '',
+            (p['hargaBeli'] as num?)?.toDouble() ?? 0,
+            (p['hargaJual'] as num?)?.toDouble() ?? 0,
+            teksKet,
+          ]);
+        }
+        bytes = buildSimpleXlsx(
+          sheetName: 'SO Grand',
+          headers: headersXls,
+          rows: rowsXls,
+        );
       }
-
-      final bytes = base64Decode(b64);
-      final nama = '${res['namaFile'] ?? 'SO-Grand-Toko.xlsx'}';
       final path = await FilePicker.platform.saveFile(
         dialogTitle: 'Simpan Lembar Kerja SO Grand Excel',
         fileName: nama,

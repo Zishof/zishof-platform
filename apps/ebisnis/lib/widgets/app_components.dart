@@ -1311,10 +1311,12 @@ class AppTableCell {
 class AppTableRowData {
   final List<AppTableCell> cells;
   final VoidCallback? onTap;
+  final Color? backgroundColor;
 
   const AppTableRowData({
     required this.cells,
     this.onTap,
+    this.backgroundColor,
   });
 }
 
@@ -1679,7 +1681,7 @@ class _AppTableRow extends StatelessWidget {
     final content = Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.cardBgOf(context),
+        color: row.backgroundColor ?? AppColors.cardBgOf(context),
         border: Border(top: BorderSide(color: AppColors.borderOf(context))),
       ),
       child: Row(

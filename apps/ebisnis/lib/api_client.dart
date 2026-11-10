@@ -203,6 +203,7 @@ class ApiClient {
     'produk_impor_excel_preview',
     'produk_rekonsiliasi_ledger',
     'produk_mutasi_ringkasan',
+    'produk_mutasi_per_tanggal',
     'produk_statistik',
     'produk_statistik_detail',
     'price_tag_list_produk',
@@ -310,7 +311,10 @@ class ApiClient {
     // atau pengguna adalah admin multi-toko tanpa toko tunggal, sertakan flag
     // `semuaToko = true` agar server mengagregasi data ke seluruh toko yang diizinkan,
     // bukan menolaknya atau mengunci ke satu toko yang kebetulan kosong.
-    if ((namaAksi == 'katalog' || namaAksi == 'produk_mutasi_ringkasan') && !sudahAdaLingkupKatalog) {
+    if ((namaAksi == 'katalog' ||
+            namaAksi == 'produk_mutasi_ringkasan' ||
+            namaAksi == 'produk_mutasi_per_tanggal') &&
+        !sudahAdaLingkupKatalog) {
       if (Sesi.instance.tokoFilter == null && (Sesi.instance.bolehSemuaToko || Sesi.instance.isAdmin)) {
         payload['semuaToko'] = true;
       } else {
@@ -678,6 +682,14 @@ class ApiClient {
   static const Set<String> _aksiOpsionalServerBaru = {
     'so_perubahan_stok',
     'toko_filter_list',
+    'stok_analisis_cerdas_produk',
+    'stok_analisis_cerdas_toko',
+    'produk_mutasi_per_tanggal',
+    'stok_pergerakan_rekap',
+    'stok_pergerakan_detail',
+    'stok_pergerakan_ekspor_excel',
+    'so_grand_daftar',
+    'so_grand_download_excel',
   };
 
   bool _kegagalanYangDiharapkan(ApiException gagal) {

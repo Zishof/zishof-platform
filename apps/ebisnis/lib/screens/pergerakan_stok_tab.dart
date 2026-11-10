@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:core_db/core_db.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +11,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../api_client.dart';
+import '../services/simple_xlsx.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
@@ -163,31 +165,86 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
         _memuat = false;
       });
     } catch (e) {
-      if (!mounted) return;
-      setStateIfMounted(() {
-        _memuat = false;
-        _pesanError = 'Gagal memuat pergerakan stok: $e';
-      });
+      // Fallback ke produk_mutasi_ringkasan atau cache lokal bila server sedang sibuk / belum memuat stok_pergerakan_rekap
+      try {
+        final fallback = await StokAnalisisCerdasLokal.muatRekapFallback(
+          tglMulai: _tglMulai,
+          tglSampai: _tglSampai,
+          keyword: _cariController.text.trim(),
+          statusFilter: _statusFilter,
+        );
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _data = (fallback['data'] as List<Map<String, dynamic>>);
+          _ringkasanTotal = fallback['ringkasan'] as Map<String, dynamic>;
+          _memuat = false;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _memuat = false;
+          _pesanError = 'Gagal memuat pergerakan stok: $e';
+        });
+      }
     }
   }
 
   Future<void> _eksporExcel() async {
     try {
-      final res =
-          await ApiClient.instance.aksi('stok_pergerakan_ekspor_excel', {
-        'dari': _formatTglParam(_tglMulai),
-        'sampai': _formatTglParam(_tglSampai),
-        'q': _cariController.text.trim(),
-        'status_filter': _statusFilter,
-      });
-
-      final b64 = res['fileBase64'] as String?;
-      if (b64 == null || b64.isEmpty) {
-        throw Exception('Server tidak mengembalikan file.');
-      }
-      final bytes = base64Decode(b64);
-      final namaFile = (res['namaFile'] as String?) ??
+      Uint8List bytes;
+      String namaFile =
           'Pergerakan_Stok_${_formatTglParam(_tglMulai)}_${_formatTglParam(_tglSampai)}.xlsx';
+      try {
+        final res =
+            await ApiClient.instance.aksi('stok_pergerakan_ekspor_excel', {
+          'dari': _formatTglParam(_tglMulai),
+          'sampai': _formatTglParam(_tglSampai),
+          'q': _cariController.text.trim(),
+          'status_filter': _statusFilter,
+        });
+
+        final b64 = res['fileBase64'] as String?;
+        if (b64 == null || b64.isEmpty) {
+          throw Exception('Server tidak mengembalikan file.');
+        }
+        bytes = base64Decode(b64);
+        namaFile = (res['namaFile'] as String?) ?? namaFile;
+      } catch (_) {
+        // Fallback ekspor Excel lokal dari _data yang sedang tampil
+        bytes = buildSimpleXlsx(
+          sheetName: 'Pergerakan & Audit Stok',
+          headers: const [
+            'Grup / Kategori',
+            'Kode Barang',
+            'Nama Produk',
+            'Stok Awal',
+            'Masuk (+)',
+            'Retur (+)',
+            'Penjualan (-)',
+            'Keluar Lain (-)',
+            'Opname (+)',
+            'Opname (-)',
+            'Stok Akhir (Sisa)',
+            'Status Audit',
+          ],
+          rows: _data
+              .map((item) => [
+                    item['kategori'] ?? '-',
+                    item['kode'] ?? '-',
+                    item['nama'] ?? '-',
+                    item['awal'] ?? 0,
+                    item['masuk'] ?? 0,
+                    item['retur'] ?? 0,
+                    item['penjualan'] ?? 0,
+                    item['keluar'] ?? 0,
+                    item['opnameMasuk'] ?? 0,
+                    item['opnameKeluar'] ?? 0,
+                    item['sisa'] ?? 0,
+                    item['statusAudit'] ?? 'Normal',
+                  ])
+              .toList(),
+        );
+      }
 
       final path = await FilePicker.platform.saveFile(
         dialogTitle: 'Simpan Rekap Pergerakan Stok',
@@ -992,6 +1049,7 @@ class _DialogDetailPergerakanStokState
   String? _pesanError;
   Map<String, dynamic>? _ringkasan;
   List<Map<String, dynamic>> _mutasi = [];
+  Map<String, dynamic>? _analisisProduk;
 
   @override
   void initState() {
@@ -1009,21 +1067,54 @@ class _DialogDetailPergerakanStokState
     });
 
     try {
-      final res = await ApiClient.instance.aksi('stok_pergerakan_detail', {
-        'id': widget.idProduk,
-        'dari': _formatTglParam(widget.tglMulai),
-        'sampai': _formatTglParam(widget.tglSampai),
-      });
+      Map<String, dynamic>? ringkasanData;
+      List<Map<String, dynamic>> mutasiList = [];
+      double hargaBeli = 0;
+
+      try {
+        final res = await ApiClient.instance.aksi('stok_pergerakan_detail', {
+          'id': widget.idProduk,
+          'dari': _formatTglParam(widget.tglMulai),
+          'sampai': _formatTglParam(widget.tglSampai),
+        });
+        ringkasanData = (res['ringkasan'] as Map?)?.cast<String, dynamic>();
+        final List rawMutasi = (res['mutasi'] as List?) ?? [];
+        mutasiList =
+            rawMutasi.map((e) => (e as Map).cast<String, dynamic>()).toList();
+        final pObj = (res['produk'] as Map?)?.cast<String, dynamic>();
+        hargaBeli = (pObj?['hargaBeli'] as num?)?.toDouble() ?? 0;
+      } catch (_) {
+        // Fallback tangguh apabila server sedang restart (HTTP 503) atau belum memuat stok_pergerakan_detail
+        final fb = await StokAnalisisCerdasLokal.muatDetailProdukFallback(
+          idProduk: widget.idProduk,
+          namaProduk: widget.namaProduk,
+          kodeProduk: widget.kodeProduk,
+          kategori: widget.kategori,
+          tglMulai: widget.tglMulai,
+          tglSampai: widget.tglSampai,
+        );
+        ringkasanData = fb['ringkasan'] as Map<String, dynamic>?;
+        mutasiList = (fb['mutasi'] as List<Map<String, dynamic>>?) ?? [];
+        hargaBeli = (fb['hargaBeli'] as num?)?.toDouble() ?? 0;
+      }
 
       if (!mounted) return;
 
-      final ringkasanData = (res['ringkasan'] as Map?)?.cast<String, dynamic>();
-      final List mutasiList = (res['mutasi'] as List?) ?? [];
+      final analisisLokal = StokAnalisisCerdasLokal.susunAnalisisProdukDariData(
+        namaProduk: widget.namaProduk,
+        kodeProduk: widget.kodeProduk,
+        kategori: widget.kategori,
+        tglMulai: widget.tglMulai,
+        tglSampai: widget.tglSampai,
+        ringkasan: ringkasanData ?? const {},
+        mutasi: mutasiList,
+        hargaBeli: hargaBeli,
+      );
 
       setStateIfMounted(() {
         _ringkasan = ringkasanData;
-        _mutasi =
-            mutasiList.map((e) => (e as Map).cast<String, dynamic>()).toList();
+        _mutasi = mutasiList;
+        _analisisProduk = analisisLokal;
         _memuat = false;
       });
     } catch (e) {
@@ -1033,6 +1124,19 @@ class _DialogDetailPergerakanStokState
         _pesanError = 'Gagal memuat detail pergerakan: $e';
       });
     }
+  }
+
+  Future<void> _salinAnalisisWaProduk() async {
+    final teks = (_analisisProduk?['teksAnalisisWa'] as String?) ?? '';
+    if (teks.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: teks));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+            'Naskah hasil analisis cerdas berhasil disalin ke Clipboard (siap ditempel ke WhatsApp).'),
+      ),
+    );
   }
 
   Future<void> _eksporExcelProduk() async {
@@ -1588,7 +1692,148 @@ class _DialogDetailPergerakanStokState
                                 ),
                               ),
               ),
-              const SizedBox(height: 12),
+              if (!_memuat && _pesanError == null && _analisisProduk != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 270),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.indigo.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                        color: Colors.indigo.withValues(alpha: 0.28)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.auto_awesome,
+                              color: Colors.indigo, size: 19),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Hasil Analisis Cerdas: ${(_analisisProduk?['judulDiagnosis'] as String?) ?? 'Ringkasan Mutasi Produk'}',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.indigo,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton.tonalIcon(
+                            onPressed: _salinAnalisisWaProduk,
+                            icon: const Icon(Icons.copy, size: 15),
+                            label: const Text('Salin Naskah WhatsApp',
+                                style: TextStyle(fontSize: 12)),
+                          ),
+                          const SizedBox(width: 6),
+                          OutlinedButton.icon(
+                            onPressed: _bukaAnalisisCerdas,
+                            icon: const Icon(Icons.open_in_new, size: 15),
+                            label: const Text('Layar Penuh',
+                                style: TextStyle(fontSize: 12)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Flexible(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                (_analisisProduk?['penjelasanUtama']
+                                        as String?) ??
+                                    '',
+                                style: const TextStyle(
+                                    fontSize: 12.2, height: 1.4),
+                              ),
+                              if (((_analisisProduk?['kronologiPoin']
+                                          as List?) ??
+                                      const [])
+                                  .isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Kronologi Kejadian Tercatat:',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12),
+                                ),
+                                const SizedBox(height: 4),
+                                ...((_analisisProduk?['kronologiPoin']
+                                            as List?) ??
+                                        const [])
+                                    .take(6)
+                                    .map((k) => Padding(
+                                          padding:
+                                              const EdgeInsets.only(bottom: 3),
+                                          child: Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              const Text('• ',
+                                                  style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 11.5)),
+                                              Expanded(
+                                                child: Text('$k',
+                                                    style: const TextStyle(
+                                                        fontSize: 11.5)),
+                                              ),
+                                            ],
+                                          ),
+                                        )),
+                              ],
+                              if (((_analisisProduk?['langkahSolusi']
+                                          as List?) ??
+                                      const [])
+                                  .isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Rekomendasi & Langkah Penyelesaian:',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12),
+                                ),
+                                const SizedBox(height: 4),
+                                ...((_analisisProduk?['langkahSolusi']
+                                            as List?) ??
+                                        const [])
+                                    .map((s) => Padding(
+                                          padding:
+                                              const EdgeInsets.only(bottom: 3),
+                                          child: Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              const Icon(
+                                                  Icons.check_circle_outline,
+                                                  size: 14,
+                                                  color: Colors.green),
+                                              const SizedBox(width: 5),
+                                              Expanded(
+                                                child: Text('$s',
+                                                    style: const TextStyle(
+                                                        fontSize: 11.5)),
+                                              ),
+                                            ],
+                                          ),
+                                        )),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -1643,9 +1888,10 @@ class _DialogAnalisisCerdasStokState extends State<DialogAnalisisCerdasStok> {
       _memuat = true;
       _error = null;
     });
+    final bool perProduk = widget.idProduk != null && widget.idProduk! > 0;
+    Map<String, dynamic> res;
     try {
-      final bool perProduk = widget.idProduk != null && widget.idProduk! > 0;
-      final res = await ApiClient.instance.aksi(
+      res = await ApiClient.instance.aksi(
         perProduk ? 'stok_analisis_cerdas_produk' : 'stok_analisis_cerdas_toko',
         {
           if (perProduk) 'id': widget.idProduk,
@@ -1653,28 +1899,47 @@ class _DialogAnalisisCerdasStokState extends State<DialogAnalisisCerdasStok> {
           'sampai': _formatTglParam(widget.tglSampai),
         },
       );
-      if (!mounted) return;
-      setStateIfMounted(() {
-        _judulDiagnosis = (res['judulDiagnosis'] as String?) ??
-            'Ringkasan Eksekutif Audit Pergerakan & Selisih Stok ${res['namaToko'] ?? 'Toko'}';
-        _penjelasanUtama = (res['penjelasanUtama'] as String?) ??
-            'Ditemukan ${res['totalProdukDinolkan'] ?? 0} jenis barang sempat dinolkan saat Stok Opname (Sudah pulih: ${res['jmlSudahPulih'] ?? 0}, Masih 0/minus: ${res['jmlMasihTerdampak'] ?? 0}) serta ${res['totalStokMinus'] ?? 0} barang berstok minus.';
-        _teksWa = (res['teksAnalisisWa'] as String?) ?? '';
-        _kronologi = ((res['kronologiPoin'] as List?) ?? const [])
-            .map((e) => '$e')
-            .toList();
-        _solusi = ((res['langkahSolusi'] as List?) ?? const [])
-            .map((e) => '$e')
-            .toList();
-        _memuat = false;
-      });
     } catch (e) {
-      if (!mounted) return;
-      setStateIfMounted(() {
-        _memuat = false;
-        _error = 'Gagal menyusun analisis otomatis: $e';
-      });
+      // Fallback otomatis multi-lapis agar pengguna TIDAK PERNAH melihat pesan
+      // "Aksi tidak dikenal" atau "HTTP 503" saat server sedang restart/belum update.
+      try {
+        res = perProduk
+            ? await StokAnalisisCerdasLokal.susunAnalisisProdukFallback(
+                idProduk: widget.idProduk!,
+                namaProduk: widget.namaProduk,
+                kodeProduk: widget.kodeProduk,
+                tglMulai: widget.tglMulai,
+                tglSampai: widget.tglSampai,
+              )
+            : await StokAnalisisCerdasLokal.susunAnalisisTokoFallback(
+                tglMulai: widget.tglMulai,
+                tglSampai: widget.tglSampai,
+              );
+      } catch (eFallback) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _memuat = false;
+          _error = 'Gagal menyusun analisis otomatis: $eFallback';
+        });
+        return;
+      }
     }
+
+    if (!mounted) return;
+    setStateIfMounted(() {
+      _judulDiagnosis = (res['judulDiagnosis'] as String?) ??
+          'Ringkasan Eksekutif Audit Pergerakan & Selisih Stok ${res['namaToko'] ?? 'Toko'}';
+      _penjelasanUtama = (res['penjelasanUtama'] as String?) ??
+          'Ditemukan ${res['totalProdukDinolkan'] ?? 0} jenis barang sempat dinolkan saat Stok Opname (Sudah pulih: ${res['jmlSudahPulih'] ?? 0}, Masih 0/minus: ${res['jmlMasihTerdampak'] ?? 0}) serta ${res['totalStokMinus'] ?? 0} barang berstok minus.';
+      _teksWa = (res['teksAnalisisWa'] as String?) ?? '';
+      _kronologi = ((res['kronologiPoin'] as List?) ?? const [])
+          .map((e) => '$e')
+          .toList();
+      _solusi = ((res['langkahSolusi'] as List?) ?? const [])
+          .map((e) => '$e')
+          .toList();
+      _memuat = false;
+    });
   }
 
   Future<void> _salinWa() async {
@@ -1887,5 +2152,740 @@ class _DialogAnalisisCerdasStokState extends State<DialogAnalisisCerdasStok> {
         ),
       ),
     );
+  }
+}
+
+/// Mesin Analisis Cerdas Pergerakan & Selisih Stok di Sisi Klien (Fallback Multi-Lapis & Offline-Ready).
+///
+/// Tujuan:
+/// 1. Menyusun hasil analisis cerdas otomatis secara instan di dalam [DialogDetailPergerakanStok]
+///    ("Tambahkan hasil analysis cerdas di sini") tepat di bawah tabel buku besar produk tanpa
+///    membutuhkan round-trip jaringan tambahan.
+/// 2. Menjamin [DialogAnalisisCerdasStok] (baik per-produk maupun seluruh toko) TIDAK PERNAH
+///    menampilkan error "Aksi tidak dikenal" atau "HTTP 503" apabila server sedang restart
+///    atau belum di-deploy versi terbaru, karena sistem otomatis menyintesis diagnosis,
+///    kronologi, langkah solusi, dan naskah WhatsApp dari endpoint pendamping (`stok_pergerakan_detail`,
+///    `stok_pergerakan_rekap`, `stok_mutasi_ledger`, `produk_mutasi_ringkasan`) maupun cache SQLite lokal (`CoreDb`).
+class StokAnalisisCerdasLokal {
+  StokAnalisisCerdasLokal._();
+
+  static final _fmtTgl = DateFormat('yyyy-MM-dd');
+  static final _fmtRp =
+      NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+
+  static String _angka(num v) => _formatAngka.format(v);
+  static String _rupiah(num v) => _fmtRp.format(v.round());
+
+  /// Menyusun diagnosis, kronologi, rekomendasi langkah penyelesaian, dan naskah WhatsApp
+  /// dari ringkasan & daftar mutasi 1 produk yang sudah dimuat.
+  static Map<String, dynamic> susunAnalisisProdukDariData({
+    required String namaProduk,
+    required String kodeProduk,
+    required String kategori,
+    required DateTime tglMulai,
+    required DateTime tglSampai,
+    required Map<String, dynamic> ringkasan,
+    required List<Map<String, dynamic>> mutasi,
+    double hargaBeli = 0,
+  }) {
+    final namaToko = Sesi.instance.tokoNama.isNotEmpty
+        ? Sesi.instance.tokoNama
+        : 'Toko Al-Bahjah';
+    final kd = kodeProduk.trim().isEmpty ? '-' : kodeProduk.trim();
+    final kat = kategori.trim().isEmpty ? 'Lain-lain' : kategori.trim();
+    final mulaiStr = _fmtTgl.format(tglMulai);
+    final sampaiStr = _fmtTgl.format(tglSampai);
+
+    final awal = (ringkasan['awal'] as num?)?.toDouble() ?? 0;
+    final masuk = (ringkasan['masuk'] as num?)?.toDouble() ?? 0;
+    final retur = (ringkasan['retur'] as num?)?.toDouble() ?? 0;
+    final penjualan = (ringkasan['penjualan'] as num?)?.toDouble() ?? 0;
+    final keluar = (ringkasan['keluar'] as num?)?.toDouble() ?? 0;
+    final opnameMasuk = (ringkasan['opnameMasuk'] as num?)?.toDouble() ?? 0;
+    final opnameKeluar = (ringkasan['opnameKeluar'] as num?)?.toDouble() ?? 0;
+    final sisa = (ringkasan['sisa'] as num?)?.toDouble() ?? 0;
+
+    bool pernahDinolkanSo = false;
+    String waktuDinolkanSo = '';
+    String petugasDinolkanSo = '';
+    String ketDinolkanSo = '';
+    double stokSebelumDinolkan = 0;
+
+    bool pernahPulihSo = false;
+    String waktuPulihSo = '';
+    double qtyPulihSo = 0;
+
+    int jmlTransaksiPos = 0;
+    int jmlOpname = 0;
+    final kronologiPoin = <String>[];
+
+    for (final m in mutasi) {
+      final tgl = '${m['tanggal'] ?? m['waktu'] ?? '-'}';
+      final tipe = '${m['tipe'] ?? m['jenis'] ?? ''}';
+      final ref = '${m['referensi'] ?? m['noFaktur'] ?? '-'}';
+      final pihak = '${m['namaPelanggan'] ?? ''}';
+      final oleh = '${m['oleh'] ?? ''}';
+      final mAwal = (m['awal'] as num?)?.toDouble() ?? 0;
+      final mMasuk = (m['masuk'] as num?)?.toDouble() ?? 0;
+      final mKeluar = (m['keluar'] as num?)?.toDouble() ?? 0;
+      final mSisa = (m['sisa'] as num?)?.toDouble() ?? 0;
+
+      if (tipe.contains('Penjualan')) {
+        jmlTransaksiPos++;
+        kronologiPoin.add(
+            '$tgl WIB: Terjual di Kasir (Nota: $ref) sebanyak ${_angka(mKeluar)} Pcs -> Stok berubah dari ${_angka(mAwal)} menjadi ${_angka(mSisa)} Pcs.');
+      } else if (tipe.contains('Pengadaan') || tipe.contains('Kulakan')) {
+        kronologiPoin.add(
+            '$tgl WIB: Barang masuk dari Pengadaan ($ref${pihak.isNotEmpty ? " - $pihak" : ""}) sebanyak +${_angka(mMasuk)} Pcs -> Stok berubah dari ${_angka(mAwal)} menjadi ${_angka(mSisa)} Pcs.');
+      } else if (tipe.contains('Opname') || tipe.contains('Penyesuaian')) {
+        jmlOpname++;
+        final pelaku = oleh.isNotEmpty
+            ? oleh
+            : (pihak.isNotEmpty ? pihak : 'Petugas');
+        if (tipe.contains('Dinolkan') ||
+            (mAwal > 0 && mSisa == 0 && mKeluar > 0)) {
+          pernahDinolkanSo = true;
+          waktuDinolkanSo = tgl;
+          petugasDinolkanSo = pelaku;
+          ketDinolkanSo = ref;
+          stokSebelumDinolkan = mAwal;
+          kronologiPoin.add(
+              '$tgl WIB: Stok Opname oleh $pelaku (Keterangan: "$ref") mengubah stok dari ${_angka(mAwal)} Pcs (senilai ${_rupiah(mAwal * hargaBeli)}) menjadi 0 Pcs (berkurang -${_angka(mKeluar)} Pcs).');
+        } else if (mMasuk > 0) {
+          if (pernahDinolkanSo) {
+            pernahPulihSo = true;
+            waktuPulihSo = tgl;
+            qtyPulihSo = mMasuk;
+          }
+          kronologiPoin.add(
+              '$tgl WIB: Penyesuaian Stok Opname (+) oleh $pelaku ("$ref") menambah stok +${_angka(mMasuk)} Pcs -> Stok berubah dari ${_angka(mAwal)} menjadi ${_angka(mSisa)} Pcs.');
+        } else if (mKeluar > 0) {
+          kronologiPoin.add(
+              '$tgl WIB: Penyesuaian Stok Opname (-) oleh $pelaku ("$ref") mengurangi stok -${_angka(mKeluar)} Pcs -> Stok berubah dari ${_angka(mAwal)} menjadi ${_angka(mSisa)} Pcs.');
+        } else {
+          kronologiPoin.add(
+              '$tgl WIB: Pencatatan Stok Opname oleh $pelaku ("$ref") tanpa perubahan jumlah (tetap ${_angka(mSisa)} Pcs).');
+        }
+      } else {
+        kronologiPoin.add(
+            '$tgl WIB: $tipe ($ref) ${mMasuk > 0 ? "+${_angka(mMasuk)}" : "-${_angka(mKeluar)}"} Pcs -> Stok berubah dari ${_angka(mAwal)} menjadi ${_angka(mSisa)} Pcs.');
+      }
+    }
+
+    String judulDiagnosis;
+    String penjelasanUtama;
+    final langkahSolusi = <String>[];
+
+    if (pernahDinolkanSo && sisa < 0) {
+      judulDiagnosis =
+          'Stok Tergencet Menjadi 0 saat Unggah Stok Opname, Lalu Terjual di Kasir sehingga Menjadi Minus (${_angka(sisa)} Pcs)';
+      penjelasanUtama =
+          'Barang ini awalnya memiliki stok ${_angka(stokSebelumDinolkan)} Pcs (senilai ${_rupiah(stokSebelumDinolkan * hargaBeli)}). Namun pada tanggal $waktuDinolkanSo WIB, tercatat Stok Opname ("$ketDinolkanSo") oleh $petugasDinolkanSo dengan angka fisik 0, sehingga stok berubah menjadi 0 Pcs. Setelah itu, barang fisiknya yang masih ada di rak toko terjual di kasir sebanyak ${_angka(penjualan)} Pcs, sehingga stok akhir menjadi minus ${_angka(sisa)} Pcs.';
+      langkahSolusi.add(
+          'Hitung jumlah fisik $namaProduk yang saat ini benar-benar ada di rak toko.');
+      langkahSolusi.add(
+          'Inputkan jumlah fisik sebenarnya melalui menu Stok Opname agar angka minus (${_angka(sisa)}) kembali sesuai fisik rak.');
+      final estimasi = (stokSebelumDinolkan - penjualan) > 0
+          ? (stokSebelumDinolkan - penjualan)
+          : 0;
+      langkahSolusi.add(
+          'Jika barang belum sempat dihitung fisiknya, stok sebelum tergencet opname adalah ${_angka(stokSebelumDinolkan)} Pcs dikurangi penjualan ${_angka(penjualan)} Pcs = ${_angka(estimasi)} Pcs.');
+    } else if (pernahDinolkanSo && sisa == 0) {
+      judulDiagnosis =
+          'Stok Berubah Menjadi 0 karena Tertimpa Angka Fisik 0 saat Stok Opname';
+      penjelasanUtama =
+          'Barang ini tidak hilang karena kesalahan perhitungan, melainkan pada tanggal $waktuDinolkanSo WIB tercatat Stok Opname ("$ketDinolkanSo") oleh $petugasDinolkanSo yang mengisi Stok Fisik = 0 Pcs (padahal stok sebelumnya tercatat ${_angka(stokSebelumDinolkan)} Pcs senilai ${_rupiah(stokSebelumDinolkan * hargaBeli)}).';
+      langkahSolusi.add(
+          'Periksa apakah barang $namaProduk masih ada fisiknya di rak/gudang toko.');
+      langkahSolusi.add(
+          'Apabila barang tersebut belum sempat dihitung saat unggah Excel Stok Opname, silakan input ulang jumlah fisik sebenarnya (stok sebelum dinolkan adalah ${_angka(stokSebelumDinolkan)} Pcs).');
+    } else if (pernahDinolkanSo && pernahPulihSo && sisa > 0) {
+      judulDiagnosis =
+          'Stok Sempat Menjadi 0 saat Stok Opname, Namun Sudah Dipulihkan Kembali (${_angka(sisa)} Pcs)';
+      penjelasanUtama =
+          'Barang ini sempat berubah menjadi 0 Pcs pada $waktuDinolkanSo WIB saat Stok Opname ("$ketDinolkanSo"), tetapi sudah diinput ulang penghitungan fisiknya pada $waktuPulihSo WIB sebanyak +${_angka(qtyPulihSo)} Pcs. Stok akhir saat ini adalah ${_angka(sisa)} Pcs.';
+      langkahSolusi.add(
+          'Data stok barang ini sudah pulih. Pastikan jumlah ${_angka(sisa)} Pcs sudah sama dengan jumlah fisik di rak.');
+    } else if (penjualan > 0 && sisa == 0 && opnameKeluar == 0) {
+      judulDiagnosis =
+          'Barang Habis Terjual Secara Sah di Kasir (Bukan Kesalahan Sistem)';
+      penjelasanUtama =
+          'Stok barang ini berubah menjadi 0 Pcs karena memang terjual habis di kasir sebanyak ${_angka(penjualan)} Pcs${jmlTransaksiPos > 0 ? " dalam $jmlTransaksiPos transaksi penjualan" : ""} selama periode ini.';
+      langkahSolusi.add(
+          'Tidak diperlukan koreksi data karena seluruh pengurangan stok berasal dari transaksi penjualan resmi di kasir.');
+      langkahSolusi.add(
+          'Silakan lakukan pengadaan/kulakan kembali apabila barang akan dijual lagi.');
+    } else if (sisa < 0) {
+      judulDiagnosis =
+          'Stok Akhir Bernilai Minus (${_angka(sisa)} Pcs) karena Penjualan Melebihi Stok Tercatat';
+      penjelasanUtama =
+          'Tercatat penjualan sebesar ${_angka(penjualan)} Pcs atau pengurangan sebesar ${_angka(keluar + opnameKeluar)} Pcs saat stok awal tercatat ${_angka(awal)} Pcs dan barang masuk ${_angka(masuk)} Pcs (kemungkinan barang fisik sudah datang di rak dan langsung terjual di kasir sebelum faktur pengadaannya diinput).';
+      langkahSolusi.add(
+          'Periksa apakah ada faktur pengadaan/kulakan barang masuk untuk $namaProduk yang belum diinput.');
+      langkahSolusi.add(
+          'Jika pengadaan sudah lengkap, lakukan Stok Opname sesuai jumlah fisik yang ada di rak saat ini.');
+    } else if (opnameMasuk > 0 || opnameKeluar > 0) {
+      judulDiagnosis =
+          'Terdapat Penyesuaian Stok Opname (+${_angka(opnameMasuk)} / -${_angka(opnameKeluar)} Pcs)';
+      penjelasanUtama =
+          'Perubahan stok pada barang ini dipengaruhi oleh penyesuaian Stok Opname${jmlOpname > 0 ? " sebanyak $jmlOpname kali" : ""} pada periode ini (bertambah +${_angka(opnameMasuk)} Pcs, berkurang -${_angka(opnameKeluar)} Pcs), sehingga sisa stok akhir menjadi ${_angka(sisa)} Pcs.';
+      langkahSolusi.add(
+          'Periksa rincian jam dan nama petugas Stok Opname pada daftar kronologi di atas untuk memastikan koreksi fisik sudah sesuai.');
+    } else {
+      judulDiagnosis = 'Pergerakan Stok Normal & Sesuai Riwayat Transaksi';
+      penjelasanUtama =
+          'Seluruh keluar-masuk barang tercatat normal (Saldo Awal: ${_angka(awal)} Pcs, Masuk: +${_angka(masuk)} Pcs, Retur: +${_angka(retur)} Pcs, Terjual: -${_angka(penjualan)} Pcs, Keluar Lain: -${_angka(keluar)} Pcs, Sisa Akhir: ${_angka(sisa)} Pcs).';
+      langkahSolusi.add(
+          'Stok sudah sesuai dengan catatan transaksi keluar-masuk barang.');
+    }
+
+    final wa = StringBuffer()
+      ..writeln('📋 *HASIL ANALISIS OTOMATIS PERGERAKAN & SELISIH STOK PRODUK*')
+      ..writeln('🏪 Unit/Cabang: *$namaToko*')
+      ..writeln('📦 Nama Barang: *$kd - $namaProduk*')
+      ..writeln('🗂️ Kategori: $kat | Periode: $mulaiStr s/d $sampaiStr\n')
+      ..writeln('🔍 *1. KESIMPULAN PENYEBAB UTAMA:*')
+      ..writeln('*$judulDiagnosis*')
+      ..writeln('$penjelasanUtama\n')
+      ..writeln('📊 *2. RINGKASAN PERHITUNGAN STOK:*')
+      ..writeln(
+          '• Saldo Awal Periode: *${_angka(awal)} Pcs* (${_rupiah(awal * hargaBeli)})')
+      ..writeln('• Barang Masuk (Pengadaan/Transfer): *+${_angka(masuk)} Pcs*')
+      ..writeln('• Pengembalian / Retur Pelanggan: *+${_angka(retur)} Pcs*')
+      ..writeln('• Terjual di Kasir: *-${_angka(penjualan)} Pcs*')
+      ..writeln(
+          '• Keluar Lainnya (Retur Beli/Transfer/Bahan): *-${_angka(keluar)} Pcs*')
+      ..writeln(
+          '• Koreksi Stok Opname Bertambah (+): *+${_angka(opnameMasuk)} Pcs*')
+      ..writeln(
+          '• Koreksi Stok Opname Berkurang (-): *-${_angka(opnameKeluar)} Pcs*')
+      ..writeln(
+          '• *Sisa Stok Akhir: ${_angka(sisa)} Pcs* (Nilai Modal: ${_rupiah(sisa * hargaBeli)})\n')
+      ..writeln('🕒 *3. KRONOLOGI LENGKAP KELUAR-MASUK & STOK OPNAME:*');
+
+    if (kronologiPoin.isEmpty) {
+      wa.writeln(
+          '• Tidak ada perubahan/transaksi pada periode tanggal ini (Stok tetap ${_angka(sisa)} Pcs).');
+    } else {
+      final maxLog = kronologiPoin.length > 25 ? 25 : kronologiPoin.length;
+      for (var i = 0; i < maxLog; i++) {
+        wa.writeln('${i + 1}. ${kronologiPoin[i]}');
+      }
+      if (kronologiPoin.length > maxLog) {
+        wa.writeln(
+            '... (dan ${kronologiPoin.length - maxLog} catatan transaksi lainnya).');
+      }
+    }
+
+    wa.writeln('\n✅ *4. REKOMENDASI & LANGKAH PENYELESAIAN:*');
+    for (var i = 0; i < langkahSolusi.length; i++) {
+      wa.writeln('${i + 1}. ${langkahSolusi[i]}');
+    }
+
+    return {
+      'judulDiagnosis': judulDiagnosis,
+      'penjelasanUtama': penjelasanUtama,
+      'kronologiPoin': kronologiPoin,
+      'langkahSolusi': langkahSolusi,
+      'teksAnalisisWa': wa.toString().trim(),
+    };
+  }
+
+  /// Fallback untuk memuat rincian buku besar produk jika `stok_pergerakan_detail` belum tersedia
+  /// atau server sedang sibuk (menggunakan `stok_mutasi_ledger` + `produk_mutasi_ringkasan` + `CoreDb`).
+  static Future<Map<String, dynamic>> muatDetailProdukFallback({
+    required int idProduk,
+    required String namaProduk,
+    required String kodeProduk,
+    required String kategori,
+    required DateTime tglMulai,
+    required DateTime tglSampai,
+  }) async {
+    double hargaBeli = 0;
+    double stokSaatIni = 0;
+    try {
+      final lokalProduk =
+          await CoreDb.instance.produkCache(keyword: '', limit: 100000);
+      for (final p in lokalProduk) {
+        if (p['id'] == idProduk ||
+            (kodeProduk.isNotEmpty && '${p['kode'] ?? ''}' == kodeProduk)) {
+          hargaBeli = (p['harga_beli'] as num?)?.toDouble() ?? 0;
+          stokSaatIni = (p['stok'] as num?)?.toDouble() ?? 0;
+          break;
+        }
+      }
+    } catch (_) {}
+
+    double awal = 0;
+    double masuk = 0;
+    double retur = 0;
+    double penjualan = 0;
+    double keluar = 0;
+    double opnameMasuk = 0;
+    double opnameKeluar = 0;
+    double sisa = stokSaatIni;
+
+    try {
+      final resRingkas =
+          await ApiClient.instance.aksi('produk_mutasi_ringkasan', {
+        'dari': _fmtTgl.format(tglMulai),
+        'sampai': _fmtTgl.format(tglSampai),
+        'page': 1,
+        'page_size': 50,
+        if (kodeProduk.trim().isNotEmpty)
+          'keyword': kodeProduk.trim()
+        else if (namaProduk.trim().isNotEmpty)
+          'keyword': namaProduk.trim(),
+      });
+      final list = (resRingkas['data'] as List?) ?? const [];
+      for (final item in list.whereType<Map>()) {
+        final itemId = (item['id'] as num?)?.toInt() ?? 0;
+        final itemKode = '${item['kode'] ?? ''}';
+        if (itemId == idProduk ||
+            (kodeProduk.isNotEmpty && itemKode == kodeProduk)) {
+          awal = (item['saldoAwal'] as num?)?.toDouble() ?? 0;
+          masuk = (item['masuk'] as num?)?.toDouble() ?? 0;
+          retur = (item['retur'] as num?)?.toDouble() ?? 0;
+          penjualan = (item['keluar'] as num?)?.toDouble() ?? 0;
+          final penyesuaian = (item['penyesuaian'] as num?)?.toDouble() ?? 0;
+          if (penyesuaian > 0) {
+            opnameMasuk = penyesuaian;
+          } else if (penyesuaian < 0) {
+            opnameKeluar = penyesuaian.abs();
+          }
+          sisa = (item['saldoAkhir'] as num?)?.toDouble() ?? stokSaatIni;
+          if (hargaBeli <= 0 && sisa > 0) {
+            final nilaiAkhir = (item['nilaiAkhir'] as num?)?.toDouble() ?? 0;
+            if (nilaiAkhir > 0) hargaBeli = nilaiAkhir / sisa;
+          }
+          break;
+        }
+      }
+    } catch (_) {}
+
+    final mutasi = <Map<String, dynamic>>[];
+    try {
+      final resLedger = await ApiClient.instance.aksi('stok_mutasi_ledger', {
+        'produk_id': idProduk,
+        'tanggalMulai': _fmtTgl.format(tglMulai),
+        'tanggalSampai': _fmtTgl.format(tglSampai),
+        'limit': 300,
+        'offset': 0,
+      });
+      final rows = ((resLedger['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList()
+          .reversed
+          .toList();
+      double running = awal;
+      for (final r in rows) {
+        final qty = (r['qty'] as num?)?.toDouble() ?? 0;
+        final jenis = '${r['jenis'] ?? 'Mutasi'}';
+        final ket = '${r['keterangan'] ?? ''}';
+        final waktu = '${r['waktu'] ?? '-'}';
+        final mAwal = running;
+        final mMasuk = qty > 0 ? qty : 0.0;
+        final mKeluar = qty < 0 ? qty.abs() : 0.0;
+        running += qty;
+        String kodeMutasi = '100';
+        if (jenis.contains('Pengadaan')) {
+          kodeMutasi = '101';
+        } else if (jenis.contains('Retur Penjualan')) {
+          kodeMutasi = '103';
+        } else if (jenis.contains('Opname')) {
+          kodeMutasi = '104';
+        } else if (jenis.contains('Penjualan')) {
+          kodeMutasi = '200';
+        }
+        mutasi.add({
+          'tanggal': waktu,
+          'tipe': jenis,
+          'kodeMutasi': kodeMutasi,
+          'referensi': ket.isNotEmpty ? ket : jenis,
+          'idPelanggan': '-',
+          'namaPelanggan': jenis,
+          'oleh': '',
+          'awal': mAwal,
+          'masuk': mMasuk,
+          'keluar': mKeluar,
+          'sisa': running,
+          'keterangan': ket.isNotEmpty ? ket : jenis,
+        });
+      }
+    } catch (_) {}
+
+    return {
+      'hargaBeli': hargaBeli,
+      'ringkasan': {
+        'awal': awal,
+        'masuk': masuk,
+        'retur': retur,
+        'penjualan': penjualan,
+        'keluar': keluar,
+        'opnameMasuk': opnameMasuk,
+        'opnameKeluar': opnameKeluar,
+        'sisa': sisa,
+      },
+      'mutasi': mutasi,
+    };
+  }
+
+  /// Fallback lengkap untuk `DialogAnalisisCerdasStok` mode per-produk.
+  static Future<Map<String, dynamic>> susunAnalisisProdukFallback({
+    required int idProduk,
+    required String namaProduk,
+    required String kodeProduk,
+    required DateTime tglMulai,
+    required DateTime tglSampai,
+  }) async {
+    try {
+      final detail = await ApiClient.instance.aksi('stok_pergerakan_detail', {
+        'id': idProduk,
+        'dari': _fmtTgl.format(tglMulai),
+        'sampai': _fmtTgl.format(tglSampai),
+      });
+      final pObj = (detail['produk'] as Map?)?.cast<String, dynamic>();
+      final ringkasan =
+          (detail['ringkasan'] as Map?)?.cast<String, dynamic>() ?? const {};
+      final mutasi = ((detail['mutasi'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      return susunAnalisisProdukDariData(
+        namaProduk: '${pObj?['nama'] ?? namaProduk}',
+        kodeProduk: '${pObj?['kode'] ?? kodeProduk}',
+        kategori: '${pObj?['kategori'] ?? 'Lain-lain'}',
+        tglMulai: tglMulai,
+        tglSampai: tglSampai,
+        ringkasan: ringkasan,
+        mutasi: mutasi,
+        hargaBeli: (pObj?['hargaBeli'] as num?)?.toDouble() ?? 0,
+      );
+    } catch (_) {
+      final fb = await muatDetailProdukFallback(
+        idProduk: idProduk,
+        namaProduk: namaProduk,
+        kodeProduk: kodeProduk,
+        kategori: 'Lain-lain',
+        tglMulai: tglMulai,
+        tglSampai: tglSampai,
+      );
+      return susunAnalisisProdukDariData(
+        namaProduk: namaProduk,
+        kodeProduk: kodeProduk,
+        kategori: 'Lain-lain',
+        tglMulai: tglMulai,
+        tglSampai: tglSampai,
+        ringkasan: (fb['ringkasan'] as Map<String, dynamic>?) ?? const {},
+        mutasi: (fb['mutasi'] as List<Map<String, dynamic>>?) ?? const [],
+        hargaBeli: (fb['hargaBeli'] as num?)?.toDouble() ?? 0,
+      );
+    }
+  }
+
+  /// Fallback rekap pergerakan stok toko dari `produk_mutasi_ringkasan` atau cache produk lokal.
+  static Future<Map<String, dynamic>> muatRekapFallback({
+    required DateTime tglMulai,
+    required DateTime tglSampai,
+    String keyword = '',
+    String statusFilter = '',
+  }) async {
+    List<Map<String, dynamic>> rawRows = [];
+    try {
+      final res = await ApiClient.instance.aksi('produk_mutasi_ringkasan', {
+        'dari': _fmtTgl.format(tglMulai),
+        'sampai': _fmtTgl.format(tglSampai),
+        'page': 1,
+        'page_size': 500,
+        if (keyword.isNotEmpty) 'keyword': keyword,
+      });
+      rawRows = ((res['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    } catch (_) {
+      final lokal =
+          await CoreDb.instance.produkCache(keyword: '', limit: 100000);
+      rawRows = lokal.map((p) {
+        final stok = (p['stok'] as num?)?.toDouble() ?? 0;
+        final hb = (p['harga_beli'] as num?)?.toDouble() ?? 0;
+        return <String, dynamic>{
+          'id': p['id'],
+          'kategori': p['jenis_nama'] ?? '-',
+          'kode': p['kode'] ?? '',
+          'barcode': p['barcode'] ?? '',
+          'nama': p['nama'] ?? '-',
+          'saldoAwal': stok,
+          'nilaiAwal': stok * hb,
+          'masuk': 0.0,
+          'keluar': 0.0,
+          'retur': 0.0,
+          'penyesuaian': 0.0,
+          'saldoAkhir': stok,
+          'nilaiAkhir': stok * hb,
+          'hargaBeli': hb,
+        };
+      }).toList();
+    }
+
+    final kodeCount = <String, int>{};
+    for (final r in rawRows) {
+      final kd = '${r['kode'] ?? ''}'.trim();
+      if (kd.isNotEmpty) kodeCount[kd] = (kodeCount[kd] ?? 0) + 1;
+    }
+
+    int jmlDinolkanSo = 0;
+    int jmlStokMinus = 0;
+    int jmlKoreksiOpname = 0;
+    int jmlKodeDuplikat = 0;
+    double totalAwal = 0;
+    double totalMasuk = 0;
+    double totalRetur = 0;
+    double totalPenjualan = 0;
+    double totalOpnameMasuk = 0;
+    double totalOpnameKeluar = 0;
+    double totalSisa = 0;
+
+    final data = <Map<String, dynamic>>[];
+    for (final r in rawRows) {
+      final awal = (r['saldoAwal'] as num?)?.toDouble() ?? 0;
+      final masuk = (r['masuk'] as num?)?.toDouble() ?? 0;
+      final retur = (r['retur'] as num?)?.toDouble() ?? 0;
+      final penjualan = (r['keluar'] as num?)?.toDouble() ?? 0;
+      final penyesuaian = (r['penyesuaian'] as num?)?.toDouble() ?? 0;
+      final opMasuk = penyesuaian > 0 ? penyesuaian : 0.0;
+      final opKeluar = penyesuaian < 0 ? penyesuaian.abs() : 0.0;
+      final sisa = (r['saldoAkhir'] as num?)?.toDouble() ?? 0;
+      final kd = '${r['kode'] ?? ''}'.trim();
+      final isDup = kd.isNotEmpty && (kodeCount[kd] ?? 0) > 1;
+
+      String statusKode = 'NORMAL';
+      String statusAudit = 'Normal';
+      if (awal > 0 && opKeluar > 0 && sisa <= 0) {
+        statusKode = 'DINOLKAN_SO';
+        statusAudit = 'Dinolkan saat Opname (${_angka(awal)} -> ${_angka(sisa)})';
+        jmlDinolkanSo++;
+      } else if (sisa < 0) {
+        statusKode = 'STOK_MINUS';
+        statusAudit = 'Stok Minus (${_angka(sisa)})';
+        jmlStokMinus++;
+      } else if (opMasuk > 0 || opKeluar > 0) {
+        statusKode = 'KOREKSI_SO';
+        statusAudit =
+            'Koreksi Opname (${opMasuk > 0 ? "+${_angka(opMasuk)}" : "-${_angka(opKeluar)}"})';
+        jmlKoreksiOpname++;
+      } else if (penjualan > 0 && sisa == 0) {
+        statusKode = 'HABIS_TERJUAL';
+        statusAudit = 'Habis Terjual di Kasir';
+      }
+      if (isDup) {
+        jmlKodeDuplikat++;
+        statusAudit = '$statusAudit · Kode Ganda';
+      }
+
+      if (statusFilter == 'dinolkan_so' && statusKode != 'DINOLKAN_SO') continue;
+      if (statusFilter == 'stok_minus' && sisa >= 0) continue;
+      if (statusFilter == 'koreksi_opname' && opMasuk == 0 && opKeluar == 0) {
+        continue;
+      }
+      if (statusFilter == 'kode_duplikat' && !isDup) continue;
+
+      totalAwal += awal;
+      totalMasuk += masuk;
+      totalRetur += retur;
+      totalPenjualan += penjualan;
+      totalOpnameMasuk += opMasuk;
+      totalOpnameKeluar += opKeluar;
+      totalSisa += sisa;
+
+      data.add({
+        'id': r['id'] ?? 0,
+        'kategori': r['kategori'] ?? '-',
+        'kode': kd,
+        'nama': r['nama'] ?? '-',
+        'awal': awal,
+        'masuk': masuk,
+        'retur': retur,
+        'penjualan': penjualan,
+        'keluar': 0.0,
+        'opnameMasuk': opMasuk,
+        'opnameKeluar': opKeluar,
+        'sisa': sisa,
+        'nilaiAkhir': r['nilaiAkhir'] ?? 0.0,
+        'nilaiAwal': r['nilaiAwal'] ?? 0.0,
+        'statusKode': statusKode,
+        'statusAudit': statusAudit,
+      });
+    }
+
+    return {
+      'data': data,
+      'ringkasan': {
+        'totalProduk': data.length,
+        'awal': totalAwal,
+        'masuk': totalMasuk,
+        'retur': totalRetur,
+        'penjualan': totalPenjualan,
+        'keluar': 0.0,
+        'opnameMasuk': totalOpnameMasuk,
+        'opnameKeluar': totalOpnameKeluar,
+        'sisa': totalSisa,
+        'jmlDinolkanSo': jmlDinolkanSo,
+        'jmlStokMinus': jmlStokMinus,
+        'jmlKoreksiOpname': jmlKoreksiOpname,
+        'jmlKodeDuplikat': jmlKodeDuplikat,
+      },
+    };
+  }
+
+  /// Fallback lengkap untuk `DialogAnalisisCerdasStok` mode seluruh toko bila server mengembalikan
+  /// HTTP 503 atau belum memuat `stok_analisis_cerdas_toko`.
+  static Future<Map<String, dynamic>> susunAnalisisTokoFallback({
+    required DateTime tglMulai,
+    required DateTime tglSampai,
+  }) async {
+    final namaToko = Sesi.instance.tokoNama.isNotEmpty
+        ? Sesi.instance.tokoNama
+        : 'Toko Al-Bahjah';
+    final mulaiStr = _fmtTgl.format(tglMulai);
+    final sampaiStr = _fmtTgl.format(tglSampai);
+
+    List<Map<String, dynamic>> rows = [];
+    Map<String, dynamic> rk = {};
+    try {
+      final resRekap = await ApiClient.instance.aksi('stok_pergerakan_rekap', {
+        'dari': mulaiStr,
+        'sampai': sampaiStr,
+        'limit': 1000,
+      });
+      rows = ((resRekap['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      rk = (resRekap['ringkasan'] as Map?)?.cast<String, dynamic>() ?? {};
+    } catch (_) {
+      final fb = await muatRekapFallback(
+        tglMulai: tglMulai,
+        tglSampai: tglSampai,
+      );
+      rows = fb['data'] as List<Map<String, dynamic>>;
+      rk = fb['ringkasan'] as Map<String, dynamic>;
+    }
+
+    final jmlDinolkan = (rk['jmlDinolkanSo'] as num?)?.toInt() ?? 0;
+    final jmlMinus = (rk['jmlStokMinus'] as num?)?.toInt() ?? 0;
+    final jmlOpname = (rk['jmlKoreksiOpname'] as num?)?.toInt() ?? 0;
+    final jmlDuplikat = (rk['jmlKodeDuplikat'] as num?)?.toInt() ?? 0;
+
+    final contohDinolkan = <String>[];
+    final contohHabisTerjual = <String>[];
+    final contohMinus = <String>[];
+
+    for (final r in rows) {
+      final kd = '${r['kode'] ?? '-'}';
+      final nm = '${r['nama'] ?? '-'}';
+      final awal = (r['awal'] as num?)?.toDouble() ?? 0;
+      final penjualan = (r['penjualan'] as num?)?.toDouble() ?? 0;
+      final opKeluar = (r['opnameKeluar'] as num?)?.toDouble() ?? 0;
+      final sisa = (r['sisa'] as num?)?.toDouble() ?? 0;
+      final statusKode = '${r['statusKode'] ?? ''}';
+
+      if ((statusKode == 'DINOLKAN_SO' || (awal > 0 && opKeluar > 0 && sisa <= 0)) &&
+          contohDinolkan.length < 6) {
+        contohDinolkan.add(
+            '$kd - $nm: Stok awal ${_angka(awal)} Pcs -> berkurang pada Stok Opname (-${_angka(opKeluar)} Pcs) -> Stok akhir ${_angka(sisa)} Pcs.');
+      } else if ((statusKode == 'HABIS_TERJUAL' ||
+              (penjualan > 0 && sisa == 0 && opKeluar == 0)) &&
+          contohHabisTerjual.length < 5) {
+        contohHabisTerjual.add(
+            '$kd - $nm: Terjual habis di kasir sebanyak ${_angka(penjualan)} Pcs -> Sisa stok sah menjadi 0 Pcs.');
+      } else if (sisa < 0 && contohMinus.length < 5) {
+        contohMinus.add(
+            '$kd - $nm: Stok akhir bernilai minus (${_angka(sisa)} Pcs).');
+      }
+    }
+
+    String judulDiagnosis;
+    String penjelasanUtama;
+    if (jmlDinolkan > 0) {
+      judulDiagnosis =
+          'Terdeteksi ${_angka(jmlDinolkan)} Jenis Barang Dinolkan saat Stok Opname & ${_angka(jmlMinus)} Barang Berstok Minus';
+      penjelasanUtama =
+          'Pada periode $mulaiStr s/d $sampaiStr di $namaToko, ditemukan ${_angka(jmlDinolkan)} jenis barang berstok positif yang berubah menjadi 0 atau minus karena koreksi Stok Opname, ${_angka(jmlOpname)} jenis barang mengalami koreksi opname (+/-), dan ${_angka(jmlMinus)} jenis barang berstok akhir minus.';
+    } else if (jmlMinus > 0) {
+      judulDiagnosis =
+          'Terdapat ${_angka(jmlMinus)} Jenis Barang Berstok Akhir Minus (< 0) di $namaToko';
+      penjelasanUtama =
+          'Pada periode $mulaiStr s/d $sampaiStr, terdapat ${_angka(jmlMinus)} jenis barang yang stok akhirnya bernilai minus karena penjualan di kasir melebihi stok tercatat.';
+    } else {
+      judulDiagnosis =
+          'Pergerakan & Rekonsiliasi Stok $namaToko Terpantau Normal (${_angka(rows.length)} Produk)';
+      penjelasanUtama =
+          'Seluruh mutasi barang masuk, penjualan kasir, retur, dan Stok Opname pada periode $mulaiStr s/d $sampaiStr tercatat wajar.';
+    }
+
+    final kronologi = <String>[
+      ...contohHabisTerjual.map((e) => '[Habis Terjual Sah] $e'),
+      ...contohDinolkan.map((e) => '[Dinolkan saat SO] $e'),
+      ...contohMinus.map((e) => '[Stok Minus] $e'),
+    ];
+
+    final solusi = <String>[
+      'Buka menu Pergerakan Stok, pilih filter "Dinolkan saat Opname (SO -> 0)" atau "Stok Akhir Minus (< 0)", lalu klik Unduh Excel untuk melihat daftar barang terdampak.',
+      'Masukkan jumlah fisik sebenarnya melalui menu Stok Opname untuk barang-barang yang belum sempat dihitung ulang.',
+      if (jmlDuplikat > 0)
+        'Pilih filter "Kode Barang Ganda / Duplikat" dan berikan kode unik pada salah satu barang yang berbagi kode yang sama.',
+      'Saat mengunggah Excel Stok Opname bertahap per rak/kategori, hapus baris barang yang belum dihitung agar tidak terisi angka 0.',
+    ];
+
+    final wa = StringBuffer()
+      ..writeln('Assalamu’alaikum Warahmatullahi Wabarakatuh,\n')
+      ..writeln(
+          'Berikut adalah *Hasil Analisis Otomatis Pergerakan & Selisih Stok* pada *$namaToko* untuk periode *$mulaiStr s/d $sampaiStr*:\n')
+      ..writeln('📋 *A. RINGKASAN & PENYEBAB PERUBAHAN STOK*')
+      ..writeln('• *$judulDiagnosis*')
+      ..writeln('• $penjelasanUtama\n');
+
+    if (contohHabisTerjual.isNotEmpty) {
+      wa.writeln(
+          '*1. Contoh Barang yang Berubah Menjadi 0 karena Sah Terjual Habis di Kasir:*');
+      for (final c in contohHabisTerjual) {
+        wa.writeln('• $c');
+      }
+      wa.writeln();
+    }
+    if (contohDinolkan.isNotEmpty) {
+      wa.writeln(
+          '*2. Contoh Barang yang Berubah Menjadi 0 atau Minus saat Stok Opname:*');
+      for (final c in contohDinolkan) {
+        wa.writeln('• $c');
+      }
+      wa.writeln();
+    }
+    if (contohMinus.isNotEmpty) {
+      wa.writeln('*3. Contoh Barang Berstok Akhir Minus (< 0):*');
+      for (final c in contohMinus) {
+        wa.writeln('• $c');
+      }
+      wa.writeln();
+    }
+
+    wa.writeln('✅ *B. LANGKAH PENYELESAIAN PRAKTIS UNTUK TIM TOKO*');
+    for (var i = 0; i < solusi.length; i++) {
+      wa.writeln('${i + 1}. ${solusi[i]}');
+    }
+    wa.writeln('\nWassalamu’alaikum Warahmatullahi Wabarakatuh.');
+
+    return {
+      'namaToko': namaToko,
+      'judulDiagnosis': judulDiagnosis,
+      'penjelasanUtama': penjelasanUtama,
+      'kronologiPoin': kronologi,
+      'langkahSolusi': solusi,
+      'totalProdukDinolkan': jmlDinolkan,
+      'totalStokMinus': jmlMinus,
+      'teksAnalisisWa': wa.toString().trim(),
+    };
   }
 }
