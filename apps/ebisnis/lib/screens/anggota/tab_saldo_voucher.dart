@@ -839,6 +839,152 @@ class _DialogPenyesuaianSaldoState extends State<_DialogPenyesuaianSaldo> {
     }
   }
 
+  /// Menjalankan cutoff / pengenolan seluruh sisa saldo positif member sekaligus di akhir periode
+  /// menggunakan rumus saldo resmi server (`DepositHelper.hitungDeposit`).
+  Future<void> _cutoffMassal() async {
+    final alasanCtrl = TextEditingController(
+      text: _keterangan.text.trim().isNotEmpty
+          ? _keterangan.text.trim()
+          : 'Cutoff akumulasi voucher periode ${DateFormat('dd MMMM yyyy', 'id_ID').format(DateTime.now())}',
+    );
+    final alasan = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cutoff / Nolkan Sisa Saldo Semua Member'),
+        content: SizedBox(
+          width: 440,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Fitur ini akan memeriksa seluruh member dan hanya mengenolkan (cutoff ke Rp 0) '
+                'member yang masih memiliki sisa saldo positif berdasarkan perhitungan resmi '
+                '(Topup dikurangi Belanja Voucher). Member yang saldonya sudah Rp 0 tidak akan '
+                'dipotong lagi sehingga bebas dari risiko saldo minus.',
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: alasanCtrl,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Alasan Cutoff *',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+          FilledButton(
+            onPressed: () {
+              if (alasanCtrl.text.trim().isEmpty) return;
+              Navigator.pop(ctx, alasanCtrl.text.trim());
+            },
+            child: const Text('Periksa & Lanjutkan'),
+          ),
+        ],
+      ),
+    );
+    alasanCtrl.dispose();
+    if (alasan == null || alasan.isEmpty || !mounted) return;
+
+    setStateIfMounted(() {
+      _menyimpan = true;
+      _pesan = null;
+    });
+    try {
+      final pratinjau = await ApiClient.instance.aksi(
+        'penyesuaian_saldo_cutoff_massal',
+        {'pratinjau': true, 'keterangan': alasan},
+      );
+      if (!mounted) return;
+      final jmlPositif =
+          ((pratinjau['jumlahMemberPositif'] as num?) ?? 0).toInt();
+      final totalSisa =
+          ((pratinjau['totalSisaPositif'] as num?) ?? 0).toDouble();
+      if (jmlPositif <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Seluruh member sudah memiliki saldo Rp 0, tidak ada sisa saldo positif yang perlu di-cutoff.')));
+        return;
+      }
+      final konfirmasi = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Konfirmasi Cutoff Saldo Massal'),
+          content: Text(
+            'Ditemukan $jmlPositif member dengan sisa saldo positif total ${_fmtRp.format(totalSisa)}.\n\n'
+            'Lanjutkan mengenolkan (cutoff ke Rp 0) seluruh sisa saldo tersebut dengan alasan:\n"$alasan"?',
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Batal')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Ya, Cutoff ke Rp 0')),
+          ],
+        ),
+      );
+      if (konfirmasi != true || !mounted) return;
+
+      final hasil = await ApiClient.instance.aksi(
+        'penyesuaian_saldo_cutoff_massal',
+        {'pratinjau': false, 'keterangan': alasan},
+      );
+      if (!mounted) return;
+      final st = '${hasil['status']}';
+      if (st != '00' && st != 'success') {
+        setStateIfMounted(() => _pesan =
+            '${hasil['description'] ?? 'Cutoff saldo massal gagal disimpan.'}');
+        return;
+      }
+      Navigator.of(context).pop(true);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:
+              Text('${hasil['description'] ?? 'Cutoff saldo massal selesai.'}')));
+    } catch (e) {
+      setStateIfMounted(() => _pesan = 'Gagal menjalankan cutoff massal: $e');
+    } finally {
+      setStateIfMounted(() => _menyimpan = false);
+    }
+  }
+
+  /// Memulihkan saldo member yang buku besar mutasinya bernilai minus (< 0) kembali ke Rp 0.
+  Future<void> _pulihkanSaldoMinus() async {
+    setStateIfMounted(() {
+      _menyimpan = true;
+      _pesan = null;
+    });
+    try {
+      final hasil = await ApiClient.instance.aksi(
+        'penyesuaian_saldo_rekonsiliasi_minus',
+        {'keterangan': 'Rekonsiliasi pemulihan saldo minus ke Rp 0'},
+      );
+      if (!mounted) return;
+      final st = '${hasil['status']}';
+      if (st != '00' && st != 'success') {
+        setStateIfMounted(() => _pesan =
+            '${hasil['description'] ?? 'Gagal memproses rekonsiliasi saldo minus.'}');
+        return;
+      }
+      await _muatRiwayat();
+      if (_idAnggota != null) await _cekSaldo();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${hasil['description'] ?? 'Rekonsiliasi selesai.'}')));
+    } catch (e) {
+      setStateIfMounted(() => _pesan = 'Gagal memulihkan saldo minus: $e');
+    } finally {
+      setStateIfMounted(() => _menyimpan = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final kunci = _cariAnggota.text.trim().toLowerCase();
@@ -1032,7 +1178,19 @@ class _DialogPenyesuaianSaldoState extends State<_DialogPenyesuaianSaldo> {
                     ),
             ),
             const SizedBox(height: 8),
-            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+            Row(children: [
+              OutlinedButton.icon(
+                onPressed: _menyimpan ? null : _cutoffMassal,
+                icon: const Icon(Icons.cleaning_services_outlined, size: 16),
+                label: const Text('Cutoff Sisa Semua Member'),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: _menyimpan ? null : _pulihkanSaldoMinus,
+                icon: const Icon(Icons.healing_outlined, size: 16),
+                label: const Text('Pulihkan Saldo Minus'),
+              ),
+              const Spacer(),
               TextButton(
                   onPressed: _menyimpan
                       ? null
