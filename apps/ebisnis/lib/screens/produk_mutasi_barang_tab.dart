@@ -298,6 +298,41 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
     );
   }
 
+  /// Membuka Menu Cerdas Analisis Otomatis untuk 1 produk (kronologi penyebab stok berubah/loncat siap WA).
+  Future<void> _bukaAnalisisCerdasProduk(Map<String, dynamic> produk) async {
+    final id = (produk['id'] as num?)?.toInt();
+    if (id == null || id <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Analisis belum tersedia untuk produk ini. Muat ulang data lalu coba lagi.'),
+      ));
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (_) => DialogAnalisisCerdasStok(
+        idProduk: id,
+        namaProduk: '${produk['nama'] ?? '-'}',
+        kodeProduk: '${produk['kode'] ?? ''}',
+        tglMulai: _dari,
+        tglSampai: _sampai,
+      ),
+    );
+  }
+
+  /// Membuka Menu Cerdas Analisis Otomatis untuk seluruh toko pada periode aktif.
+  Future<void> _bukaAnalisisCerdasToko() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => DialogAnalisisCerdasStok(
+        idProduk: null,
+        namaProduk: 'Seluruh Produk Toko',
+        kodeProduk: '',
+        tglMulai: _dari,
+        tglSampai: _sampai,
+      ),
+    );
+  }
+
   AppTableCell _angkaCell(dynamic v, {bool rupiah = false}) =>
       AppTableCell.text(
         rupiah
@@ -340,6 +375,11 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
             align: TextAlign.center,
             child: AksiBarisMenu(aksi: [
               AksiBaris(
+                ikon: Icons.auto_awesome_outlined,
+                label: 'Analisis cerdas produk (Siap WA)',
+                onTap: () => _bukaAnalisisCerdasProduk(r),
+              ),
+              AksiBaris(
                 ikon: Icons.receipt_long_outlined,
                 label: 'Lihat rincian mutasi',
                 onTap: () => _bukaRincian(r),
@@ -377,6 +417,10 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
               onPressed: () => _pilihTanggal(false),
               icon: const Icon(Icons.event_outlined, size: 17),
               label: Text('Sampai ${_mutasiTanggal.format(_sampai)}')),
+          FilledButton.tonalIcon(
+              onPressed: _bukaAnalisisCerdasToko,
+              icon: const Icon(Icons.auto_awesome, size: 18),
+              label: const Text('Analisis Cerdas Toko')),
           FilledButton.tonalIcon(
               onPressed: _mengekspor ? null : _unduhExcel,
               icon: const Icon(Icons.table_view_outlined, size: 18),

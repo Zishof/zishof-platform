@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../api_client.dart';
@@ -221,6 +222,37 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
     );
   }
 
+  void _bukaAnalisisCerdasProduk(Map<String, dynamic> item) {
+    final idProduk = (item['id'] as num?)?.toInt() ?? 0;
+    if (idProduk <= 0) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => DialogAnalisisCerdasStok(
+        idProduk: idProduk,
+        namaProduk: (item['nama'] as String?) ?? 'Produk',
+        kodeProduk: (item['kode'] as String?) ?? '',
+        tglMulai: _tglMulai,
+        tglSampai: _tglSampai,
+      ),
+    );
+  }
+
+  void _bukaAnalisisCerdasToko() {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => DialogAnalisisCerdasStok(
+        idProduk: null,
+        namaProduk: 'Seluruh Produk Toko',
+        kodeProduk: '',
+        tglMulai: _tglMulai,
+        tglSampai: _tglSampai,
+      ),
+    );
+  }
+
   Widget _buildSummaryMini(String title, num val, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -372,6 +404,19 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
                   label: const Text('Cari / Muat'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+
+                // Tombol Analisis Cerdas Toko
+                ElevatedButton.icon(
+                  onPressed: _memuat ? null : _bukaAnalisisCerdasToko,
+                  icon: const Icon(Icons.auto_awesome, size: 16),
+                  label: const Text('Analisis Cerdas Toko'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.indigo,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -561,11 +606,18 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
                                           ),
                                         ),
                                         DataCell(
-                                          IconButton(
-                                            icon: const Icon(Icons.visibility, size: 18, color: Colors.blue),
-                                            tooltip: 'Lihat Buku Besar',
-                                            onPressed: () => _bukaDetailProduk(item),
-                                          ),
+                                          AksiBarisMenu(aksi: [
+                                            AksiBaris(
+                                              ikon: Icons.auto_awesome_outlined,
+                                              label: 'Analisis Cerdas Produk (Siap WA)',
+                                              onTap: () => _bukaAnalisisCerdasProduk(item),
+                                            ),
+                                            AksiBaris(
+                                              ikon: Icons.receipt_long_outlined,
+                                              label: 'Lihat Buku Besar Mutasi',
+                                              onTap: () => _bukaDetailProduk(item),
+                                            ),
+                                          ]),
                                         ),
                                       ],
                                     );
@@ -688,6 +740,20 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
     }
   }
 
+  void _bukaAnalisisCerdas() {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => DialogAnalisisCerdasStok(
+        idProduk: widget.idProduk,
+        namaProduk: widget.namaProduk,
+        kodeProduk: widget.kodeProduk,
+        tglMulai: widget.tglMulai,
+        tglSampai: widget.tglSampai,
+      ),
+    );
+  }
+
   Widget _buildSummaryCard(String title, num val, Color color) {
     return Expanded(
       child: Container(
@@ -771,7 +837,18 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
                       ],
                     ),
                   ),
+                  FilledButton.tonalIcon(
+                    onPressed: _bukaAnalisisCerdas,
+                    icon: const Icon(Icons.auto_awesome, size: 17),
+                    label: const Text('Analisis Cerdas Produk Ini'),
+                  ),
+                  const SizedBox(width: 8),
                   AksiBarisMenu(tooltip: 'Aksi rincian mutasi', aksi: [
+                    AksiBaris(
+                      ikon: Icons.auto_awesome_outlined,
+                      label: 'Analisis Cerdas Produk (Siap WA)',
+                      onTap: _bukaAnalisisCerdas,
+                    ),
                     AksiBaris(
                       ikon: Icons.file_download_outlined,
                       label: 'Unduh Excel',
@@ -932,6 +1009,264 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
                               ),
               ),
               const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Dialog Menu Cerdas Analisis Otomatis Pergerakan & Selisih Stok (Per Produk maupun Seluruh Toko).
+/// Menghasilkan kronologi lengkap penyebab stok berubah/loncat beserta rekomendasi penyelesaian
+/// tanpa istilah teknis yang siap disalin langsung ke WhatsApp.
+class DialogAnalisisCerdasStok extends StatefulWidget {
+  final int? idProduk;
+  final String namaProduk;
+  final String kodeProduk;
+  final DateTime tglMulai;
+  final DateTime tglSampai;
+
+  const DialogAnalisisCerdasStok({
+    super.key,
+    required this.idProduk,
+    required this.namaProduk,
+    required this.kodeProduk,
+    required this.tglMulai,
+    required this.tglSampai,
+  });
+
+  @override
+  State<DialogAnalisisCerdasStok> createState() => _DialogAnalisisCerdasStokState();
+}
+
+class _DialogAnalisisCerdasStokState extends State<DialogAnalisisCerdasStok> {
+  bool _memuat = true;
+  String? _error;
+  String _judulDiagnosis = '';
+  String _penjelasanUtama = '';
+  String _teksWa = '';
+  List<String> _kronologi = [];
+  List<String> _solusi = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _muatAnalisis();
+  }
+
+  String _formatTglParam(DateTime dt) => DateFormat('yyyy-MM-dd').format(dt);
+
+  Future<void> _muatAnalisis() async {
+    setStateIfMounted(() {
+      _memuat = true;
+      _error = null;
+    });
+    try {
+      final bool perProduk = widget.idProduk != null && widget.idProduk! > 0;
+      final res = await ApiClient.instance.aksi(
+        perProduk ? 'stok_analisis_cerdas_produk' : 'stok_analisis_cerdas_toko',
+        {
+          if (perProduk) 'id': widget.idProduk,
+          'dari': _formatTglParam(widget.tglMulai),
+          'sampai': _formatTglParam(widget.tglSampai),
+        },
+      );
+      if (!mounted) return;
+      setStateIfMounted(() {
+        _judulDiagnosis = (res['judulDiagnosis'] as String?) ??
+            'Ringkasan Eksekutif Audit Pergerakan & Selisih Stok ${res['namaToko'] ?? 'Toko'}';
+        _penjelasanUtama = (res['penjelasanUtama'] as String?) ??
+            'Ditemukan ${res['totalProdukDinolkan'] ?? 0} jenis barang sempat dinolkan saat Stok Opname (Sudah pulih: ${res['jmlSudahPulih'] ?? 0}, Masih 0/minus: ${res['jmlMasihTerdampak'] ?? 0}) serta ${res['totalStokMinus'] ?? 0} barang berstok minus.';
+        _teksWa = (res['teksAnalisisWa'] as String?) ?? '';
+        _kronologi = ((res['kronologiPoin'] as List?) ?? const [])
+            .map((e) => '$e')
+            .toList();
+        _solusi = ((res['langkahSolusi'] as List?) ?? const [])
+            .map((e) => '$e')
+            .toList();
+        _memuat = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setStateIfMounted(() {
+        _memuat = false;
+        _error = 'Gagal menyusun analisis otomatis: $e';
+      });
+    }
+  }
+
+  Future<void> _salinWa() async {
+    if (_teksWa.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: _teksWa));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Naskah analisis berhasil disalin ke Clipboard (siap ditempel ke WhatsApp).'),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool perProduk = widget.idProduk != null && widget.idProduk! > 0;
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 880, maxHeight: 720),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.auto_awesome, color: Colors.indigo, size: 24),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          perProduk
+                              ? 'Analisis Cerdas Produk: ${widget.kodeProduk.isNotEmpty ? "${widget.kodeProduk} - " : ""}${widget.namaProduk}'
+                              : 'Analisis Cerdas Pergerakan & Selisih Stok Toko',
+                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          'Laporan otomatis kronologi penyebab perubahan stok & rekomendasi solusi (tanpa istilah teknis)',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Expanded(
+                child: _memuat
+                    ? const Center(child: CircularProgressIndicator())
+                    : _error != null
+                        ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
+                        : SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: Colors.indigo.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: Colors.indigo.withValues(alpha: 0.3)),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _judulDiagnosis,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.indigo,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        _penjelasanUtama,
+                                        style: const TextStyle(fontSize: 12.5, height: 1.4),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (_kronologi.isNotEmpty) ...[
+                                  const SizedBox(height: 12),
+                                  const Text(
+                                    'Kronologi Kejadian Tercatat:',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  ..._kronologi.take(8).map((k) => Padding(
+                                        padding: const EdgeInsets.only(bottom: 4),
+                                        child: Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text('• ', style: TextStyle(fontWeight: FontWeight.bold)),
+                                            Expanded(child: Text(k, style: const TextStyle(fontSize: 12))),
+                                          ],
+                                        ),
+                                      )),
+                                ],
+                                if (_solusi.isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  const Text(
+                                    'Langkah Penyelesaian:',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  ..._solusi.map((s) => Padding(
+                                        padding: const EdgeInsets.only(bottom: 4),
+                                        child: Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Icon(Icons.check_circle_outline,
+                                                size: 15, color: Colors.green),
+                                            const SizedBox(width: 6),
+                                            Expanded(child: Text(s, style: const TextStyle(fontSize: 12))),
+                                          ],
+                                        ),
+                                      )),
+                                ],
+                                const SizedBox(height: 14),
+                                const Text(
+                                  'Naskah Lengkap Siap Kirim WhatsApp (Non-Teknis):',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                                ),
+                                const SizedBox(height: 6),
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.grey.shade300),
+                                  ),
+                                  child: SelectableText(
+                                    _teksWa,
+                                    style: const TextStyle(
+                                      fontFamily: 'Consolas',
+                                      fontSize: 12,
+                                      height: 1.45,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: _memuat ? null : _salinWa,
+                    icon: const Icon(Icons.copy, size: 17),
+                    label: const Text('Salin Naskah WhatsApp'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green.shade700,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Tutup'),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
