@@ -38,6 +38,7 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
   late DateTime _tglSampai;
 
   final TextEditingController _cariController = TextEditingController();
+  String _statusFilter = '';
   bool _memuat = false;
   String? _pesanError;
   List<Map<String, dynamic>> _data = [];
@@ -140,7 +141,8 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
         'dari': _formatTglParam(_tglMulai),
         'sampai': _formatTglParam(_tglSampai),
         'q': _cariController.text.trim(),
-        'limit': 300,
+        'status_filter': _statusFilter,
+        'limit': 500,
       });
 
       if (!mounted) return;
@@ -168,6 +170,7 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
         'dari': _formatTglParam(_tglMulai),
         'sampai': _formatTglParam(_tglSampai),
         'q': _cariController.text.trim(),
+        'status_filter': _statusFilter,
       });
 
       final b64 = res['fileBase64'] as String?;
@@ -310,7 +313,7 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
 
                 // Pencarian
                 SizedBox(
-                  width: 220,
+                  width: 200,
                   height: 36,
                   child: TextField(
                     controller: _cariController,
@@ -323,6 +326,42 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
                       ),
                     ),
                     onSubmitted: (_) => _muatData(),
+                  ),
+                ),
+
+                // Filter Status Audit / Selisih
+                Container(
+                  height: 36,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade400),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _statusFilter,
+                      borderRadius: BorderRadius.circular(8),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: '', child: Text('Semua Status Barang')),
+                        DropdownMenuItem(value: 'ADA_MUTASI', child: Text('Ada Mutasi / Loncat')),
+                        DropdownMenuItem(value: 'DINOLKAN_SO', child: Text('Dinolkan saat Opname (SO -> 0)')),
+                        DropdownMenuItem(value: 'STOK_MINUS', child: Text('Stok Akhir Minus (< 0)')),
+                        DropdownMenuItem(value: 'ADA_OPNAME', child: Text('Ada Koreksi Opname (+/-)')),
+                        DropdownMenuItem(value: 'KODE_GANDA', child: Text('Kode Barang Ganda / Duplikat')),
+                      ],
+                      onChanged: (val) {
+                        if (val == null) return;
+                        setStateIfMounted(() {
+                          _statusFilter = val;
+                        });
+                        _muatData();
+                      },
+                    ),
                   ),
                 ),
 
@@ -356,6 +395,12 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
                   _buildSummaryMini('Retur', (_ringkasanTotal!['retur'] as num?) ?? 0, Colors.blue),
                   _buildSummaryMini('Penjualan', (_ringkasanTotal!['penjualan'] as num?) ?? 0, Colors.orange),
                   _buildSummaryMini('Keluar', (_ringkasanTotal!['keluar'] as num?) ?? 0, Colors.red),
+                  _buildSummaryMini('Opname (+)', (_ringkasanTotal!['opnameMasuk'] as num?) ?? 0, Colors.purple),
+                  _buildSummaryMini('Opname (-)', (_ringkasanTotal!['opnameKeluar'] as num?) ?? 0, Colors.pink),
+                  if (((_ringkasanTotal!['jmlDinolkanSo'] as num?) ?? 0) > 0)
+                    _buildSummaryMini('SO->0', (_ringkasanTotal!['jmlDinolkanSo'] as num?) ?? 0, Colors.deepOrange),
+                  if (((_ringkasanTotal!['jmlStokMinus'] as num?) ?? 0) > 0)
+                    _buildSummaryMini('Stok Minus', (_ringkasanTotal!['jmlStokMinus'] as num?) ?? 0, Colors.red.shade900),
                 ],
               ],
             ),
@@ -395,7 +440,7 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
                                   headingRowColor: WidgetStateProperty.all(
                                     isDark ? Colors.grey.shade800 : Colors.grey.shade100,
                                   ),
-                                  columnSpacing: 20,
+                                  columnSpacing: 18,
                                   columns: const [
                                     DataColumn(label: Text('Grup', style: TextStyle(fontWeight: FontWeight.bold))),
                                     DataColumn(label: Text('Produk', style: TextStyle(fontWeight: FontWeight.bold))),
@@ -404,7 +449,10 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
                                     DataColumn(numeric: true, label: Text('Pengembalian', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue))),
                                     DataColumn(numeric: true, label: Text('Penjualan', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange))),
                                     DataColumn(numeric: true, label: Text('Keluar', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red))),
+                                    DataColumn(numeric: true, label: Text('Opname (+)', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.purple))),
+                                    DataColumn(numeric: true, label: Text('Opname (-)', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.pink))),
                                     DataColumn(numeric: true, label: Text('Sisa', style: TextStyle(fontWeight: FontWeight.bold))),
+                                    DataColumn(label: Text('Status / Jejak Selisih', style: TextStyle(fontWeight: FontWeight.bold))),
                                     DataColumn(label: Text('Aksi', style: TextStyle(fontWeight: FontWeight.bold))),
                                   ],
                                   rows: _data.map((item) {
@@ -413,7 +461,22 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
                                     final retur = (item['retur'] as num?)?.toDouble() ?? 0;
                                     final penjualan = (item['penjualan'] as num?)?.toDouble() ?? 0;
                                     final keluar = (item['keluar'] as num?)?.toDouble() ?? 0;
+                                    final opnameMasuk = (item['opnameMasuk'] as num?)?.toDouble() ?? 0;
+                                    final opnameKeluar = (item['opnameKeluar'] as num?)?.toDouble() ?? 0;
                                     final sisa = (item['sisa'] as num?)?.toDouble() ?? 0;
+                                    final statusKode = (item['statusKode'] as String?) ?? 'NORMAL';
+                                    final statusAudit = (item['statusAudit'] as String?) ?? 'Normal';
+
+                                    Color statusColor = Colors.teal.shade700;
+                                    if (statusKode == 'DINOLKAN_SO' ||
+                                        statusKode == 'STOK_MINUS' ||
+                                        statusKode == 'SELISIH_FORMULA') {
+                                      statusColor = Colors.red.shade800;
+                                    } else if (statusKode == 'KOREKSI_SO') {
+                                      statusColor = Colors.deepOrange.shade800;
+                                    } else if (statusKode == 'PULIH_SO' || statusKode == 'HABIS_TERJUAL') {
+                                      statusColor = Colors.blue.shade800;
+                                    }
 
                                     return DataRow(
                                       onSelectChanged: (_) => _bukaDetailProduk(item),
@@ -453,10 +516,48 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
                                           _formatAngka.format(keluar),
                                           style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
                                         )),
+                                        DataCell(Text(
+                                          opnameMasuk > 0 ? '+${_formatAngka.format(opnameMasuk)}' : '0',
+                                          style: TextStyle(
+                                            color: opnameMasuk > 0 ? Colors.purple.shade700 : Colors.grey,
+                                            fontWeight: opnameMasuk > 0 ? FontWeight.bold : FontWeight.normal,
+                                          ),
+                                        )),
+                                        DataCell(Text(
+                                          opnameKeluar > 0 ? '-${_formatAngka.format(opnameKeluar)}' : '0',
+                                          style: TextStyle(
+                                            color: opnameKeluar > 0 ? Colors.pink.shade700 : Colors.grey,
+                                            fontWeight: opnameKeluar > 0 ? FontWeight.bold : FontWeight.normal,
+                                          ),
+                                        )),
                                         DataCell(
                                           Text(
                                             _formatAngka.format(sisa),
-                                            style: const TextStyle(fontWeight: FontWeight.bold),
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color: sisa < 0 ? Colors.red.shade800 : null,
+                                            ),
+                                          ),
+                                        ),
+                                        DataCell(
+                                          Container(
+                                            constraints: const BoxConstraints(maxWidth: 260),
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: statusColor.withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(6),
+                                              border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                                            ),
+                                            child: Text(
+                                              statusAudit,
+                                              overflow: TextOverflow.ellipsis,
+                                              maxLines: 2,
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                                color: statusColor,
+                                              ),
+                                            ),
                                           ),
                                         ),
                                         DataCell(
@@ -627,6 +728,7 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
         const DataCell(Text('-')),
         DataCell(Text(_formatAngka.format(saldo),
             style: const TextStyle(fontWeight: FontWeight.bold))),
+        const DataCell(Text('Saldo awal periode')),
       ]);
 
   @override
@@ -636,12 +738,14 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
     final retur = (_ringkasan?['retur'] as num?)?.toDouble() ?? 0;
     final penjualan = (_ringkasan?['penjualan'] as num?)?.toDouble() ?? 0;
     final keluar = (_ringkasan?['keluar'] as num?)?.toDouble() ?? 0;
+    final opnameMasuk = (_ringkasan?['opnameMasuk'] as num?)?.toDouble() ?? 0;
+    final opnameKeluar = (_ringkasan?['opnameKeluar'] as num?)?.toDouble() ?? 0;
     final sisa = (_ringkasan?['sisa'] as num?)?.toDouble() ?? 0;
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 950, maxHeight: 700),
+        constraints: const BoxConstraints(maxWidth: 1120, maxHeight: 740),
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -683,7 +787,7 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
               ),
               const SizedBox(height: 16),
 
-              // 6 Summary Cards
+              // 8 Summary Cards (termasuk Opname + dan Opname -)
               Row(
                 children: [
                   _buildSummaryCard('Awal', awal, Colors.blueGrey),
@@ -691,6 +795,8 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
                   _buildSummaryCard('Pengembalian', retur, Colors.blue),
                   _buildSummaryCard('Penjualan', penjualan, Colors.orange),
                   _buildSummaryCard('Keluar', keluar, Colors.red),
+                  _buildSummaryCard('Opname (+)', opnameMasuk, Colors.purple),
+                  _buildSummaryCard('Opname (-)', opnameKeluar, Colors.pink),
                   _buildSummaryCard('Sisa', sisa, Colors.indigo),
                 ],
               ),
@@ -717,84 +823,107 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
                                       scrollDirection: Axis.horizontal,
                                       child: DataTable(
                                         headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
-                                        columnSpacing: 24,
+                                        columnSpacing: 20,
                                         columns: const [
                                           DataColumn(label: Text('No', style: TextStyle(fontWeight: FontWeight.bold))),
                                           DataColumn(label: Text('Tanggal & jam', style: TextStyle(fontWeight: FontWeight.bold))),
                                           DataColumn(label: Text('No Faktur', style: TextStyle(fontWeight: FontWeight.bold))),
                                           DataColumn(label: Text('kode mutasi', style: TextStyle(fontWeight: FontWeight.bold))),
                                           DataColumn(label: Text('ID Pelanggan', style: TextStyle(fontWeight: FontWeight.bold))),
-                                          DataColumn(label: Text('Nama Pelanggan', style: TextStyle(fontWeight: FontWeight.bold))),
+                                          DataColumn(label: Text('Pelanggan / Petugas', style: TextStyle(fontWeight: FontWeight.bold))),
                                           DataColumn(numeric: true, label: Text('Saldo sebelum', style: TextStyle(fontWeight: FontWeight.bold))),
                                           DataColumn(numeric: true, label: Text('Masuk', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green))),
                                           DataColumn(numeric: true, label: Text('Keluar', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red))),
                                           DataColumn(numeric: true, label: Text('Saldo', style: TextStyle(fontWeight: FontWeight.bold))),
+                                          DataColumn(label: Text('Rincian Audit / Keterangan', style: TextStyle(fontWeight: FontWeight.bold))),
                                         ],
                                         rows: [
                                           _barisSaldoAwal(awal),
                                           ..._mutasi.asMap().entries.map((entry) {
-                                          final idx = entry.key + 2;
-                                          final m = entry.value;
-                                          final tAwal = (m['awal'] as num?)?.toDouble() ?? 0;
-                                          final tMasuk = (m['masuk'] as num?)?.toDouble() ?? 0;
-                                          final tKeluar = (m['keluar'] as num?)?.toDouble() ?? 0;
-                                          final tSisa = (m['sisa'] as num?)?.toDouble() ?? 0;
-                                          final tipe = (m['tipe'] as String?) ?? '';
-                                          final ref = (m['referensi'] as String?) ?? '';
-                                          final kodeMutasi = (m['kodeMutasi'] as String?) ?? '000';
-                                          final idPel = (m['idPelanggan'] as String?) ?? '';
-                                          final namaPel = (m['namaPelanggan'] as String?) ?? '';
+                                            final idx = entry.key + 2;
+                                            final m = entry.value;
+                                            final tAwal = (m['awal'] as num?)?.toDouble() ?? 0;
+                                            final tMasuk = (m['masuk'] as num?)?.toDouble() ?? 0;
+                                            final tKeluar = (m['keluar'] as num?)?.toDouble() ?? 0;
+                                            final tSisa = (m['sisa'] as num?)?.toDouble() ?? 0;
+                                            final tipe = (m['tipe'] as String?) ?? '';
+                                            final ref = (m['referensi'] as String?) ?? '';
+                                            final kodeMutasi = (m['kodeMutasi'] as String?) ?? '000';
+                                            final idPel = (m['idPelanggan'] as String?) ?? '';
+                                            final namaPel = (m['namaPelanggan'] as String?) ?? '';
+                                            final oleh = (m['oleh'] as String?) ?? '';
+                                            final ket = (m['keterangan'] as String?) ?? '';
 
-                                          Color badgeColor = Colors.grey.shade700;
-                                          if (tipe.contains('Penjualan')) {
-                                            badgeColor = Colors.orange.shade800;
-                                          } else if (tipe.contains('Pembelian')) {
-                                            badgeColor = Colors.green.shade800;
-                                          } else if (tipe.contains('Retur')) {
-                                            badgeColor = Colors.blue.shade800;
-                                          } else if (tipe.contains('Opname') ||
-                                              tipe.contains('Penyesuaian')) {
-                                            badgeColor = Colors.purple.shade800;
-                                          }
+                                            Color badgeColor = Colors.grey.shade700;
+                                            if (tipe.contains('Penjualan')) {
+                                              badgeColor = Colors.orange.shade800;
+                                            } else if (tipe.contains('Pembelian')) {
+                                              badgeColor = Colors.green.shade800;
+                                            } else if (tipe.contains('Retur')) {
+                                              badgeColor = Colors.blue.shade800;
+                                            } else if (tipe.contains('Opname') ||
+                                                tipe.contains('Penyesuaian')) {
+                                              badgeColor = Colors.purple.shade800;
+                                            }
 
-                                          return DataRow(
-                                            cells: [
-                                              DataCell(Text('$idx')),
-                                              DataCell(Text((m['tanggal'] as String?) ?? '-')),
-                                              DataCell(Text(ref.isEmpty ? '-' : ref)),
-                                              DataCell(Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                decoration: BoxDecoration(
-                                                  color: badgeColor.withValues(alpha: 0.12),
-                                                  borderRadius: BorderRadius.circular(4),
-                                                ),
-                                                child: Text(
-                                                  kodeMutasi,
-                                                  style: TextStyle(
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: badgeColor,
+                                            final String pelaku = namaPel.isNotEmpty
+                                                ? (oleh.isNotEmpty && oleh != namaPel ? '$namaPel ($oleh)' : namaPel)
+                                                : (oleh.isNotEmpty ? oleh : (tipe.isNotEmpty ? tipe : '-'));
+
+                                            return DataRow(
+                                              cells: [
+                                                DataCell(Text('$idx')),
+                                                DataCell(Text((m['tanggal'] as String?) ?? '-')),
+                                                DataCell(Text(ref.isEmpty ? '-' : ref)),
+                                                DataCell(Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: badgeColor.withValues(alpha: 0.12),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  child: Text(
+                                                    kodeMutasi,
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: badgeColor,
+                                                    ),
+                                                  ),
+                                                )),
+                                                DataCell(Text(idPel.isEmpty ? '-' : idPel)),
+                                                DataCell(Text(pelaku)),
+                                                DataCell(Text(_formatAngka.format(tAwal))),
+                                                DataCell(Text(
+                                                  tMasuk > 0 ? '+${_formatAngka.format(tMasuk)}' : '-',
+                                                  style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600),
+                                                )),
+                                                DataCell(Text(
+                                                  tKeluar > 0 ? '-${_formatAngka.format(tKeluar)}' : '-',
+                                                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+                                                )),
+                                                DataCell(Text(
+                                                  _formatAngka.format(tSisa),
+                                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                                )),
+                                                DataCell(
+                                                  ConstrainedBox(
+                                                    constraints: const BoxConstraints(maxWidth: 320),
+                                                    child: Text(
+                                                      ket.isNotEmpty ? ket : tipe,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      maxLines: 2,
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        color: tipe.contains('Opname')
+                                                            ? Colors.purple.shade900
+                                                            : Colors.grey.shade800,
+                                                      ),
+                                                    ),
                                                   ),
                                                 ),
-                                              )),
-                                              DataCell(Text(idPel.isEmpty ? '-' : idPel)),
-                                              DataCell(Text(namaPel.isNotEmpty ? namaPel : (tipe.isNotEmpty ? tipe : '-'))),
-                                              DataCell(Text(_formatAngka.format(tAwal))),
-                                              DataCell(Text(
-                                                tMasuk > 0 ? '+${_formatAngka.format(tMasuk)}' : '-',
-                                                style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600),
-                                              )),
-                                              DataCell(Text(
-                                                tKeluar > 0 ? '-${_formatAngka.format(tKeluar)}' : '-',
-                                                style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
-                                              )),
-                                              DataCell(Text(
-                                                _formatAngka.format(tSisa),
-                                                style: const TextStyle(fontWeight: FontWeight.bold),
-                                              )),
-                                            ],
-                                          );
-                                        }),
+                                              ],
+                                            );
+                                          }),
                                         ],
                                       ),
                                     ),
@@ -803,7 +932,6 @@ class _DialogDetailPergerakanStokState extends State<DialogDetailPergerakanStok>
                               ),
               ),
               const SizedBox(height: 12),
-
             ],
           ),
         ),
