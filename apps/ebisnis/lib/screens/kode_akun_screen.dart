@@ -1315,16 +1315,20 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     return _formGrupAkun();
   }
 
+  static final NumberFormat _fmtSaldoAkun =
+      NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+
   Widget _tabelAkun({required bool pohon}) {
     final data = pohon ? _akunPohon : _akun;
     return AppDataTable(
-      minWidth: 900,
+      minWidth: 980,
       emptyText: 'Tidak ada akun untuk filter ini.',
       columns: const [
         AppTableColumn('Akun', flex: 4),
         AppTableColumn('Debet/Credit', flex: 2),
         AppTableColumn('Keterangan', flex: 3),
         AppTableColumn('Grup Akun', flex: 3),
+        AppTableColumn('Saldo', flex: 2, align: TextAlign.right),
         AppTableColumn('Dipakai', flex: 1, align: TextAlign.right),
         AppTableColumn('Aksi', width: 64, align: TextAlign.center),
       ],
@@ -1336,6 +1340,10 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                 AppTableCell.text('${a['posisi'] ?? ''}', flex: 2),
                 AppTableCell.text('${a['keterangan'] ?? ''}', flex: 3),
                 AppTableCell.text('${a['grupAkun'] ?? ''}', flex: 3),
+                AppTableCell.text(
+                    _fmtSaldoAkun.format((a['saldo'] as num?)?.toDouble() ?? 0),
+                    flex: 2,
+                    align: TextAlign.right),
                 AppTableCell.text('${a['jumlahDipakai'] ?? 0}',
                     flex: 1, align: TextAlign.right),
                 _aksiAkun(a),

@@ -550,6 +550,17 @@ class AppDrawer extends StatelessWidget {
                             builder: (_) => const AnggotaScreen(),
                           ),
                         ),
+                      if (Sesi.instance.bolehMenu('anggota'))
+                        _ItemMenu(
+                          icon: Icons.request_quote_outlined,
+                          label: 'Piutang Pelanggan',
+                          aktif: menuAktif == 'Piutang Pelanggan',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Piutang Pelanggan',
+                            builder: (_) => const AnggotaScreen(tabAwal: 7),
+                          ),
+                        ),
                       if (Sesi.instance.bolehMenu('produk'))
                         _ItemMenu(
                           icon: Icons.inventory_2_outlined,

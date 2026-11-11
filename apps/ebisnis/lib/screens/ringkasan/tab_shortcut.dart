@@ -323,6 +323,20 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
         'aktif': true,
       },
       {
+        'id': 'sc_tab_piutang_pelanggan',
+        'judul': 'Mutasi & Pelunasan Piutang Pelanggan',
+        'ket':
+            'Rekap piutang pelanggan/member, rincian mutasi piutang, dan entri pelunasan piutang',
+        'grup': 'Pelanggan & Keuangan',
+        'jenis': 'TAB',
+        'target': 'anggota:tab:7',
+        'kunciMenu': 'anggota',
+        'ikon': 'payments',
+        'warna': '#E11D48',
+        'urutan': 20,
+        'aktif': true,
+      },
+      {
         'id': 'sc_data_pelanggan',
         'judul': 'Data Pelanggan / Member',
         'ket':
@@ -333,7 +347,7 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
         'kunciMenu': 'anggota',
         'ikon': 'people',
         'warna': '#7C3AED',
-        'urutan': 20,
+        'urutan': 21,
         'aktif': true,
       },
       {
@@ -347,7 +361,7 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
         'kunciMenu': 'laporan',
         'ikon': 'folder_open',
         'warna': '#D97706',
-        'urutan': 21,
+        'urutan': 22,
         'aktif': true,
       },
     ];
@@ -476,7 +490,7 @@ bool bolehAksesItemShortcut(Map<String, dynamic> item) {
     }
   }
 
-  if (jenis == 'TAB') {
+  if (jenis == 'TAB' || jenis.endsWith('_TAB') || target.contains(':tab:')) {
     if (target.startsWith('produk:')) {
       return bolehTampilMenu(MenuEBisnis.produk);
     }
@@ -487,8 +501,12 @@ bool bolehAksesItemShortcut(Map<String, dynamic> item) {
       }
       return true;
     }
-    if (target.startsWith('laporantransaksi:')) {
+    if (target.startsWith('laporantransaksi:') ||
+        target.startsWith('laporan_transaksi:')) {
       return bolehTampilMenu(MenuEBisnis.laporanTransaksi);
+    }
+    if (target.startsWith('stokopname:') || target.startsWith('stok_opname:')) {
+      return bolehTampilMenu(MenuEBisnis.stokOpname);
     }
   } else if (jenis == 'LAPORAN') {
     return bolehTampilMenu(MenuEBisnis.laporanLaporan);
@@ -641,7 +659,7 @@ Future<void> bukaShortcutMenu(
     return;
   }
 
-  if (jenis == 'TAB') {
+  if (jenis == 'TAB' || jenis.endsWith('_TAB') || target.contains(':tab:')) {
     final bagian = target.split(':');
     final modul = bagian.isNotEmpty ? bagian[0].trim().toLowerCase() : '';
     final idxTab = bagian.length >= 3 ? (int.tryParse(bagian[2]) ?? 0) : 0;
@@ -665,6 +683,14 @@ Future<void> bukaShortcutMenu(
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => LaporanTransaksiScreen(tabAwal: idxTab),
+        ),
+      );
+      return;
+    }
+    if (modul == 'stokopname' || modul == 'stok_opname') {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => StokOpnameScreen(tabAwal: idxTab),
         ),
       );
       return;

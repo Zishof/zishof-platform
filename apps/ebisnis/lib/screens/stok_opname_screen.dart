@@ -48,7 +48,8 @@ final _formatRupiah =
 /// (mobile_scanner/MLKit lewat core_hw.BarcodeScannerScreen), bukan
 /// Html5Qrcode berbasis web -- pengalaman scan harusnya lebih responsif.
 class StokOpnameScreen extends StatefulWidget {
-  const StokOpnameScreen({super.key});
+  final int tabAwal;
+  const StokOpnameScreen({super.key, this.tabAwal = 0});
 
   @override
   State<StokOpnameScreen> createState() => _StokOpnameScreenState();
@@ -64,7 +65,7 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 8, vsync: this);
+    _tab = TabController(length: 8, vsync: this, initialIndex: widget.tabAwal.clamp(0, 7));
     _tab.addListener(_saatTabBerubah);
     _muatDaftarRakToko();
   }
@@ -1187,11 +1188,251 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
   bool _memuat = true;
   bool _mengunduh = false;
   bool _mengunggah = false;
+  bool _menyimpanPartial = false;
   String? _pesanError;
   String _dibuatPada = '';
   bool _dariCache = false;
   List<Map<String, dynamic>> _data = [];
   Set<int> _selesai = <int>{};
+  final Map<int, TextEditingController> _inputFisikPerProduk = {};
+  final Set<int> _sedangSimpanBaris = <int>{};
+
+  @override
+  void dispose() {
+    for (final c in _inputFisikPerProduk.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  TextEditingController _controllerFisik(int produkId) =>
+      _inputFisikPerProduk.putIfAbsent(produkId, () => TextEditingController());
+
+  Future<void> _pilihTambahBarangPartial() async {
+    final q = TextEditingController();
+    List<Map<String, dynamic>> hasil = [];
+    bool mencari = false;
+    final dipilih = await showDialog<List<Map<String, dynamic>>>(
+      context: context,
+      builder: (dctx) {
+        final terpilih = <int, Map<String, dynamic>>{};
+        return StatefulBuilder(builder: (c, setLocal) {
+          Future<void> cari() async {
+            setLocal(() => mencari = true);
+            try {
+              final r = await MasterOffline.daftarDenganCache(
+                'produk_list',
+                {'keyword': q.text.trim(), 'page': 1, 'page_size': 60},
+                'master:produk:so_partial:${q.text.trim()}',
+              );
+              hasil = ((r['data'] as List?) ?? [])
+                  .whereType<Map>()
+                  .map((e) => Map<String, dynamic>.from(e))
+                  .toList();
+            } catch (_) {
+              hasil = [];
+            } finally {
+              setLocal(() => mencari = false);
+            }
+          }
+
+          if (hasil.isEmpty && !mencari && q.text.isEmpty) {
+            unawaited(cari());
+          }
+          return AlertDialog(
+            title: const Text('Pilih Barang untuk SO Harian (Partial)'),
+            content: SizedBox(
+              width: 640,
+              height: 460,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  AppSearchField(
+                    controller: q,
+                    hintText: 'Cari kode / barcode / nama barang...',
+                    scanProduk: true,
+                    autofocus: true,
+                    onChanged: (_) => cari(),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Centang barang yang ingin dihitung stok fisiknya secara parsial hari ini (${terpilih.length} dipilih).',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 6),
+                  Expanded(
+                    child: mencari
+                        ? const Center(child: CircularProgressIndicator())
+                        : hasil.isEmpty
+                            ? const Center(
+                                child: Text('Tidak ada barang yang cocok.'))
+                            : ListView.builder(
+                                itemCount: hasil.length,
+                                itemBuilder: (_, i) {
+                                  final item = hasil[i];
+                                  final id = (item['id'] as num?)?.toInt() ?? 0;
+                                  final cek = terpilih.containsKey(id);
+                                  return CheckboxListTile(
+                                    dense: true,
+                                    value: cek,
+                                    title: Text('${item['nama'] ?? '-'}'),
+                                    subtitle: Text(
+                                      '${item['kode'] ?? '-'} · Stok Sistem: ${item['stok'] ?? 0} ${item['satuan'] ?? 'PCS'} · Rak: ${item['rakUtamaNama'] ?? item['rakNama'] ?? 'Rak Utama'}',
+                                    ),
+                                    onChanged: (v) {
+                                      setLocal(() {
+                                        if (v == true && id > 0) {
+                                          terpilih[id] = item;
+                                        } else {
+                                          terpilih.remove(id);
+                                        }
+                                      });
+                                    },
+                                  );
+                                },
+                              ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dctx),
+                child: const Text('Batal'),
+              ),
+              FilledButton.icon(
+                onPressed: terpilih.isEmpty
+                    ? null
+                    : () => Navigator.pop(dctx, terpilih.values.toList()),
+                icon: const Icon(Icons.playlist_add_check, size: 18),
+                label: Text('Tambahkan (${terpilih.length})'),
+              ),
+            ],
+          );
+        });
+      },
+    );
+    q.dispose();
+    if (dipilih == null || dipilih.isEmpty || !mounted) return;
+    setStateIfMounted(() {
+      final sudahAda = _data
+          .map((r) => (r['produkId'] as num?)?.toInt() ?? 0)
+          .where((id) => id > 0)
+          .toSet();
+      for (final p in dipilih) {
+        final pid = (p['id'] as num?)?.toInt() ?? 0;
+        if (pid <= 0 || sudahAda.contains(pid)) continue;
+        sudahAda.add(pid);
+        _data.insert(0, <String, dynamic>{
+          'produkId': pid,
+          'kode': p['kode'] ?? '',
+          'barcode': p['barcode'] ?? '',
+          'nama': p['nama'] ?? '',
+          'satuan': p['satuan'] ?? 'PCS',
+          'rakNama': p['rakUtamaNama'] ?? p['rakNama'] ?? 'Rak Utama',
+          'qtyTerjual': 0,
+          'qtyRetur': 0,
+          'qtyTerjualBersih': 0,
+          'stokSistem': p['stok'] ?? 0,
+          'manualPartial': true,
+        });
+      }
+    });
+  }
+
+  Future<void> _simpanOpnameBaris(Map<String, dynamic> r) async {
+    final produkId = (r['produkId'] as num?)?.toInt() ?? 0;
+    if (produkId <= 0) return;
+    final teks = _controllerFisik(produkId).text.trim().replaceAll(',', '.');
+    final fisik = double.tryParse(teks);
+    if (fisik == null || fisik < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Masukkan angka Stok Fisik yang valid (>= 0).')),
+      );
+      return;
+    }
+    setStateIfMounted(() => _sedangSimpanBaris.add(produkId));
+    try {
+      await ApiClient.instance.aksi('so_simpan', {
+        'produk_id': produkId,
+        'stok_fisik': fisik,
+        'keterangan': 'SO Harian (Partial) $_tanggalTeks',
+      });
+      if (!mounted) return;
+      await _ubahChecklist(produkId, true);
+      setStateIfMounted(() {
+        r['stokSistem'] = fisik;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(
+                'Stok fisik ${r['nama'] ?? ''} berhasil disimpan ($fisik).')),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menyimpan SO: ${terapkanGalat(e)}')),
+        );
+      }
+    } finally {
+      if (mounted) setStateIfMounted(() => _sedangSimpanBaris.remove(produkId));
+    }
+  }
+
+  Future<void> _simpanSemuaPartialYangTerisi() async {
+    final target = _data.where((r) {
+      final pid = (r['produkId'] as num?)?.toInt() ?? 0;
+      if (pid <= 0) return false;
+      final teks = _inputFisikPerProduk[pid]?.text.trim() ?? '';
+      return teks.isNotEmpty &&
+          double.tryParse(teks.replaceAll(',', '.')) != null;
+    }).toList();
+    if (target.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'Isi kolom Input Stok Fisik pada minimal satu barang terlebih dahulu.')),
+      );
+      return;
+    }
+    setStateIfMounted(() => _menyimpanPartial = true);
+    int berhasil = 0;
+    try {
+      for (final r in target) {
+        final pid = (r['produkId'] as num).toInt();
+        final fisik = double.parse(
+            _inputFisikPerProduk[pid]!.text.trim().replaceAll(',', '.'));
+        await ApiClient.instance.aksi('so_simpan', {
+          'produk_id': pid,
+          'stok_fisik': fisik,
+          'keterangan': 'SO Harian (Partial) $_tanggalTeks',
+        });
+        r['stokSistem'] = fisik;
+        _selesai.add(pid);
+        berhasil++;
+      }
+      await _simpanChecklist();
+      if (mounted) {
+        setStateIfMounted(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content:
+                  Text('$berhasil barang SO Harian (Partial) berhasil disimpan.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(
+                  '$berhasil tersimpan, kendala: ${terapkanGalat(e)}')),
+        );
+      }
+    } finally {
+      if (mounted) setStateIfMounted(() => _menyimpanPartial = false);
+    }
+  }
 
   String get _tanggalTeks => DateFormat('yyyy-MM-dd').format(_tanggal);
   String get _kunciChecklist =>
@@ -1494,11 +1735,28 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
               spacing: 8,
               runSpacing: 8,
               children: [
+                FilledButton.icon(
+                  onPressed: _memuat ? null : _pilihTambahBarangPartial,
+                  icon: const Icon(Icons.add_box_outlined, size: 17),
+                  label: const Text('Pilih Barang (SO Partial)'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: _memuat || _menyimpanPartial
+                      ? null
+                      : _simpanSemuaPartialYangTerisi,
+                  icon: _menyimpanPartial
+                      ? const SizedBox(
+                          width: 15,
+                          height: 15,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.save_outlined, size: 17),
+                  label: const Text('Simpan Semua Stok Fisik Terisi'),
+                ),
                 if (widget.onBukaSoGrand != null)
-                  FilledButton.tonalIcon(
+                  OutlinedButton.icon(
                     onPressed: widget.onBukaSoGrand,
                     icon: const Icon(Icons.fact_check_outlined, size: 17),
-                    label: const Text('Beralih ke Metode SO Grand (Audit Total 100% Barang)'),
+                    label: const Text('Beralih ke Metode SO Grand (100% Barang)'),
                   ),
               ],
             ),
@@ -1676,24 +1934,27 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
           ),
         if (!_memuat && _data.isNotEmpty)
           AppDataTable(
-            minWidth: 1050,
-            emptyText: 'Tidak ada produk terjual.',
+            minWidth: 1240,
+            emptyText: 'Tidak ada produk pada daftar SO Harian.',
             columns: const [
               AppTableColumn('Cek', flex: 1),
               AppTableColumn('Kode / Barcode', flex: 2),
-              AppTableColumn('Produk', flex: 4),
+              AppTableColumn('Produk', flex: 3),
               AppTableColumn('Rak', flex: 2),
               AppTableColumn('Satuan', flex: 1),
               AppTableColumn('Terjual', flex: 1, align: TextAlign.right),
               AppTableColumn('Retur', flex: 1, align: TextAlign.right),
               AppTableColumn('Bersih', flex: 1, align: TextAlign.right),
-              AppTableColumn('Sisa Stok Saat Ini',
+              AppTableColumn('Stok Sistem',
                   flex: 1, align: TextAlign.right),
-              AppTableColumn('Status', flex: 2),
+              AppTableColumn('Input Stok Fisik', flex: 2),
+              AppTableColumn('Status / Aksi', flex: 2),
             ],
             rows: _data.map((r) {
               final produkId = (r['produkId'] as num).toInt();
               final dicek = _selesai.contains(produkId);
+              final sedangSimpan = _sedangSimpanBaris.contains(produkId);
+              final ctrl = _controllerFisik(produkId);
               final rakNama =
                   '${r['rakNama'] ?? r['rak_nama'] ?? r['rakUtamaNama'] ?? 'Rak Belum Ditentukan'}';
               return AppTableRowData(cells: [
@@ -1708,7 +1969,7 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
                     '${r['kode'] ?? ''}${('${r['barcode'] ?? ''}').isEmpty ? '' : '\n${r['barcode']}'}',
                     flex: 2,
                     maxLines: 2),
-                AppTableCell.text('${r['nama'] ?? ''}', flex: 4, maxLines: 2),
+                AppTableCell.text('${r['nama'] ?? ''}', flex: 3, maxLines: 2),
                 AppTableCell.text(rakNama, flex: 2, maxLines: 2),
                 AppTableCell.text('${r['satuan'] ?? '-'}', flex: 1),
                 AppTableCell.text(_formatAngka.format(r['qtyTerjual'] ?? 0),
@@ -1726,14 +1987,40 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
                     style: const TextStyle(fontWeight: FontWeight.w700)),
                 AppTableCell(
                   flex: 2,
-                  child: Row(children: [
-                    Icon(dicek ? Icons.check_circle : Icons.pending_outlined,
-                        size: 17,
-                        color: dicek ? AppColors.success : AppColors.warning),
-                    const SizedBox(width: 6),
-                    Text(dicek ? 'Sudah dicek' : 'Belum dicek',
-                        style: const TextStyle(fontSize: 12)),
-                  ]),
+                  child: SizedBox(
+                    height: 34,
+                    child: TextField(
+                      controller: ctrl,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      onSubmitted: (_) => _simpanOpnameBaris(r),
+                      style: const TextStyle(fontSize: 12.5),
+                      decoration: InputDecoration(
+                        hintText: '${r['stokSistem'] ?? 0}',
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 6),
+                        border: const OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ),
+                AppTableCell(
+                  flex: 2,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(dicek ? Icons.check_circle : Icons.pending_outlined,
+                          size: 16,
+                          color: dicek ? AppColors.success : AppColors.warning),
+                      const SizedBox(width: 4),
+                      TextButton(
+                        onPressed:
+                            sedangSimpan ? null : () => _simpanOpnameBaris(r),
+                        child: Text(sedangSimpan ? '...' : 'Simpan'),
+                      ),
+                    ],
+                  ),
                 ),
               ]);
             }).toList(),

@@ -50,6 +50,7 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
   // --- saldo awal
   List<Map<String, dynamic>> _saldoAwal = [];
   Map<String, dynamic>? _drafSaldoAwal;
+  DateTime? _tglSaldoAwal;
 
   // --- penyesuaian
   List<Map<String, dynamic>> _template = [];
@@ -363,6 +364,39 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
   }
 
   Future<void> _unduhContohSaldoAwal() async {
+    final petaSaldo = <String, Map<String, dynamic>>{};
+    for (final s in _saldoAwal) {
+      final k = '${s['kodeAkun'] ?? ''}'.trim();
+      if (k.isNotEmpty) petaSaldo[k] = s;
+    }
+    final akunUrut = List<Map<String, dynamic>>.from(_akun)
+      ..sort((a, b) => '${a['kode'] ?? ''}'.compareTo('${b['kode'] ?? ''}'));
+    final barisUnduh = <List<String>>[];
+    final kodeSudah = <String>{};
+    for (final a in akunUrut) {
+      final kode = '${a['kode'] ?? ''}'.trim();
+      if (kode.isEmpty) continue;
+      kodeSudah.add(kode);
+      final sa = petaSaldo[kode];
+      barisUnduh.add([
+        kode,
+        '${a['nama'] ?? sa?['namaAkun'] ?? ''}',
+        ((sa?['debet'] as num?)?.toDouble() ?? 0).toStringAsFixed(0),
+        ((sa?['kredit'] as num?)?.toDouble() ?? 0).toStringAsFixed(0),
+        '${sa?['keterangan'] ?? ''}',
+      ]);
+    }
+    for (final s in _saldoAwal) {
+      final kode = '${s['kodeAkun'] ?? ''}'.trim();
+      if (kode.isEmpty || kodeSudah.contains(kode)) continue;
+      barisUnduh.add([
+        kode,
+        '${s['namaAkun'] ?? ''}',
+        ((s['debet'] as num?)?.toDouble() ?? 0).toStringAsFixed(0),
+        ((s['kredit'] as num?)?.toDouble() ?? 0).toStringAsFixed(0),
+        '${s['keterangan'] ?? ''}',
+      ]);
+    }
     final bytes = buildSimpleXlsx(
       sheetName: 'Saldo Awal',
       headers: const [
@@ -372,15 +406,7 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
         'Kredit',
         'Keterangan'
       ],
-      rows: _saldoAwal
-          .map((s) => [
-                '${s['kodeAkun'] ?? ''}',
-                '${s['namaAkun'] ?? ''}',
-                (s['debet'] as num?)?.toStringAsFixed(0) ?? '0',
-                (s['kredit'] as num?)?.toStringAsFixed(0) ?? '0',
-                '${s['keterangan'] ?? ''}',
-              ])
-          .toList(),
+      rows: barisUnduh,
     );
     final path = await FilePicker.platform.saveFile(
         dialogTitle: 'Simpan Saldo Awal',
@@ -411,10 +437,11 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
   bool _bolehTutupBuku(String aksi) => _hakTutupBuku[aksi] != false;
 
   Future<void> _postingSaldo() async {
-    final d = _drafSaldoAwal;
+    var d = _drafSaldoAwal;
     if (d == null) {
       await _drafSaldo();
-      return;
+      d = _drafSaldoAwal;
+      if (d == null) return;
     }
     if (d['siap'] != true) {
       _pesan('${d['alasan'] ?? 'Belum siap diposting.'}');
@@ -674,14 +701,51 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
         ]),
       );
 
+  List<Map<String, dynamic>> get _saldoAwalTerfilter {
+    final tgl = _tglSaldoAwal;
+    if (tgl == null) return _saldoAwal;
+    final target = _fmt.format(tgl);
+    return _saldoAwal.where((s) {
+      final raw = '${s['tanggal'] ?? ''}'.trim();
+      return raw.isEmpty || raw.startsWith(target);
+    }).toList();
+  }
+
   Widget _tabSaldoAwal() {
     final d = _drafSaldoAwal;
+    final daftarSaldo = _saldoAwalTerfilter;
     return Column(children: [
       _bar([
         FilledButton.icon(
             onPressed: _sibuk ? null : () => _formSaldoAwal(),
             icon: const Icon(Icons.add, size: 18),
             label: const Text('Tambah Akun')),
+        OutlinedButton.icon(
+            onPressed: _sibuk
+                ? null
+                : () async {
+                    final pilih = await showDatePicker(
+                      context: context,
+                      initialDate: _tglSaldoAwal ?? DateTime.now(),
+                      firstDate: DateTime(2000),
+                      lastDate: DateTime(2100),
+                    );
+                    if (pilih != null) {
+                      setStateIfMounted(() => _tglSaldoAwal = pilih);
+                    }
+                  },
+            icon: const Icon(Icons.event_outlined, size: 18),
+            label: Text(_tglSaldoAwal == null
+                ? 'Semua Tanggal'
+                : 'Tanggal ${_fmt.format(_tglSaldoAwal!)}')),
+        if (_tglSaldoAwal != null)
+          IconButton(
+            tooltip: 'Reset filter tanggal',
+            icon: const Icon(Icons.clear, size: 18),
+            onPressed: _sibuk
+                ? null
+                : () => setStateIfMounted(() => _tglSaldoAwal = null),
+          ),
         OutlinedButton.icon(
             onPressed: _sibuk ? null : _unduhContohSaldoAwal,
             icon: const Icon(Icons.download, size: 18),
@@ -726,7 +790,7 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
             AppTableColumn('Status', flex: 2),
             AppTableColumn('Aksi', flex: 2),
           ],
-          rows: _saldoAwal.map((s) {
+          rows: daftarSaldo.map((s) {
             final sudah = s['sudahDiposting'] == true;
             return AppTableRowData(cells: [
               AppTableCell.text('${s['kodeAkun'] ?? ''}', flex: 2),

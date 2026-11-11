@@ -70,6 +70,7 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
             ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         final dariServer = hasil['dariServer'] == true;
         final kanalList = ((hasil['kanalPembayaranList'] as List?) ?? []).cast<Map<String, dynamic>>();
+        data.sort((a, b) => (a['nama'] ?? '').toString().toLowerCase().compareTo((b['nama'] ?? '').toString().toLowerCase()));
         setStateIfMounted(() {
           _daftar = data;
           if (kanalList.isNotEmpty) _kanalPembayaranList = kanalList;
@@ -238,6 +239,7 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
                         columns: [
                           const AppTableColumn('Kode', flex: 1),
                           const AppTableColumn('Nama', flex: 2),
+                          const AppTableColumn('Akun', flex: 2),
                           const AppTableColumn('Potong Saldo',
                               flex: 1, align: TextAlign.center),
                           const AppTableColumn('Piutang Customer',

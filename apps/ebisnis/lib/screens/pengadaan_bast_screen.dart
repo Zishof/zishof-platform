@@ -1063,6 +1063,7 @@ class _FormBastDialogState extends State<_FormBastDialog> {
           setLocal(() {});
         }
 
+        if (hasil.isEmpty && q.text.isEmpty) cari();
         return AlertDialog(
           title: const Text('Pilih Barang'),
           content: SizedBox(
@@ -1104,6 +1105,7 @@ class _FormBastDialogState extends State<_FormBastDialog> {
     setState(() => _baris.add(_BarisBast(
           barangId: (dipilih['id'] as num?)?.toInt(),
           namaBarang: '${dipilih['nama'] ?? '-'}',
+          hargaAwal: '${(dipilih['hargaBeli'] as num?)?.toInt() ?? 0}',
         )));
   }
 

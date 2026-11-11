@@ -1672,6 +1672,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
       ),
     ];
     return DefaultTabController(
+        key: ValueKey<int>(_tabAktif),
         length: 6,
         initialIndex: _tabAktif,
         child: AppShell(

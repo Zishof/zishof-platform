@@ -1240,6 +1240,7 @@ class _FormPoDialogState extends State<_FormPoDialog> {
           setLocal(() {});
         }
 
+        if (hasil.isEmpty && q.text.isEmpty) cari();
         return AlertDialog(
           title: const Text('Pilih Barang'),
           content: SizedBox(
@@ -1282,6 +1283,7 @@ class _FormPoDialogState extends State<_FormPoDialog> {
           barangId: (dipilih['id'] as num?)?.toInt(),
           namaBarang: '${dipilih['nama'] ?? '-'}',
           satuan: '${dipilih['satuanPembelianNama'] ?? ''}',
+          hargaAwal: '${(dipilih['hargaBeli'] as num?)?.toInt() ?? 0}',
         )));
   }
 

@@ -1,5 +1,10 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
+import '../services/simple_xlsx.dart';
 
 import '../api_client.dart';
 import '../services/master_offline.dart';
@@ -182,6 +187,69 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
     }
   }
 
+  Future<void> _unduhExcel(List<Map<String, dynamic>> baris) async {
+    if (baris.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tidak ada data posting untuk diunduh.')),
+      );
+      return;
+    }
+    try {
+      final bytes = buildSimpleXlsx(
+        sheetName: widget.judul.length > 28
+            ? widget.judul.substring(0, 28)
+            : widget.judul,
+        headers: const [
+          'Tanggal',
+          'Referensi',
+          'Nilai',
+          'Debet',
+          'Kredit',
+          'Status',
+          'Nomor Jurnal',
+          'Keterangan / Alasan',
+        ],
+        rows: baris.map((r) {
+          final sudah = r['sudahDiposting'] == true;
+          final bisa = !sudah && r['siap'] == true;
+          final status = (r['statusLabel'] ??
+                  (sudah
+                      ? 'Sudah Diposting'
+                      : (bisa
+                          ? 'Belum Diposting - Siap'
+                          : 'Belum Diposting - Tertahan')))
+              .toString();
+          return [
+            (r['tanggal'] ?? '').toString(),
+            (r['referensi'] ?? r['ref'] ?? '').toString(),
+            ((r['nilai'] as num?)?.toDouble() ?? 0).toStringAsFixed(0),
+            (r['debet'] ?? '').toString(),
+            (r['kredit'] ?? '').toString(),
+            status,
+            (r['nomorJurnal'] ?? '').toString(),
+            (r['alasan'] ?? '').toString(),
+          ];
+        }).toList(),
+      );
+      final namaFile =
+          '${widget.judul.replaceAll(RegExp(r"[^A-Za-z0-9_]+"), "_")}_${_fmt.format(_mulai)}_${_fmt.format(_sampai)}.xlsx';
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: 'Simpan Excel ${widget.judul}',
+        fileName: namaFile,
+        type: FileType.custom,
+        allowedExtensions: const ['xlsx'],
+        bytes: bytes,
+      );
+      if (path != null) await File(path).writeAsBytes(bytes);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal mengunduh Excel: $e')),
+        );
+      }
+    }
+  }
+
   Widget _diagnostikSetting(List<Map<String, dynamic>> rincian) {
     final alasan = rincian
         .where((r) => r['siap'] != true)
@@ -276,6 +344,12 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
                 onPressed: _sibuk ? null : _muatDraf,
                 icon: const Icon(Icons.refresh, size: 18),
                 label: const Text('Muat ulang')),
+            OutlinedButton.icon(
+                onPressed: _sibuk || rincianTerfilter.isEmpty
+                    ? null
+                    : () => _unduhExcel(rincianTerfilter),
+                icon: const Icon(Icons.download_outlined, size: 18),
+                label: const Text('Download Excel')),
             TombolSesuaikanAkunPosting(
                 jenis: widget.jenis,
                 sisi: SisiAkunPosting.debet,

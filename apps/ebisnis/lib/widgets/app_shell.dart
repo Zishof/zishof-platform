@@ -144,6 +144,7 @@ enum MenuEBisnis {
   ringkasan,
   pesanan,
   anggota,
+  piutangPelanggan,
   produk,
   jenisProduk,
   uom,
@@ -334,6 +335,7 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
   MenuEBisnis.ringkasan: 'ringkasan',
   MenuEBisnis.pesanan: 'pesanan',
   MenuEBisnis.anggota: 'anggota',
+  MenuEBisnis.piutangPelanggan: 'anggota',
   MenuEBisnis.produk: 'produk',
   MenuEBisnis.jenisProduk: 'produk',
   MenuEBisnis.rakProduk: 'produk',
@@ -1737,6 +1739,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Pesanan';
     case MenuEBisnis.anggota:
       return 'Customer/Anggota';
+    case MenuEBisnis.piutangPelanggan:
+      return 'Piutang Pelanggan';
     case MenuEBisnis.produk:
       return 'Produk';
     case MenuEBisnis.jenisProduk:

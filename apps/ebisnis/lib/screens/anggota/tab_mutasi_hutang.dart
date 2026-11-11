@@ -53,6 +53,8 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
   int? _idAnggotaFilter;
   String? _namaAnggotaFilter;
   bool _mengunggah = false;
+  bool _melunasiTerpilih = false;
+  final Set<String> _barisTerpilih = <String>{};
 
   @override
   void initState() {
@@ -96,6 +98,7 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
         if (!mounted) return;
         setStateIfMounted(() {
           _data = _diff.terapkan(hasil);
+          _barisTerpilih.clear();
           _halaman = 1;
         });
       });
@@ -157,6 +160,7 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
       final item = rekap.putIfAbsent(
           kunci,
           () => {
+                'idAnggota': (r['idAnggota'] as num?)?.toInt(),
                 'namaAnggota': r['namaAnggota'],
                 'saldoAwal': (r['saldoAwal'] as num?)?.toDouble() ?? 0,
                 'bertambah': 0.0,
@@ -175,15 +179,141 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
     }).toList();
   }
 
-  Future<void> _bukaFormBayarHutang(
-      {double? nominalAwal, String? keteranganAwal}) async {
+  Future<void> _bukaFormBayarHutang({
+    int? idAnggotaAwal,
+    String? namaAnggotaAwal,
+    double? nominalAwal,
+    String? keteranganAwal,
+  }) async {
     final tersimpan = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       builder: (_) => _FormBayarHutang(
-          nominalAwal: nominalAwal, keteranganAwal: keteranganAwal),
+        idAnggotaAwal: idAnggotaAwal,
+        namaAnggotaAwal: namaAnggotaAwal,
+        nominalAwal: nominalAwal,
+        keteranganAwal: keteranganAwal,
+      ),
     );
     if (tersimpan == true) await _muat();
+  }
+
+  Future<void> _lunasiBarisTerpilih() async {
+    final barisDipilih = _data.where((r) {
+      final k = '${r['barisId'] ?? ''}';
+      return k.isNotEmpty &&
+          _barisTerpilih.contains(k) &&
+          ((r['bertambah'] as num?) ?? 0) > 0 &&
+          r['idAnggota'] != null;
+    }).toList();
+    if (barisDipilih.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Centang minimal satu baris piutang terlebih dahulu.')),
+      );
+      return;
+    }
+    final perAnggota = <int, Map<String, dynamic>>{};
+    for (final r in barisDipilih) {
+      final idA = (r['idAnggota'] as num).toInt();
+      final item = perAnggota.putIfAbsent(
+          idA,
+          () => <String, dynamic>{
+                'idAnggota': idA,
+                'namaAnggota': '${r['namaAnggota'] ?? '-'}',
+                'nominal': 0.0,
+                'jumlahNota': 0,
+              });
+      item['nominal'] = (item['nominal'] as double) +
+          ((r['bertambah'] as num?)?.toDouble() ?? 0);
+      item['jumlahNota'] = (item['jumlahNota'] as int) + 1;
+    }
+    if (perAnggota.length == 1) {
+      final tunggal = perAnggota.values.first;
+      await _bukaFormBayarHutang(
+        idAnggotaAwal: tunggal['idAnggota'] as int,
+        namaAnggotaAwal: '${tunggal['namaAnggota']}',
+        nominalAwal: tunggal['nominal'] as double,
+        keteranganAwal:
+            'Pelunasan ${tunggal['jumlahNota']} transaksi piutang terpilih',
+      );
+      return;
+    }
+    final totalSemua = perAnggota.values
+        .fold<double>(0, (s, e) => s + (e['nominal'] as double));
+    final setuju = await showDialog<bool>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        title: Text('Lunasi ${barisDipilih.length} Baris Piutang Terpilih?'),
+        content: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Total ${_formatRpMutasiHutang.format(totalSemua)} untuk ${perAnggota.length} pelanggan:',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              ...perAnggota.values.take(10).map((e) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      '• ${e['namaAnggota']}: ${_formatRpMutasiHutang.format(e['nominal'])} (${e['jumlahNota']} transaksi)',
+                    ),
+                  )),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dctx, true),
+            icon: const Icon(Icons.price_check_outlined, size: 18),
+            label: const Text('Simpan Pelunasan'),
+          ),
+        ],
+      ),
+    );
+    if (setuju != true || !mounted) return;
+    setStateIfMounted(() => _melunasiTerpilih = true);
+    try {
+      final waktuStr = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
+      for (final e in perAnggota.values) {
+        final idA = e['idAnggota'] as int;
+        await prosesSimpanMaster(
+          context,
+          aksi: 'hutang_bayar_simpan',
+          body: {
+            'id_member': idA,
+            'nominal': e['nominal'] as double,
+            'keterangan':
+                'Pelunasan ${e['jumlahNota']} transaksi piutang terpilih',
+            'waktu': waktuStr,
+          },
+          kunci:
+              'hutang_bayar:baru:${idA}_${DateTime.now().microsecondsSinceEpoch}',
+        );
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(
+                  'Pelunasan ${perAnggota.length} pelanggan berhasil disimpan.')),
+        );
+      }
+      await _muat();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(terapkanGalat(e))));
+      }
+    } finally {
+      if (mounted) setStateIfMounted(() => _melunasiTerpilih = false);
+    }
   }
 
   Future<void> _bukaDetailPiutang(Map<String, dynamic> baris) async {
@@ -474,11 +604,29 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
                     onPressed: _hapusFilterAnggota),
               if (Sesi.instance.bolehEntryPelunasanPiutang)
                 ElevatedButton.icon(
-                  onPressed: _bukaFormBayarHutang,
+                  onPressed: () => _bukaFormBayarHutang(
+                    idAnggotaAwal: _idAnggotaFilter,
+                    namaAnggotaAwal: _namaAnggotaFilter,
+                  ),
                   icon: const Icon(Icons.money_off_csred_outlined, size: 18),
                   label: const Text('Entri Pelunasan Piutang'),
                   style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.danger,
+                      foregroundColor: Colors.white),
+                ),
+              if (Sesi.instance.bolehEntryPelunasanPiutang &&
+                  _barisTerpilih.isNotEmpty)
+                ElevatedButton.icon(
+                  onPressed: _melunasiTerpilih ? null : _lunasiBarisTerpilih,
+                  icon: _melunasiTerpilih
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.playlist_add_check, size: 18),
+                  label: Text('Lunasi Terpilih (${_barisTerpilih.length})'),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white),
                 ),
               ElevatedButton.icon(
@@ -554,27 +702,50 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
               AppTableColumn('Bertambah', flex: 1, align: TextAlign.right),
               AppTableColumn('Pelunasan', flex: 1, align: TextAlign.right),
               AppTableColumn('Saldo Akhir', flex: 1, align: TextAlign.right),
+              AppTableColumn('Aksi', flex: 1, align: TextAlign.center),
             ],
             rows: _rekapPerAnggota
-                .map((r) => AppTableRowData(cells: [
-                      AppTableCell.text('${r['namaAnggota'] ?? '-'}', flex: 2),
-                      AppTableCell.text(
-                          _formatRpMutasiHutang.format(r['saldoAwal']),
-                          flex: 1,
-                          align: TextAlign.right),
-                      AppTableCell.text(
-                          _formatRpMutasiHutang.format(r['bertambah']),
-                          flex: 1,
-                          align: TextAlign.right),
-                      AppTableCell.text(
-                          _formatRpMutasiHutang.format(r['berkurang']),
-                          flex: 1,
-                          align: TextAlign.right),
-                      AppTableCell.text(
-                          _formatRpMutasiHutang.format(r['saldoAkhir']),
-                          flex: 1,
-                          align: TextAlign.right),
-                    ]))
+                .map((r) {
+                  final sisaAkhir = (r['saldoAkhir'] as num?)?.toDouble() ?? 0;
+                  return AppTableRowData(cells: [
+                    AppTableCell.text('${r['namaAnggota'] ?? '-'}', flex: 2),
+                    AppTableCell.text(
+                        _formatRpMutasiHutang.format(r['saldoAwal']),
+                        flex: 1,
+                        align: TextAlign.right),
+                    AppTableCell.text(
+                        _formatRpMutasiHutang.format(r['bertambah']),
+                        flex: 1,
+                        align: TextAlign.right),
+                    AppTableCell.text(
+                        _formatRpMutasiHutang.format(r['berkurang']),
+                        flex: 1,
+                        align: TextAlign.right),
+                    AppTableCell.text(
+                        _formatRpMutasiHutang.format(r['saldoAkhir']),
+                        flex: 1,
+                        align: TextAlign.right),
+                    AppTableCell(
+                      flex: 1,
+                      align: TextAlign.center,
+                      child: (sisaAkhir > 0 &&
+                              Sesi.instance.bolehEntryPelunasanPiutang)
+                          ? TextButton.icon(
+                              onPressed: () => _bukaFormBayarHutang(
+                                idAnggotaAwal: r['idAnggota'] as int?,
+                                namaAnggotaAwal: '${r['namaAnggota'] ?? ''}',
+                                nominalAwal: sisaAkhir,
+                                keteranganAwal:
+                                    'Pelunasan saldo piutang ${r['namaAnggota'] ?? ''}',
+                              ),
+                              icon: const Icon(Icons.price_check_outlined,
+                                  size: 16),
+                              label: const Text('Lunasi Sisa'),
+                            )
+                          : const Text('-'),
+                    ),
+                  ]);
+                })
                 .toList(),
           ),
           const SizedBox(height: 16),
@@ -585,6 +756,7 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
             minWidth: 1120,
             emptyText: 'Tidak ada mutasi piutang pada rentang ini.',
             columns: const [
+              AppTableColumn('Pilih', width: 48, align: TextAlign.center),
               AppTableColumn('Nama', flex: 2),
               AppTableColumn('Tanggal', flex: 2),
               AppTableColumn('Jenis', flex: 2),
@@ -595,7 +767,28 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
             ],
             rows: _dataHalaman.map((r) {
               final waktu = DateTime.tryParse('${r['waktu']}');
+              final barisId = '${r['barisId'] ?? ''}';
+              final bisaDipilih =
+                  barisId.isNotEmpty && ((r['bertambah'] as num?) ?? 0) > 0;
               return AppTableRowData(cells: [
+                AppTableCell(
+                  width: 48,
+                  align: TextAlign.center,
+                  child: bisaDipilih
+                      ? Checkbox(
+                          value: _barisTerpilih.contains(barisId),
+                          onChanged: (v) {
+                            setStateIfMounted(() {
+                              if (v == true) {
+                                _barisTerpilih.add(barisId);
+                              } else {
+                                _barisTerpilih.remove(barisId);
+                              }
+                            });
+                          },
+                        )
+                      : const SizedBox.shrink(),
+                ),
                 AppTableCell(
                   flex: 2,
                   child: KilauBaris(
@@ -651,6 +844,8 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
                           Sesi.instance.bolehEntryPelunasanPiutang)
                         TextButton.icon(
                           onPressed: () => _bukaFormBayarHutang(
+                              idAnggotaAwal: (r['idAnggota'] as num?)?.toInt(),
+                              namaAnggotaAwal: '${r['namaAnggota'] ?? ''}',
                               nominalAwal: ((r['bertambah'] as num?) ?? 0).toDouble(),
                               keteranganAwal: 'Pelunasan '
                                   '${r['jenisMutasi'] ?? 'piutang'}'
@@ -726,8 +921,15 @@ class _FormBayarHutang extends StatefulWidget {
   // Tetap dapat disunting sebelum disimpan -- server mencatat pelunasan
   // pada SALDO anggota, bukan dialokasikan ke satu nota, jadi angka
   // terisi ini bantuan pengisian, bukan janji alokasi per transaksi.
-  const _FormBayarHutang({this.nominalAwal, this.keteranganAwal});
+  const _FormBayarHutang({
+    this.idAnggotaAwal,
+    this.namaAnggotaAwal,
+    this.nominalAwal,
+    this.keteranganAwal,
+  });
 
+  final int? idAnggotaAwal;
+  final String? namaAnggotaAwal;
   final double? nominalAwal;
   final String? keteranganAwal;
 
@@ -748,6 +950,11 @@ class _FormBayarHutangState extends State<_FormBayarHutang> with JejakGalat {
   @override
   void initState() {
     super.initState();
+    if (widget.idAnggotaAwal != null) {
+      _idAnggota = widget.idAnggotaAwal;
+      final nama = widget.namaAnggotaAwal?.trim() ?? '';
+      if (nama.isNotEmpty) _namaAnggota = nama;
+    }
     final n = widget.nominalAwal;
     if (n != null && n > 0) {
       _nominal.text = n == n.roundToDouble()
