@@ -8,6 +8,7 @@ import '../theme/app_colors.dart';
 import '../screens/kasir_screen.dart';
 import '../screens/produk_screen.dart';
 import '../screens/anggota_screen.dart';
+import '../screens/anggota/tab_mutasi_hutang.dart';
 import '../screens/pesanan_screen.dart';
 import '../screens/stok_opname_screen.dart';
 import '../screens/kedaluwarsa_screen.dart';
@@ -823,6 +824,28 @@ class AppDrawer extends StatelessWidget {
                             context,
                             label: 'Riwayat Penjualan',
                             builder: (_) => const RiwayatPenjualanScreen(),
+                          ),
+                        ),
+                      if (Sesi.instance.bolehMenu('piutang_pelanggan'))
+                        _ItemMenu(
+                          icon: Icons.payments_outlined,
+                          label: 'Pelunasan Piutang',
+                          aktif: menuAktif == 'Pelunasan Piutang' ||
+                              menuAktif == 'Piutang Pelanggan',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Pelunasan Piutang',
+                            builder: (_) => const AppShell(
+                              menuAktif: MenuEBisnis.piutangPelanggan,
+                              judul: 'Pelunasan Piutang',
+                              subjudul:
+                                  'Daftar piutang pelanggan & pelunasan beberapa faktur penjualan sekaligus',
+                              scrollable: false,
+                              body: Padding(
+                                padding: EdgeInsets.only(bottom: 16),
+                                child: AnggotaTabMutasiHutang(),
+                              ),
+                            ),
                           ),
                         ),
                       // Riwayat Perubahan Data menampilkan data TERHAPUS lintas toko dan

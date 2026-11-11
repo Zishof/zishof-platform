@@ -1329,7 +1329,6 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
         AppTableColumn('Keterangan', flex: 3),
         AppTableColumn('Grup Akun', flex: 3),
         AppTableColumn('Saldo', flex: 2, align: TextAlign.right),
-        AppTableColumn('Dipakai', flex: 1, align: TextAlign.right),
         AppTableColumn('Aksi', width: 64, align: TextAlign.center),
       ],
       rows: data
@@ -1344,8 +1343,6 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                     _fmtSaldoAkun.format((a['saldo'] as num?)?.toDouble() ?? 0),
                     flex: 2,
                     align: TextAlign.right),
-                AppTableCell.text('${a['jumlahDipakai'] ?? 0}',
-                    flex: 1, align: TextAlign.right),
                 _aksiAkun(a),
               ]))
           .toList(),

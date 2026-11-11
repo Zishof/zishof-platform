@@ -289,6 +289,15 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
                                       style: const TextStyle(fontSize: 12.5)),
                                 ),
                               ),
+                              // Sel kolom "Akun" (Perbaikan Error 1: wajib sejajar
+                              // dengan AppTableColumn('Akun', flex: 2) agar kode dan nama
+                              // akun yang sudah dipetakan tampil pada kolom Akun).
+                              AppTableCell.text(
+                                (c['akunLabel'] as String?)?.trim().isNotEmpty == true
+                                    ? '${c['akunLabel']}'
+                                    : '-',
+                                flex: 2,
+                              ),
                               AppTableCell(
                                 flex: 1,
                                 align: TextAlign.center,

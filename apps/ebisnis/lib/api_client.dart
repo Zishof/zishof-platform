@@ -224,8 +224,20 @@ class ApiClient {
     'so_grand_download_excel',
     'so_grand_upload_excel',
     'so_grand_simpan_batch',
+    'so_grand_simpan_baris',
     'pkm_daftar',
     'pkm_download_excel',
+    'rak_daftar',
+    'rak_simpan',
+    'rak_hapus',
+    'rak_item_daftar',
+    'rak_item_tambah_banyak',
+    'rak_item_hapus',
+    'rak_item_pindah',
+    'rak_sinkronkan_stok',
+    'rak_download_excel',
+    'rak_upload_excel',
+    'rak_seed_standar',
     'stok_dashboard',
     'stok_mutasi_ledger',
     'stok_pergerakan_rekap',
@@ -340,7 +352,13 @@ class ApiClient {
 
   /// Apakah [namaAksi] menerima `toko_id` dari sesi (lihat [_aksiBerTokoId]).
   static bool aksiMemakaiTokoId(String namaAksi) =>
-      _aksiBerTokoId.contains(namaAksi) || namaAksi.startsWith('pengadaan_');
+      _aksiBerTokoId.contains(namaAksi) ||
+      namaAksi.startsWith('pengadaan_') ||
+      namaAksi.startsWith('rak_') ||
+      namaAksi.startsWith('so_') ||
+      namaAksi.startsWith('stok_') ||
+      namaAksi.startsWith('pkm_') ||
+      namaAksi.startsWith('produk_');
 
   /// Nama field yang isinya TIDAK BOLEH ikut tercatat di log teknis.
   ///

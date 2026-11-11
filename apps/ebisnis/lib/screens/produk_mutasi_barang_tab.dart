@@ -214,12 +214,12 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
 
       // Baca LOKAL DULU (MasterOffline.daftarCacheDulu): tabel tampil seketika
       // dari cache, hasil server menyusul + diff utk kilau baris. Cache
-      // dipisah per rentang tanggal karena seluruh kolom saldo/nilai baris
-      // hanya sahih untuk periode itu.
+      // dipisah per toko dan rentang tanggal karena seluruh kolom saldo/nilai baris
+      // hanya sahih untuk toko dan periode itu.
       await MasterOffline.daftarCacheDulu(
         'produk_mutasi_ringkasan',
         _payload(),
-        'master:mutasi_barang:${_mutasiTanggal.format(_dari)}_${_mutasiTanggal.format(_sampai)}',
+        'master:mutasi_barang:${Sesi.instance.idTokoTerpilih ?? "semua"}:${_mutasiTanggal.format(_dari)}_${_mutasiTanggal.format(_sampai)}',
         // Baris ringkasan mutasi tidak ber-'id'; satu-satunya kolom identitas
         // yang dikirim server adalah kode barang (unik per produk). Baris yang
         // kebetulan tanpa kode tetap aman: MasterOffline memperlakukannya

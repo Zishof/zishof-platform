@@ -231,12 +231,19 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
     }
     if (perAnggota.length == 1) {
       final tunggal = perAnggota.values.first;
+      final daftarNota = barisDipilih
+          .map((r) => '${r['keterangan'] ?? ''}'.trim())
+          .where((k) => k.isNotEmpty)
+          .toList();
+      final ringkasNota = daftarNota.isEmpty
+          ? ''
+          : ' (${daftarNota.take(5).join(', ')}${daftarNota.length > 5 ? ', dst.' : ''})';
       await _bukaFormBayarHutang(
         idAnggotaAwal: tunggal['idAnggota'] as int,
         namaAnggotaAwal: '${tunggal['namaAnggota']}',
         nominalAwal: tunggal['nominal'] as double,
         keteranganAwal:
-            'Pelunasan ${tunggal['jumlahNota']} transaksi piutang terpilih',
+            'Pelunasan ${tunggal['jumlahNota']} faktur penjualan$ringkasNota',
       );
       return;
     }
@@ -750,8 +757,49 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
                 .toList(),
           ),
           const SizedBox(height: 16),
-          const Text('Rincian Mutasi & Sisa Piutang',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Rincian Faktur Piutang & Mutasi Pelunasan',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+              ),
+              if (Sesi.instance.bolehEntryPelunasanPiutang) ...[
+                TextButton.icon(
+                  onPressed: () {
+                    final semuaBarisFaktur = _data
+                        .where((r) =>
+                            '${r['barisId'] ?? ''}'.isNotEmpty &&
+                            ((r['bertambah'] as num?) ?? 0) > 0)
+                        .map((r) => '${r['barisId']}')
+                        .toSet();
+                    setStateIfMounted(() {
+                      if (_barisTerpilih.length == semuaBarisFaktur.length &&
+                          semuaBarisFaktur.isNotEmpty) {
+                        _barisTerpilih.clear();
+                      } else {
+                        _barisTerpilih
+                          ..clear()
+                          ..addAll(semuaBarisFaktur);
+                      }
+                    });
+                  },
+                  icon: Icon(
+                    _barisTerpilih.isNotEmpty
+                        ? Icons.deselect_outlined
+                        : Icons.select_all_outlined,
+                    size: 16,
+                  ),
+                  label: Text(
+                    _barisTerpilih.isNotEmpty
+                        ? 'Batal Pilih (${_barisTerpilih.length})'
+                        : 'Pilih Semua Faktur',
+                  ),
+                ),
+              ],
+            ],
+          ),
           const SizedBox(height: 6),
           AppDataTable(
             minWidth: 1120,
@@ -948,6 +996,13 @@ class _FormBayarHutangState extends State<_FormBayarHutang> with JejakGalat {
   bool _menyimpan = false;
   String? _pesanError;
 
+  // Daftar faktur penjualan (piutang) milik pelanggan terpilih agar kasir/admin
+  // dapat mencentang beberapa faktur sekaligus dalam 1 kali pelunasan.
+  bool _memuatFaktur = false;
+  List<Map<String, dynamic>> _daftarFakturPiutang = <Map<String, dynamic>>[];
+  final Set<String> _fakturTerpilih = <String>{};
+  double _sisaPiutangPelanggan = 0;
+
   @override
   void initState() {
     super.initState();
@@ -964,6 +1019,9 @@ class _FormBayarHutangState extends State<_FormBayarHutang> with JejakGalat {
     }
     final k = widget.keteranganAwal;
     if (k != null && k.trim().isNotEmpty) _keterangan.text = k.trim();
+    if (_idAnggota != null) {
+      _muatFakturPelanggan(_idAnggota!);
+    }
   }
 
   @override
@@ -973,6 +1031,78 @@ class _FormBayarHutangState extends State<_FormBayarHutang> with JejakGalat {
     super.dispose();
   }
 
+  /// Memuat daftar faktur penjualan (piutang) milik pelanggan [idAnggota]
+  /// sehingga pengguna dapat memilih beberapa faktur sekaligus untuk dilunasi.
+  Future<void> _muatFakturPelanggan(int idAnggota) async {
+    setStateIfMounted(() {
+      _memuatFaktur = true;
+      _daftarFakturPiutang = <Map<String, dynamic>>[];
+      _fakturTerpilih.clear();
+      _sisaPiutangPelanggan = 0;
+    });
+    try {
+      final sekarang = DateTime.now();
+      final hasil = await ApiClient.instance.aksi('mutasi_hutang_list', {
+        'dari': '2020-01-01',
+        'sampai': DateFormat('yyyy-MM-dd').format(sekarang),
+        'id_anggota': idAnggota,
+      });
+      final semua = ((hasil['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      double sisaAkhir = 0;
+      if (semua.isNotEmpty) {
+        sisaAkhir =
+            ((semua.last['saldoPerAnggota'] as num?) ?? 0).toDouble();
+      }
+      // Kumpulkan faktur penjualan yang menambah piutang (urutan terbaru di atas)
+      // hingga mencakup sisa piutang aktif pelanggan.
+      final faktur = semua
+          .where((r) =>
+              '${r['barisId'] ?? ''}'.startsWith('H') &&
+              ((r['bertambah'] as num?) ?? 0) > 0)
+          .toList()
+          .reversed
+          .toList();
+      if (!mounted) return;
+      setStateIfMounted(() {
+        _sisaPiutangPelanggan = sisaAkhir > 0 ? sisaAkhir : 0;
+        _daftarFakturPiutang = faktur;
+      });
+    } catch (_) {
+      // Tetap izinkan input manual bila daftar faktur gagal dimuat.
+    } finally {
+      if (mounted) setStateIfMounted(() => _memuatFaktur = false);
+    }
+  }
+
+  void _terapkanPilihanFaktur() {
+    final dipilih = _daftarFakturPiutang
+        .where((r) => _fakturTerpilih.contains('${r['barisId'] ?? ''}'))
+        .toList();
+    if (dipilih.isEmpty) return;
+    double totalFaktur = dipilih.fold<double>(
+      0,
+      (s, r) => s + (((r['bertambah'] as num?) ?? 0).toDouble()),
+    );
+    if (_sisaPiutangPelanggan > 0 && totalFaktur > _sisaPiutangPelanggan) {
+      totalFaktur = _sisaPiutangPelanggan;
+    }
+    _nominal.text = totalFaktur == totalFaktur.roundToDouble()
+        ? totalFaktur.round().toString()
+        : totalFaktur.toString();
+    final nomorNota = dipilih
+        .map((r) => '${r['keterangan'] ?? ''}'.trim())
+        .where((k) => k.isNotEmpty)
+        .toList();
+    final ringkas = nomorNota.isEmpty
+        ? ''
+        : ': ${nomorNota.take(5).join(', ')}${nomorNota.length > 5 ? ', dst.' : ''}';
+    _keterangan.text =
+        'Pelunasan ${dipilih.length} faktur penjualan$ringkas';
+  }
+
   Future<void> _pilihAnggota() async {
     final dipilih = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
@@ -980,10 +1110,12 @@ class _FormBayarHutangState extends State<_FormBayarHutang> with JejakGalat {
       builder: (_) => const PilihAnggotaSheet(),
     );
     if (dipilih == null) return;
+    final idBaru = dipilih['id'] as int;
     setStateIfMounted(() {
-      _idAnggota = dipilih['id'] as int;
+      _idAnggota = idBaru;
       _namaAnggota = '${dipilih['nama']}';
     });
+    await _muatFakturPelanggan(idBaru);
   }
 
   Future<void> _simpan() async {
@@ -1070,7 +1202,164 @@ class _FormBayarHutangState extends State<_FormBayarHutang> with JejakGalat {
                   icon: const Icon(Icons.person_search, size: 18),
                   label: Text(_namaAnggota ?? 'Pilih Pelanggan...'),
                 ),
+                if (_idAnggota != null && _sisaPiutangPelanggan > 0) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.danger.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: AppColors.danger.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.account_balance_wallet_outlined,
+                            size: 18, color: AppColors.danger),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Total Sisa Piutang: ${_formatRpMutasiHutang.format(_sisaPiutangPelanggan)}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.danger,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            setStateIfMounted(() {
+                              _fakturTerpilih
+                                ..clear()
+                                ..addAll(_daftarFakturPiutang
+                                    .map((r) => '${r['barisId'] ?? ''}')
+                                    .where((k) => k.isNotEmpty));
+                              _nominal.text = _sisaPiutangPelanggan ==
+                                      _sisaPiutangPelanggan.roundToDouble()
+                                  ? _sisaPiutangPelanggan.round().toString()
+                                  : _sisaPiutangPelanggan.toString();
+                              _keterangan.text =
+                                  'Pelunasan seluruh sisa piutang (${_daftarFakturPiutang.length} faktur)';
+                            });
+                          },
+                          child: const Text('Lunasi Semua'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ]),
+              if (_idAnggota != null)
+                AppFormSection(
+                  judul:
+                      'Pilih Faktur Penjualan yang Dilunasi (Bisa Pilih Beberapa Sekaligus)',
+                  children: [
+                    if (_memuatFaktur)
+                      const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (_daftarFakturPiutang.isEmpty)
+                      const Text(
+                        'Tidak ada rincian faktur piutang ditemukan untuk pelanggan ini.',
+                        style: TextStyle(fontSize: 12.5),
+                      )
+                    else ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Terpilih ${_fakturTerpilih.length} dari ${_daftarFakturPiutang.length} faktur',
+                              style: const TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: () {
+                              setStateIfMounted(() {
+                                if (_fakturTerpilih.length ==
+                                    _daftarFakturPiutang.length) {
+                                  _fakturTerpilih.clear();
+                                } else {
+                                  _fakturTerpilih
+                                    ..clear()
+                                    ..addAll(_daftarFakturPiutang
+                                        .map((r) => '${r['barisId'] ?? ''}')
+                                        .where((k) => k.isNotEmpty));
+                                  _terapkanPilihanFaktur();
+                                }
+                              });
+                            },
+                            icon: Icon(
+                              _fakturTerpilih.length ==
+                                      _daftarFakturPiutang.length
+                                  ? Icons.deselect_outlined
+                                  : Icons.select_all_outlined,
+                              size: 16,
+                            ),
+                            label: Text(
+                              _fakturTerpilih.length ==
+                                      _daftarFakturPiutang.length
+                                  ? 'Batal Pilih Semua'
+                                  : 'Pilih Semua Faktur',
+                            ),
+                          ),
+                        ],
+                      ),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 220),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: _daftarFakturPiutang.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (ctx, i) {
+                            final f = _daftarFakturPiutang[i];
+                            final idBaris = '${f['barisId'] ?? ''}';
+                            final dicentang = _fakturTerpilih.contains(idBaris);
+                            final nilai =
+                                ((f['bertambah'] as num?) ?? 0).toDouble();
+                            final tgl = DateTime.tryParse('${f['waktu'] ?? ''}');
+                            return CheckboxListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              value: dicentang,
+                              onChanged: (v) {
+                                setStateIfMounted(() {
+                                  if (v == true) {
+                                    _fakturTerpilih.add(idBaris);
+                                  } else {
+                                    _fakturTerpilih.remove(idBaris);
+                                  }
+                                  _terapkanPilihanFaktur();
+                                });
+                              },
+                              title: Text(
+                                'Faktur ${f['keterangan'] ?? '-'}',
+                                style: const TextStyle(
+                                    fontSize: 13, fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: Text(
+                                '${tgl == null ? '${f['waktu'] ?? '-'}' : _formatTglMutasiHutang.format(tgl)}'
+                                '${(f['metodePembayaran'] ?? '').toString().isNotEmpty ? ' • ${f['metodePembayaran']}' : ''}',
+                                style: const TextStyle(fontSize: 11.5),
+                              ),
+                              secondary: Text(
+                                _formatRpMutasiHutang.format(nilai),
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.danger,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               AppFormSection(judul: 'Pembayaran', children: [
                 AppFormTextField(
                   label: 'Nominal *',

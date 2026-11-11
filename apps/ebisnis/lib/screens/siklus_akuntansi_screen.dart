@@ -308,8 +308,12 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
   }
 
   Future<void> _hapusSaldoAwal(Map<String, dynamic> baris) async {
-    if (!await _konfirmasi('Hapus baris saldo awal?',
-        'Baris ${baris['kodeAkun']} akan dihapus. Baris yang sudah diposting tidak dapat dihapus.')) {
+    final sudah = baris['sudahDiposting'] == true;
+    if (!await _konfirmasi(
+        'Hapus baris saldo awal?',
+        sudah
+            ? 'Baris ${baris['kodeAkun']} (${baris['namaAkun'] ?? ''}) sudah diposting. Menghapus baris ini akan otomatis memperbarui kembali jurnal pembukaan.'
+            : 'Baris ${baris['kodeAkun']} akan dihapus dari daftar saldo awal.')) {
       return;
     }
     final hasil = await _aksi('saldo_awal_hapus', {'id': baris['id']});
@@ -808,21 +812,23 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
               AppTableCell(
                 flex: 2,
                 align: TextAlign.center,
-                child: sudah
+                child: (!_bolehSaldoAwal('update') && !_bolehSaldoAwal('delete'))
                     ? const SizedBox.shrink()
                     : AksiBarisMenu(
                         aksi: [
-                          AksiBaris(
-                            ikon: Icons.edit,
-                            label: 'Ubah saldo awal',
-                            onTap: _sibuk ? null : () => _formSaldoAwal(s),
-                          ),
-                          AksiBaris(
-                            ikon: Icons.delete_outline,
-                            label: 'Hapus saldo awal',
-                            merusak: true,
-                            onTap: _sibuk ? null : () => _hapusSaldoAwal(s),
-                          ),
+                          if (_bolehSaldoAwal('update'))
+                            AksiBaris(
+                              ikon: Icons.edit,
+                              label: 'Ubah saldo awal',
+                              onTap: _sibuk ? null : () => _formSaldoAwal(s),
+                            ),
+                          if (_bolehSaldoAwal('delete'))
+                            AksiBaris(
+                              ikon: Icons.delete_outline,
+                              label: 'Hapus saldo awal',
+                              merusak: true,
+                              onTap: _sibuk ? null : () => _hapusSaldoAwal(s),
+                            ),
                         ],
                       ),
               ),

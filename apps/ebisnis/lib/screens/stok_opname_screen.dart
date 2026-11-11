@@ -592,11 +592,12 @@ class _TabMutasiStokState extends State<_TabMutasiStok> with JejakGalat {
       _pesanError = null;
     });
     try {
+      final tokoKey = '${Sesi.instance.idTokoTerpilih ?? "semua"}';
       final results = await Future.wait([
         MasterOffline.objekDenganCache(
-            'stok_dashboard', {'periode': 'month'}, 'stok_dashboard:month'),
+            'stok_dashboard', {'periode': 'month'}, 'stok_dashboard:$tokoKey:month'),
         MasterOffline.objekDenganCache(
-            'so_ringkasan', const {}, 'so_ringkasan'),
+            'so_ringkasan', const {}, 'so_ringkasan:$tokoKey'),
       ]);
       setStateIfMounted(() {
         _dasbor = results[0];
@@ -2128,7 +2129,7 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
       await MasterOffline.daftarCacheDulu(
           'so_riwayat',
           {'limit': 30, 'tanggal': _tanggalRiwayatTeks},
-          'master:so_riwayat:$_tanggalRiwayatTeks', onData: (hasil) {
+          'master:so_riwayat:${Sesi.instance.idTokoTerpilih ?? "semua"}:$_tanggalRiwayatTeks', onData: (hasil) {
         if (!mounted) return;
         setStateIfMounted(() => _riwayatHariIni = _diff.terapkan(hasil));
         unawaited(_muatHpp());

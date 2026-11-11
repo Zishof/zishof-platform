@@ -203,6 +203,19 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
   bool _bolehUbahEditTransaksiGlobal = false;
   bool _menyimpanEditTransaksiGlobal = false;
 
+  // Konfigurasi ON/OFF Otorisasi Setujui Dokumen Sendiri (default OFF / false).
+  bool _bolehUbahSetujuiSendiri = false;
+  bool _menyimpanSetujuiSendiri = false;
+  bool _setujuiSendiriSemua = false;
+  bool _setujuiSendiriBast = false;
+  bool _setujuiSendiriPr = false;
+  bool _setujuiSendiriPo = false;
+  bool _setujuiSendiriPembayaranVendor = false;
+  bool _setujuiSendiriUangMuka = false;
+  bool _setujuiSendiriLpj = false;
+  bool _setujuiSendiriKas = false;
+  bool _setujuiSendiriReimbursement = false;
+
   @override
   void initState() {
     super.initState();
@@ -233,6 +246,13 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
       // Pengaturan keamanan tidak boleh diasumsikan aktif ketika server tidak
       // dapat dimintai keputusan. Detail transaksi tetap dapat dibaca offline.
     }
+    Map<String, dynamic> pengaturanSetujuiSendiri = const <String, dynamic>{};
+    try {
+      pengaturanSetujuiSendiri = await ApiClient.instance
+          .aksi('pengaturan_setujui_sendiri_ambil', const {});
+    } catch (_) {
+      // Default aman OFF (false) bila server belum dapat dihubungi.
+    }
     if (defaultTargetPlatform == TargetPlatform.windows) {
       await PengaturanLaci.instance.muat();
       try {
@@ -258,6 +278,20 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
         _izinkanEditTransaksi = pengaturanEdit['global'] == true;
         _bolehUbahEditTransaksiGlobal =
             pengaturanEdit['bolehUbahGlobal'] == true;
+        _bolehUbahSetujuiSendiri =
+            pengaturanSetujuiSendiri['bolehUbah'] == true ||
+                Sesi.instance.isAdmin;
+        _setujuiSendiriSemua = pengaturanSetujuiSendiri['semua'] == true;
+        _setujuiSendiriBast = pengaturanSetujuiSendiri['bast'] == true;
+        _setujuiSendiriPr = pengaturanSetujuiSendiri['pr'] == true;
+        _setujuiSendiriPo = pengaturanSetujuiSendiri['po'] == true;
+        _setujuiSendiriPembayaranVendor =
+            pengaturanSetujuiSendiri['pembayaranVendor'] == true;
+        _setujuiSendiriUangMuka = pengaturanSetujuiSendiri['uangMuka'] == true;
+        _setujuiSendiriLpj = pengaturanSetujuiSendiri['lpj'] == true;
+        _setujuiSendiriKas = pengaturanSetujuiSendiri['kas'] == true;
+        _setujuiSendiriReimbursement =
+            pengaturanSetujuiSendiri['reimbursement'] == true;
         _memuat = false;
       });
     }
@@ -348,6 +382,46 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
       }
     } finally {
       if (mounted) setStateIfMounted(() => _tesLaciBerjalan = false);
+    }
+  }
+
+  /// Menyimpan perubahan sakelar ON/OFF izin menyetujui dokumen buatan sendiri
+  /// ke server (`pengaturan_setujui_sendiri_simpan`). Seluruh opsi memiliki
+  /// nilai default OFF (`false`) dan hanya dapat diubah oleh Administrator.
+  Future<void> _ubahSetujuiSendiri(String kunci, bool nilai) async {
+    if (!_bolehUbahSetujuiSendiri || _menyimpanSetujuiSendiri) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setStateIfMounted(() => _menyimpanSetujuiSendiri = true);
+    try {
+      final hasil = await ApiClient.instance.aksi(
+        'pengaturan_setujui_sendiri_simpan',
+        {kunci: nilai},
+      );
+      if (!mounted) return;
+      setStateIfMounted(() {
+        _setujuiSendiriSemua = hasil['semua'] == true;
+        _setujuiSendiriBast = hasil['bast'] == true;
+        _setujuiSendiriPr = hasil['pr'] == true;
+        _setujuiSendiriPo = hasil['po'] == true;
+        _setujuiSendiriPembayaranVendor = hasil['pembayaranVendor'] == true;
+        _setujuiSendiriUangMuka = hasil['uangMuka'] == true;
+        _setujuiSendiriLpj = hasil['lpj'] == true;
+        _setujuiSendiriKas = hasil['kas'] == true;
+        _setujuiSendiriReimbursement = hasil['reimbursement'] == true;
+      });
+      messenger.showSnackBar(const SnackBar(
+        content: Text(
+            'Konfigurasi persetujuan dokumen sendiri berhasil disimpan di server.'),
+      ));
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(
+            SnackBar(content: Text('Gagal menyimpan konfigurasi: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setStateIfMounted(() => _menyimpanSetujuiSendiri = false);
+      }
     }
   }
 
@@ -532,6 +606,128 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
               color: AppColors.info,
               text:
                   'Sakelar ini tidak memberikan hak baru. Server memeriksa kebijakan global/per toko dan hak admin/supervisor ketika detail dibuka maupun saat koreksi disimpan.',
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        AppFormSection(
+          judul: 'Otorisasi & Persetujuan Dokumen (Setujui Dokumen Sendiri)',
+          deskripsi:
+              'Atur apakah pembuat/pengaju dokumen yang memiliki hak persetujuan (Approve) diizinkan menyetujui dokumen yang dibuatnya sendiri. Secara bawaan (default) semua diatur OFF (Tidak Boleh Disetujui Sendiri).',
+          children: [
+            AppFormSwitchTile(
+              title: 'Izinkan Setujui Dokumen Sendiri di Semua Modul (Master)',
+              subtitle: _setujuiSendiriSemua
+                  ? 'ON — Pembuat dokumen berhak approve dapat menyetujui dokumen buatannya sendiri di seluruh modul.'
+                  : 'OFF (Default) — Mengikuti pengaturan ON/OFF masing-masing modul di bawah.',
+              value: _setujuiSendiriSemua,
+              onChanged: _bolehUbahSetujuiSendiri && !_menyimpanSetujuiSendiri
+                  ? (v) => _ubahSetujuiSendiri('semua', v)
+                  : null,
+            ),
+            const Divider(height: 16),
+            AppFormSwitchTile(
+              title: 'Penerimaan Barang / Jasa (BAST)',
+              subtitle: (_setujuiSendiriSemua || _setujuiSendiriBast)
+                  ? 'ON — Pembuat BAST diizinkan menyetujui Penerimaan Barang yang dibuatnya sendiri.'
+                  : 'OFF (Default) — Pembuat BAST tidak boleh menyetujui Penerimaan Barang buatannya sendiri.',
+              value: _setujuiSendiriSemua || _setujuiSendiriBast,
+              onChanged: _bolehUbahSetujuiSendiri &&
+                      !_menyimpanSetujuiSendiri &&
+                      !_setujuiSendiriSemua
+                  ? (v) => _ubahSetujuiSendiri('bast', v)
+                  : null,
+            ),
+            AppFormSwitchTile(
+              title: 'Permintaan Pembelian (Purchase Request / PR)',
+              subtitle: (_setujuiSendiriSemua || _setujuiSendiriPr)
+                  ? 'ON — Pembuat PR diizinkan menyetujui Permintaan Pembelian buatannya sendiri.'
+                  : 'OFF (Default) — Pembuat PR tidak boleh menyetujui Permintaan Pembelian buatannya sendiri.',
+              value: _setujuiSendiriSemua || _setujuiSendiriPr,
+              onChanged: _bolehUbahSetujuiSendiri &&
+                      !_menyimpanSetujuiSendiri &&
+                      !_setujuiSendiriSemua
+                  ? (v) => _ubahSetujuiSendiri('pr', v)
+                  : null,
+            ),
+            AppFormSwitchTile(
+              title: 'Pemesanan Pembelian (Purchase Order / PO)',
+              subtitle: (_setujuiSendiriSemua || _setujuiSendiriPo)
+                  ? 'ON — Pembuat PO diizinkan menyetujui Pemesanan Pembelian buatannya sendiri.'
+                  : 'OFF (Default) — Pembuat PO tidak boleh menyetujui Pemesanan Pembelian buatannya sendiri.',
+              value: _setujuiSendiriSemua || _setujuiSendiriPo,
+              onChanged: _bolehUbahSetujuiSendiri &&
+                      !_menyimpanSetujuiSendiri &&
+                      !_setujuiSendiriSemua
+                  ? (v) => _ubahSetujuiSendiri('po', v)
+                  : null,
+            ),
+            AppFormSwitchTile(
+              title: 'Pembayaran Vendor (DPC) & Realisasi Transitori',
+              subtitle: (_setujuiSendiriSemua ||
+                      _setujuiSendiriPembayaranVendor)
+                  ? 'ON — Pembuat dokumen pembayaran vendor diizinkan menyetujui/merealisasikan sendiri.'
+                  : 'OFF (Default) — Pembuat dokumen pembayaran vendor tidak boleh menyetujui sendiri.',
+              value: _setujuiSendiriSemua || _setujuiSendiriPembayaranVendor,
+              onChanged: _bolehUbahSetujuiSendiri &&
+                      !_menyimpanSetujuiSendiri &&
+                      !_setujuiSendiriSemua
+                  ? (v) => _ubahSetujuiSendiri('pembayaranVendor', v)
+                  : null,
+            ),
+            AppFormSwitchTile(
+              title: 'Pengajuan Uang Muka & Dana Talangan',
+              subtitle: (_setujuiSendiriSemua || _setujuiSendiriUangMuka)
+                  ? 'ON — Pemohon Uang Muka / Dana Talangan diizinkan menyetujui pengajuannya sendiri.'
+                  : 'OFF (Default) — Pemohon tidak boleh menyetujui Uang Muka / Dana Talangan miliknya sendiri.',
+              value: _setujuiSendiriSemua || _setujuiSendiriUangMuka,
+              onChanged: _bolehUbahSetujuiSendiri &&
+                      !_menyimpanSetujuiSendiri &&
+                      !_setujuiSendiriSemua
+                  ? (v) => _ubahSetujuiSendiri('uangMuka', v)
+                  : null,
+            ),
+            AppFormSwitchTile(
+              title: 'Pertanggungjawaban (LPJ Uang Muka & Kas Besar)',
+              subtitle: (_setujuiSendiriSemua || _setujuiSendiriLpj)
+                  ? 'ON — Pembuat LPJ diizinkan menyetujui pertanggungjawabannya sendiri.'
+                  : 'OFF (Default) — Pembuat LPJ tidak boleh menyetujui pertanggungjawabannya sendiri.',
+              value: _setujuiSendiriSemua || _setujuiSendiriLpj,
+              onChanged: _bolehUbahSetujuiSendiri &&
+                      !_menyimpanSetujuiSendiri &&
+                      !_setujuiSendiriSemua
+                  ? (v) => _ubahSetujuiSendiri('lpj', v)
+                  : null,
+            ),
+            AppFormSwitchTile(
+              title: 'Kas Besar, Kas Kecil & Penggantian Kas Kecil',
+              subtitle: (_setujuiSendiriSemua || _setujuiSendiriKas)
+                  ? 'ON — Pembuat dokumen kas diizinkan menyetujui pengajuannya sendiri.'
+                  : 'OFF (Default) — Pembuat dokumen kas tidak boleh menyetujui pengajuannya sendiri.',
+              value: _setujuiSendiriSemua || _setujuiSendiriKas,
+              onChanged: _bolehUbahSetujuiSendiri &&
+                      !_menyimpanSetujuiSendiri &&
+                      !_setujuiSendiriSemua
+                  ? (v) => _ubahSetujuiSendiri('kas', v)
+                  : null,
+            ),
+            AppFormSwitchTile(
+              title: 'Reimbursement / Klaim Pegawai',
+              subtitle: (_setujuiSendiriSemua || _setujuiSendiriReimbursement)
+                  ? 'ON — Pengaju Reimbursement diizinkan menyetujui klaim miliknya sendiri.'
+                  : 'OFF (Default) — Pengaju Reimbursement tidak boleh menyetujui klaim miliknya sendiri.',
+              value: _setujuiSendiriSemua || _setujuiSendiriReimbursement,
+              onChanged: _bolehUbahSetujuiSendiri &&
+                      !_menyimpanSetujuiSendiri &&
+                      !_setujuiSendiriSemua
+                  ? (v) => _ubahSetujuiSendiri('reimbursement', v)
+                  : null,
+            ),
+            const AppInfoBanner(
+              icon: Icons.admin_panel_settings_outlined,
+              color: AppColors.info,
+              text:
+                  'Seluruh opsi di atas secara bawaan bernilai OFF (Tidak Boleh Disetujui oleh Pengaju Sendiri). Hanya Administrator yang dapat mengubah pengaturan ini.',
             ),
           ],
         ),

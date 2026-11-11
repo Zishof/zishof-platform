@@ -23,6 +23,7 @@ import '../screens/kasir_screen.dart';
 import '../screens/ringkasan_screen.dart';
 import '../screens/pesanan_screen.dart';
 import '../screens/anggota_screen.dart';
+import '../screens/anggota/tab_mutasi_hutang.dart';
 import '../screens/produk_screen.dart';
 import '../screens/stok_opname_screen.dart';
 import '../screens/kedaluwarsa_screen.dart';
@@ -134,6 +135,12 @@ final _menuAktifNotifier =
 /// tetap berlaku ketika berpindah halaman. Pada layar kecil AppDrawer tetap
 /// dipakai seperti sebelumnya.
 final _sidebarRingkasNotifier = ValueNotifier<bool>(false);
+
+/// Versi pilihan toko di topbar (baik via Pindah Toko maupun Filter Toko).
+/// Ketika angka ini naik, [AppShell] otomatis membuat ulang subtree layar aktif
+/// beserta seluruh tab di dalamnya agar data langsung dimuat ulang untuk toko
+/// yang baru dipilih tanpa menyisakan state toko sebelumnya.
+final _versiTokoNotifier = ValueNotifier<int>(0);
 
 /// Kunci menu, dipetakan ke label+ikon+builder layar tujuan -- dipakai
 /// AppSidebar (desktop) DAN AppDrawer (mobile, lihat app_drawer.dart) supaya
@@ -905,6 +912,9 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(
       MenuEBisnis.riwayatPenjualan, Icons.history, 'Riwayat Penjualan',
       builder: _bangunRiwayatPenjualan),
+  _ItemMenuShell(MenuEBisnis.piutangPelanggan, Icons.payments_outlined,
+      'Pelunasan Piutang',
+      builder: _bangunPiutangPelanggan),
   _ItemMenuShell(MenuEBisnis.laporanTransaksi, Icons.assessment_outlined,
       'Laporan Transaksi',
       builder: _bangunLaporanTransaksi),
@@ -1165,6 +1175,7 @@ const _grupMenu = <_GrupMenuShell>[
   _GrupMenuShell('Transaksi & Laporan', [
     MenuEBisnis.returPenjualan,
     MenuEBisnis.riwayatPenjualan,
+    MenuEBisnis.piutangPelanggan,
     MenuEBisnis.laporanTransaksi,
     MenuEBisnis.laporanLaporan,
   ]),
@@ -1281,6 +1292,17 @@ Widget _bangunPenyedia(BuildContext c) => const SupplierScreen();
 Widget _bangunReturPenjualan(BuildContext c) => const ReturPenjualanScreen();
 Widget _bangunRiwayatPenjualan(BuildContext c) =>
     const RiwayatPenjualanScreen();
+Widget _bangunPiutangPelanggan(BuildContext c) => const AppShell(
+      menuAktif: MenuEBisnis.piutangPelanggan,
+      judul: 'Pelunasan Piutang',
+      subjudul:
+          'Daftar piutang pelanggan & pelunasan beberapa faktur penjualan sekaligus',
+      scrollable: false,
+      body: Padding(
+        padding: EdgeInsets.only(bottom: 16),
+        child: AnggotaTabMutasiHutang(),
+      ),
+    );
 Widget _bangunLaporanTransaksi(BuildContext c) =>
     const LaporanTransaksiScreen();
 Widget _bangunLaporanLaporan(BuildContext c) => const LaporanScreen();
@@ -1721,6 +1743,7 @@ Future<bool> _pilihTokoGlobal(BuildContext context) async {
 
 void _muatUlangHalamanAktif(BuildContext context) {
   if (PengamanKeranjang.cegahKeluar(context)) return;
+  _versiTokoNotifier.value++;
   final item = _itemMenu(_menuAktifNotifier.value);
   if (item?.builder == null) return;
   Navigator.of(context).pushReplacement(
@@ -1740,7 +1763,7 @@ String _labelDrawer(MenuEBisnis kunci) {
     case MenuEBisnis.anggota:
       return 'Customer/Anggota';
     case MenuEBisnis.piutangPelanggan:
-      return 'Piutang Pelanggan';
+      return 'Pelunasan Piutang';
     case MenuEBisnis.produk:
       return 'Produk';
     case MenuEBisnis.jenisProduk:
@@ -2030,6 +2053,9 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.returPenjualan;
     case 'Riwayat Penjualan':
       return MenuEBisnis.riwayatPenjualan;
+    case 'Pelunasan Piutang':
+    case 'Piutang Pelanggan':
+      return MenuEBisnis.piutangPelanggan;
     case 'Laporan Transaksi':
       return MenuEBisnis.laporanTransaksi;
     case 'Laporan-Laporan':
@@ -2281,21 +2307,38 @@ class _AppShellState extends State<AppShell> {
     return ValueListenableBuilder<MenuEBisnis>(
       valueListenable: _menuAktifNotifier,
       builder: (context, menuTerpilih, _) {
-        if (widget.menuAktif == MenuEBisnis.kasir &&
-            !bolehTampilMenu(MenuEBisnis.kasir)) {
-          final pengalihan = menuAwalPosSesuaiHakAkses();
-          if (pengalihan != MenuEBisnis.kasir) {
-            final itemPengalihan = _itemMenu(pengalihan);
-            if (itemPengalihan?.builder != null) {
-              return itemPengalihan!.builder!(context);
+        return ValueListenableBuilder<int>(
+          valueListenable: _versiTokoNotifier,
+          builder: (context, versiToko, _) {
+            final kunciToko = '${Sesi.instance.idTokoTerpilih ?? "semua"}-$versiToko';
+            if (widget.menuAktif == MenuEBisnis.kasir &&
+                !bolehTampilMenu(MenuEBisnis.kasir)) {
+              final pengalihan = menuAwalPosSesuaiHakAkses();
+              if (pengalihan != MenuEBisnis.kasir) {
+                final itemPengalihan = _itemMenu(pengalihan);
+                if (itemPengalihan?.builder != null) {
+                  return KeyedSubtree(
+                    key: ValueKey('shell-${pengalihan.name}-$kunciToko'),
+                    child: itemPengalihan!.builder!(context),
+                  );
+                }
+              }
             }
-          }
-        }
-        if (_notifierSudahSinkron && menuTerpilih != widget.menuAktif) {
-          final item = _itemMenu(menuTerpilih);
-          if (item?.builder != null) return item!.builder!(context);
-        }
-        return _buildShell(context);
+            if (_notifierSudahSinkron && menuTerpilih != widget.menuAktif) {
+              final item = _itemMenu(menuTerpilih);
+              if (item?.builder != null) {
+                return KeyedSubtree(
+                  key: ValueKey('shell-${menuTerpilih.name}-$kunciToko'),
+                  child: item!.builder!(context),
+                );
+              }
+            }
+            return KeyedSubtree(
+              key: ValueKey('shell-${widget.menuAktif.name}-$kunciToko'),
+              child: _buildShell(context),
+            );
+          },
+        );
       },
     );
   }
@@ -2928,9 +2971,32 @@ class _AppTopbarState extends State<_AppTopbar> {
       ),
     );
     if (dipilih == null || !mounted) return;
+    final idBaru = dipilih == 'semua' ? null : (dipilih as num).toInt();
+    String namaBaru = '';
+    if (idBaru != null) {
+      for (final t in sesi.daftarTokoFilter) {
+        if ((t['id'] as num?)?.toInt() == idBaru) {
+          namaBaru = '${t['nama'] ?? ''}';
+          break;
+        }
+      }
+    }
     setState(() {
-      sesi.tokoFilter = dipilih == 'semua' ? null : dipilih as int;
+      sesi.tokoFilter = idBaru;
+      if (idBaru != null) {
+        sesi.tokoId = idBaru;
+        if (namaBaru.isNotEmpty) sesi.tokoNama = namaBaru;
+      }
     });
+    if (idBaru != null) {
+      try {
+        await ApiClient.instance.aksi('pilih_toko_aktif', {'id_toko': idBaru});
+        if (sesi.userId.isNotEmpty) {
+          await TokoAktifLokal.instance.simpan(sesi.userId, idBaru);
+        }
+      } catch (_) {}
+    }
+    if (!mounted) return;
     _muatUlangHalamanAktif(context);
   }
 
