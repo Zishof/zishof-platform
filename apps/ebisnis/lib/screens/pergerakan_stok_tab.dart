@@ -412,6 +412,33 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
     final idProduk = (item['id'] as num?)?.toInt() ?? 0;
     if (idProduk <= 0) return;
 
+    // The stock table already contains a period summary. Use it immediately
+    // so an older server that does not recognize the optional analysis action
+    // cannot leave the operator with an empty analysis window.
+    final ringkasanAwal = <String, dynamic>{
+      for (final key in const [
+        'awal',
+        'masuk',
+        'retur',
+        'penjualan',
+        'keluar',
+        'opnameMasuk',
+        'opnameKeluar',
+        'sisa',
+      ])
+        if (item.containsKey(key)) key: item[key],
+    };
+    final analisisAwal = StokAnalisisCerdasLokal.susunAnalisisProdukDariData(
+      namaProduk: (item['nama'] as String?) ?? 'Produk',
+      kodeProduk: (item['kode'] as String?) ?? '',
+      kategori: (item['kategori'] as String?) ?? '-',
+      tglMulai: _tglMulai,
+      tglSampai: _tglSampai,
+      ringkasan: ringkasanAwal,
+      mutasi: const [],
+      hargaBeli: (item['hargaBeli'] as num?)?.toDouble() ?? 0,
+    );
+
     showDialog(
       context: context,
       barrierDismissible: true,
@@ -421,6 +448,7 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
         kodeProduk: (item['kode'] as String?) ?? '',
         tglMulai: _tglMulai,
         tglSampai: _tglSampai,
+        hasilAnalisisAwal: analisisAwal,
       ),
     );
   }
@@ -621,28 +649,28 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
                       onTap: () {
                         if (!_memuat) _muatData();
                       },
-                ),
+                    ),
                     AksiBaris(
                       ikon: Icons.auto_awesome,
                       label: 'Analisis Cerdas Toko',
                       onTap: () {
                         if (!_memuat) _bukaAnalisisCerdasToko();
                       },
-                  ),
+                    ),
                     AksiBaris(
                       ikon: Icons.file_download_outlined,
                       label: 'Download Excel',
                       onTap: () {
                         if (!_memuat) _eksporExcel();
                       },
-                ),
+                    ),
                     AksiBaris(
                       ikon: Icons.picture_as_pdf_outlined,
                       label: 'Cetak PDF',
                       onTap: () {
                         if (!_memuat) _cetakPdfRekap();
                       },
-                  ),
+                    ),
                   ],
                 ),
 
@@ -1293,6 +1321,8 @@ class _DialogDetailPergerakanStokState
         kodeProduk: widget.kodeProduk,
         tglMulai: widget.tglMulai,
         tglSampai: widget.tglSampai,
+        hasilAnalisisAwal: _analisisProduk,
+        gunakanHasilAwalSaja: true,
       ),
     );
   }
@@ -1692,7 +1722,9 @@ class _DialogDetailPergerakanStokState
                                 ),
                               ),
               ),
-              if (!_memuat && _pesanError == null && _analisisProduk != null) ...[
+              if (!_memuat &&
+                  _pesanError == null &&
+                  _analisisProduk != null) ...[
                 const SizedBox(height: 12),
                 Container(
                   constraints: const BoxConstraints(maxHeight: 270),
@@ -1854,6 +1886,15 @@ class DialogAnalisisCerdasStok extends StatefulWidget {
   final DateTime tglMulai;
   final DateTime tglSampai;
 
+  /// Reuses a diagnosis already built from the visible, period-scoped ledger.
+  /// This keeps the analysis useful when the optional server analysis action
+  /// is unavailable and avoids repeating a request for data already loaded.
+  final Map<String, dynamic>? hasilAnalisisAwal;
+
+  /// When true, the parent supplied the complete ledger-based diagnosis, so
+  /// this dialog must not issue another request or replace it with stale data.
+  final bool gunakanHasilAwalSaja;
+
   const DialogAnalisisCerdasStok({
     super.key,
     required this.idProduk,
@@ -1861,6 +1902,8 @@ class DialogAnalisisCerdasStok extends StatefulWidget {
     required this.kodeProduk,
     required this.tglMulai,
     required this.tglSampai,
+    this.hasilAnalisisAwal,
+    this.gunakanHasilAwalSaja = false,
   });
 
   @override
@@ -1886,6 +1929,11 @@ class _DialogAnalisisCerdasStokState extends State<DialogAnalisisCerdasStok> {
   String _formatTglParam(DateTime dt) => DateFormat('yyyy-MM-dd').format(dt);
 
   Future<void> _muatAnalisis() async {
+    if (widget.gunakanHasilAwalSaja && widget.hasilAnalisisAwal != null) {
+      _terapkanAnalisisKeState(widget.hasilAnalisisAwal!);
+      _memuat = false;
+      return;
+    }
     setStateIfMounted(() {
       _memuat = true;
       _error = null;
@@ -1902,6 +1950,20 @@ class _DialogAnalisisCerdasStokState extends State<DialogAnalisisCerdasStok> {
         },
       );
     } catch (e) {
+      if (!_bolehPakaiFallbackAnalisis(e)) {
+        final awal = widget.hasilAnalisisAwal;
+        if (awal != null) {
+          _terapkanAnalisis(awal);
+          return;
+        }
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _memuat = false;
+          _error =
+              'Analisis belum dapat dimuat untuk akun dan toko ini. Periksa akses, lalu coba lagi.';
+        });
+        return;
+      }
       // Fallback otomatis multi-lapis agar pengguna TIDAK PERNAH melihat pesan
       // "Aksi tidak dikenal" atau "HTTP 503" saat server sedang restart/belum update.
       try {
@@ -1918,10 +1980,23 @@ class _DialogAnalisisCerdasStokState extends State<DialogAnalisisCerdasStok> {
                 tglSampai: widget.tglSampai,
               );
       } catch (eFallback) {
+        final hasilAwal = widget.hasilAnalisisAwal;
+        if (hasilAwal != null) {
+          if (!mounted) return;
+          setStateIfMounted(() {
+            _terapkanAnalisisKeState(hasilAwal);
+            _memuat = false;
+            _error = null;
+          });
+          return;
+        }
         if (!mounted) return;
         setStateIfMounted(() {
           _memuat = false;
-          _error = 'Gagal menyusun analisis otomatis: $eFallback';
+          // Do not expose transport/server internals to the operator. Keep the
+          // action recoverable from the kebab menu and state the next step.
+          _error =
+              'Analisis belum dapat disusun dari data yang tersedia. Periksa koneksi, lalu pilih Coba Lagi.';
         });
         return;
       }
@@ -1929,18 +2004,45 @@ class _DialogAnalisisCerdasStokState extends State<DialogAnalisisCerdasStok> {
 
     if (!mounted) return;
     setStateIfMounted(() {
-      _judulDiagnosis = (res['judulDiagnosis'] as String?) ??
-          'Ringkasan Eksekutif Audit Pergerakan & Selisih Stok ${res['namaToko'] ?? 'Toko'}';
-      _penjelasanUtama = (res['penjelasanUtama'] as String?) ??
-          'Ditemukan ${res['totalProdukDinolkan'] ?? 0} jenis barang sempat dinolkan saat Stok Opname (Sudah pulih: ${res['jmlSudahPulih'] ?? 0}, Masih 0/minus: ${res['jmlMasihTerdampak'] ?? 0}) serta ${res['totalStokMinus'] ?? 0} barang berstok minus.';
-      _teksWa = (res['teksAnalisisWa'] as String?) ?? '';
-      _kronologi = ((res['kronologiPoin'] as List?) ?? const [])
-          .map((e) => '$e')
-          .toList();
-      _solusi = ((res['langkahSolusi'] as List?) ?? const [])
-          .map((e) => '$e')
-          .toList();
+      _terapkanAnalisisKeState(res);
       _memuat = false;
+    });
+  }
+
+  /// Only transport outages and a server that explicitly lacks this optional
+  /// read action may use a local/alternate read fallback. Authentication,
+  /// permission, and business-rule rejections must remain visible and must not
+  /// be disguised as successful analysis from a different data source.
+  bool _bolehPakaiFallbackAnalisis(Object error) {
+    if (error is! ApiException) return true;
+    if (error.offline) return true;
+    final pesan = error.pesan.toLowerCase();
+    return pesan.contains('aksi tidak dikenal') ||
+        pesan.contains('fitur belum tersedia') ||
+        pesan.contains('action not found');
+  }
+
+  /// Applies the same result shape from either the server or local ledger.
+  /// Keeping one mapper prevents an offline fallback from silently omitting
+  /// chronology, suggested checks, or the copy-ready operator message.
+  void _terapkanAnalisisKeState(Map<String, dynamic> res) {
+    _judulDiagnosis = (res['judulDiagnosis'] as String?) ??
+        'Ringkasan Eksekutif Audit Pergerakan & Selisih Stok ${res['namaToko'] ?? 'Toko'}';
+    _penjelasanUtama = (res['penjelasanUtama'] as String?) ??
+        'Ditemukan ${res['totalProdukDinolkan'] ?? 0} jenis barang sempat dinolkan saat Stok Opname (Sudah pulih: ${res['jmlSudahPulih'] ?? 0}, Masih 0/minus: ${res['jmlMasihTerdampak'] ?? 0}) serta ${res['totalStokMinus'] ?? 0} barang berstok minus.';
+    _teksWa = (res['teksAnalisisWa'] as String?) ?? '';
+    _kronologi =
+        ((res['kronologiPoin'] as List?) ?? const []).map((e) => '$e').toList();
+    _solusi =
+        ((res['langkahSolusi'] as List?) ?? const []).map((e) => '$e').toList();
+  }
+
+  void _terapkanAnalisis(Map<String, dynamic> res) {
+    if (!mounted) return;
+    setStateIfMounted(() {
+      _terapkanAnalisisKeState(res);
+      _memuat = false;
+      _error = null;
     });
   }
 
@@ -1991,10 +2093,6 @@ class _DialogAnalisisCerdasStokState extends State<DialogAnalisisCerdasStok> {
                         ),
                       ],
                     ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
                   ),
                 ],
               ),
@@ -2128,26 +2226,29 @@ class _DialogAnalisisCerdasStokState extends State<DialogAnalisisCerdasStok> {
                           ),
               ),
               const SizedBox(height: 14),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: _memuat ? null : _salinWa,
-                    icon: const Icon(Icons.copy, size: 17),
-                    label: const Text('Salin Naskah WhatsApp'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.shade700,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: AksiBarisMenu(
+                  tooltip: 'Aksi analisis stok',
+                  aksi: [
+                    if (_error != null)
+                      AksiBaris(
+                        ikon: Icons.refresh,
+                        label: 'Coba Lagi',
+                        onTap: _muatAnalisis,
+                      ),
+                    AksiBaris(
+                      ikon: Icons.copy,
+                      label: 'Salin Naskah WhatsApp',
+                      onTap: _memuat || _teksWa.isEmpty ? null : _salinWa,
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Tutup'),
-                  ),
-                ],
+                    AksiBaris(
+                      ikon: Icons.close,
+                      label: 'Tutup Analisis',
+                      onTap: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -2190,6 +2291,46 @@ class StokAnalisisCerdasLokal {
     required List<Map<String, dynamic>> mutasi,
     double hargaBeli = 0,
   }) {
+    const kolomRingkasanWajib = [
+      'awal',
+      'masuk',
+      'retur',
+      'penjualan',
+      'keluar',
+      'opnameMasuk',
+      'opnameKeluar',
+      'sisa',
+    ];
+    final ringkasanLengkap =
+        kolomRingkasanWajib.every((key) => ringkasan[key] is num);
+    if (!ringkasanLengkap && mutasi.isEmpty) {
+      const judul = 'Data Pergerakan Belum Cukup untuk Menentukan Penyebab';
+      const penjelasan =
+          'Rincian saldo dan transaksi untuk produk ini belum berhasil dimuat. Penyebab perubahan stok belum dapat dipastikan, sehingga belum ada angka atau kesimpulan yang kami buat-buat.';
+      const solusi = [
+        'Coba buka kembali rincian pergerakan produk setelah data berhasil dimuat.',
+        'Jangan melakukan koreksi jumlah stok hanya berdasarkan hasil yang belum lengkap.',
+      ];
+      final wa = StringBuffer()
+        ..writeln('HASIL PEMERIKSAAN PERGERAKAN STOK')
+        ..writeln(
+            'Barang: ${kodeProduk.trim().isEmpty ? '-' : kodeProduk.trim()} - $namaProduk')
+        ..writeln(
+            'Periode: ${_fmtTgl.format(tglMulai)} s/d ${_fmtTgl.format(tglSampai)}')
+        ..writeln(penjelasan)
+        ..writeln('Langkah berikutnya:')
+        ..writeln('1. Muat ulang rincian pergerakan produk.')
+        ..writeln(
+            '2. Tunda koreksi stok sampai saldo dan catatan transaksinya tampil lengkap.');
+      return {
+        'dataMemadai': false,
+        'judulDiagnosis': judul,
+        'penjelasanUtama': penjelasan,
+        'kronologiPoin': const <String>[],
+        'langkahSolusi': solusi,
+        'teksAnalisisWa': wa.toString().trim(),
+      };
+    }
     final namaToko = Sesi.instance.tokoNama.isNotEmpty
         ? Sesi.instance.tokoNama
         : 'Toko Al-Bahjah';
@@ -2241,9 +2382,8 @@ class StokAnalisisCerdasLokal {
             '$tgl WIB: Barang masuk dari Pengadaan ($ref${pihak.isNotEmpty ? " - $pihak" : ""}) sebanyak +${_angka(mMasuk)} Pcs -> Stok berubah dari ${_angka(mAwal)} menjadi ${_angka(mSisa)} Pcs.');
       } else if (tipe.contains('Opname') || tipe.contains('Penyesuaian')) {
         jmlOpname++;
-        final pelaku = oleh.isNotEmpty
-            ? oleh
-            : (pihak.isNotEmpty ? pihak : 'Petugas');
+        final pelaku =
+            oleh.isNotEmpty ? oleh : (pihak.isNotEmpty ? pihak : 'Petugas');
         if (tipe.contains('Dinolkan') ||
             (mAwal > 0 && mSisa == 0 && mKeluar > 0)) {
           pernahDinolkanSo = true;
@@ -2385,6 +2525,7 @@ class StokAnalisisCerdasLokal {
     }
 
     return {
+      'dataMemadai': true,
       'judulDiagnosis': judulDiagnosis,
       'penjelasanUtama': penjelasanUtama,
       'kronologiPoin': kronologiPoin,
@@ -2666,7 +2807,8 @@ class StokAnalisisCerdasLokal {
       String statusAudit = 'Normal';
       if (awal > 0 && opKeluar > 0 && sisa <= 0) {
         statusKode = 'DINOLKAN_SO';
-        statusAudit = 'Dinolkan saat Opname (${_angka(awal)} -> ${_angka(sisa)})';
+        statusAudit =
+            'Dinolkan saat Opname (${_angka(awal)} -> ${_angka(sisa)})';
         jmlDinolkanSo++;
       } else if (sisa < 0) {
         statusKode = 'STOK_MINUS';
@@ -2795,7 +2937,8 @@ class StokAnalisisCerdasLokal {
       final sisa = (r['sisa'] as num?)?.toDouble() ?? 0;
       final statusKode = '${r['statusKode'] ?? ''}';
 
-      if ((statusKode == 'DINOLKAN_SO' || (awal > 0 && opKeluar > 0 && sisa <= 0)) &&
+      if ((statusKode == 'DINOLKAN_SO' ||
+              (awal > 0 && opKeluar > 0 && sisa <= 0)) &&
           contohDinolkan.length < 6) {
         contohDinolkan.add(
             '$kd - $nm: Stok awal ${_angka(awal)} Pcs -> berkurang pada Stok Opname (-${_angka(opKeluar)} Pcs) -> Stok akhir ${_angka(sisa)} Pcs.');
@@ -2805,8 +2948,8 @@ class StokAnalisisCerdasLokal {
         contohHabisTerjual.add(
             '$kd - $nm: Terjual habis di kasir sebanyak ${_angka(penjualan)} Pcs -> Sisa stok sah menjadi 0 Pcs.');
       } else if (sisa < 0 && contohMinus.length < 5) {
-        contohMinus.add(
-            '$kd - $nm: Stok akhir bernilai minus (${_angka(sisa)} Pcs).');
+        contohMinus
+            .add('$kd - $nm: Stok akhir bernilai minus (${_angka(sisa)} Pcs).');
       }
     }
 

@@ -33,8 +33,11 @@ void main() {
   });
 
   test('detail statistik dapat dicetak PDF dan diunduh sebagai Excel', () {
-    expect(source, contains("const Text('Cetak PDF')"));
-    expect(source, contains("const Text('Download Excel')"));
+    // Export actions intentionally live in the required three-dot menu, not
+    // in standalone text buttons. Assert the user-facing menu labels instead.
+    expect(source, contains("label: 'Cetak PDF'"));
+    expect(source, contains("label: 'Download Excel'"));
+    expect(source, contains("tooltip: 'Aksi daftar produk'"));
     expect(source, contains('DynamicReportDesigner.exportPdf'));
     expect(source, contains('DynamicReportDesigner.exportExcel'));
   });
