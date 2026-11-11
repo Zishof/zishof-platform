@@ -1346,6 +1346,139 @@ class AppTablePagination {
 /// barisnya bahkan tidak dapat dicapai sama sekali.
 const int kBarisPerHalamanTabel = 15;
 
+/// Tabel Flutter standar dengan batas tampilan 15 baris per halaman.
+///
+/// Gunakan pembungkus ini ketika layar sudah membentuk daftar [DataRow] namun
+/// belum mempunyai bilah halaman. Ini membatasi baris yang dirender sekaligus
+/// pada Desktop maupun Android. Untuk daftar besar dari server, tetap gunakan
+/// paging server agar perangkat juga tidak menerima seluruh daftar sekaligus.
+class AppPagedDataTable extends StatefulWidget {
+  final List<DataColumn> columns;
+  final List<DataRow> rows;
+  final int? sortColumnIndex;
+  final bool sortAscending;
+  final ValueSetter<bool?>? onSelectAll;
+  final double? dataRowMinHeight;
+  final double? dataRowMaxHeight;
+  final double headingRowHeight;
+  final double horizontalMargin;
+  final double? columnSpacing;
+  final bool showCheckboxColumn;
+  final bool showBottomBorder;
+  final double dividerThickness;
+  final WidgetStateProperty<Color?>? headingRowColor;
+  final WidgetStateProperty<Color?>? dataRowColor;
+  final TextStyle? headingTextStyle;
+  final TextStyle? dataTextStyle;
+  final Decoration? decoration;
+  final double? checkboxHorizontalMargin;
+  final TableBorder? border;
+  final Clip clipBehavior;
+  final String labelData;
+
+  const AppPagedDataTable({
+    super.key,
+    required this.columns,
+    required this.rows,
+    this.sortColumnIndex,
+    this.sortAscending = true,
+    this.onSelectAll,
+    this.dataRowMinHeight,
+    this.dataRowMaxHeight,
+    this.headingRowHeight = 56.0,
+    this.horizontalMargin = 24.0,
+    this.columnSpacing,
+    this.showCheckboxColumn = true,
+    this.showBottomBorder = false,
+    this.dividerThickness = 1.0,
+    this.headingRowColor,
+    this.dataRowColor,
+    this.headingTextStyle,
+    this.dataTextStyle,
+    this.decoration,
+    this.checkboxHorizontalMargin,
+    this.border,
+    this.clipBehavior = Clip.none,
+    this.labelData = 'data',
+  });
+
+  @override
+  State<AppPagedDataTable> createState() => _AppPagedDataTableState();
+}
+
+class _AppPagedDataTableState extends State<AppPagedDataTable> {
+  int _halaman = 1;
+
+  int get _totalHalaman =>
+      (widget.rows.length / kBarisPerHalamanTabel).ceil().clamp(1, 1 << 30);
+
+  @override
+  void didUpdateWidget(covariant AppPagedDataTable oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_halaman > _totalHalaman) _halaman = _totalHalaman;
+  }
+
+  void _keHalaman(int halaman) {
+    final tujuan = halaman.clamp(1, _totalHalaman);
+    if (tujuan == _halaman) return;
+    setState(() => _halaman = tujuan);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mulai = (_halaman - 1) * kBarisPerHalamanTabel;
+    final akhir =
+        (mulai + kBarisPerHalamanTabel).clamp(0, widget.rows.length).toInt();
+    final barisHalaman = mulai >= widget.rows.length
+        ? const <DataRow>[]
+        : widget.rows.sublist(mulai, akhir);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DataTable(
+          columns: widget.columns,
+          rows: barisHalaman,
+          sortColumnIndex: widget.sortColumnIndex,
+          sortAscending: widget.sortAscending,
+          onSelectAll: widget.onSelectAll,
+          dataRowMinHeight: widget.dataRowMinHeight,
+          dataRowMaxHeight: widget.dataRowMaxHeight,
+          headingRowHeight: widget.headingRowHeight,
+          horizontalMargin: widget.horizontalMargin,
+          columnSpacing: widget.columnSpacing,
+          showCheckboxColumn: widget.showCheckboxColumn,
+          showBottomBorder: widget.showBottomBorder,
+          dividerThickness: widget.dividerThickness,
+          headingRowColor: widget.headingRowColor,
+          dataRowColor: widget.dataRowColor,
+          headingTextStyle: widget.headingTextStyle,
+          dataTextStyle: widget.dataTextStyle,
+          decoration: widget.decoration,
+          checkboxHorizontalMargin: widget.checkboxHorizontalMargin,
+          border: widget.border,
+          clipBehavior: widget.clipBehavior,
+        ),
+        if (widget.rows.length > kBarisPerHalamanTabel)
+          _AppTableFooter(
+            pagination: AppTablePagination(
+              halaman: _halaman,
+              totalHalaman: _totalHalaman,
+              totalData: widget.rows.length,
+              labelData: widget.labelData,
+              onSebelumnya:
+                  _halaman > 1 ? () => _keHalaman(_halaman - 1) : null,
+              onBerikutnya: _halaman < _totalHalaman
+                  ? () => _keHalaman(_halaman + 1)
+                  : null,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class AppDataTable extends StatefulWidget {
   final List<AppTableColumn> columns;
   final List<AppTableRowData> rows;

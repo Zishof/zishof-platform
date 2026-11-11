@@ -67,6 +67,7 @@ class _DialogRincianKlik extends StatefulWidget {
 
 class _DialogRincianKlikState extends State<_DialogRincianKlik> {
   String _cari = '';
+  int _halaman = 1;
   bool _mengekspor = false;
   final ScrollController _hScroll = ScrollController();
   final ScrollController _vScroll = ScrollController();
@@ -87,6 +88,13 @@ class _DialogRincianKlikState extends State<_DialogRincianKlik> {
       }
       return false;
     }).toList();
+  }
+
+  List<List<Object?>> _barisHalaman(List<List<Object?>> data) {
+    final awal = (_halaman - 1) * kBarisPerHalamanTabel;
+    if (awal >= data.length) return const <List<Object?>>[];
+    final akhir = (awal + kBarisPerHalamanTabel).clamp(0, data.length);
+    return data.sublist(awal, akhir);
   }
 
   String _namaFileAman(String s) {
@@ -223,6 +231,10 @@ class _DialogRincianKlikState extends State<_DialogRincianKlik> {
     final dialogWidth = (screenSize.width * 0.95).clamp(360.0, 1680.0);
     final dialogHeight = (screenSize.height * 0.88).clamp(360.0, 980.0);
     final data = _barisTersaring;
+    final totalHalaman =
+        (data.length / kBarisPerHalamanTabel).ceil().clamp(1, 1 << 30);
+    final awalBaris = data.isEmpty ? 0 : (_halaman - 1) * kBarisPerHalamanTabel;
+    final dataHalaman = _barisHalaman(data);
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -318,7 +330,7 @@ class _DialogRincianKlikState extends State<_DialogRincianKlik> {
                           dense: true,
                           leading: Icon(Icons.close),
                           title: Text('Tutup'),
-                      ),
+                        ),
                       ),
                     ],
                   ),
@@ -330,7 +342,10 @@ class _DialogRincianKlikState extends State<_DialogRincianKlik> {
                   Expanded(
                     child: AppSearchField(
                       hintText: 'Cari di dalam rincian ini...',
-                      onChanged: (v) => setStateIfMounted(() => _cari = v),
+                      onChanged: (v) => setStateIfMounted(() {
+                        _cari = v;
+                        _halaman = 1;
+                      }),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -409,7 +424,7 @@ class _DialogRincianKlikState extends State<_DialogRincianKlik> {
                                         )
                                         .toList(),
                                     rows: [
-                                      ...data.map(
+                                      ...dataHalaman.map(
                                         (r) => DataRow(
                                           cells: List<DataCell>.generate(
                                             widget.kolom.length,
@@ -457,6 +472,38 @@ class _DialogRincianKlikState extends State<_DialogRincianKlik> {
                         ),
                       ),
               ),
+              if (data.length > kBarisPerHalamanTabel)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Menampilkan ${awalBaris + 1}–${(awalBaris + dataHalaman.length).clamp(0, data.length)} dari ${data.length} baris',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondaryOf(context),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Halaman sebelumnya',
+                        icon: const Icon(Icons.chevron_left),
+                        onPressed: _halaman > 1
+                            ? () => setState(() => _halaman--)
+                            : null,
+                      ),
+                      Text('Halaman $_halaman / $totalHalaman'),
+                      IconButton(
+                        tooltip: 'Halaman berikutnya',
+                        icon: const Icon(Icons.chevron_right),
+                        onPressed: _halaman < totalHalaman
+                            ? () => setState(() => _halaman++)
+                            : null,
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
         ),

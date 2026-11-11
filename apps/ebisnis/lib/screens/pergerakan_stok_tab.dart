@@ -1,3 +1,4 @@
+import '../widgets/app_components.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -776,7 +777,7 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
                               scrollDirection: Axis.vertical,
                               child: SingleChildScrollView(
                                 scrollDirection: Axis.horizontal,
-                                child: DataTable(
+                                child: AppPagedDataTable(
                                   headingRowColor: WidgetStateProperty.all(
                                     isDark
                                         ? Colors.grey.shade800
@@ -1487,7 +1488,7 @@ class _DialogDetailPergerakanStokState
                                     scrollDirection: Axis.vertical,
                                     child: SingleChildScrollView(
                                       scrollDirection: Axis.horizontal,
-                                      child: DataTable(
+                                      child: AppPagedDataTable(
                                         headingRowColor:
                                             WidgetStateProperty.all(
                                                 Colors.grey.shade100),
@@ -1727,7 +1728,8 @@ class _DialogDetailPergerakanStokState
                   _analisisProduk != null) ...[
                 const SizedBox(height: 12),
                 Container(
-                  constraints: const BoxConstraints(minHeight: 165, maxHeight: 235),
+                  constraints:
+                      const BoxConstraints(minHeight: 165, maxHeight: 235),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: Colors.indigo.withValues(alpha: 0.05),
@@ -2734,8 +2736,9 @@ class StokAnalisisCerdasLokal {
             tipeTampil = 'Stok Opname (+)';
           } else if (mKeluar > 0) {
             calcOpnameKeluar += mKeluar;
-            tipeTampil =
-                (mAwal > 0 && running == 0) ? 'Stok Opname (Dinolkan)' : 'Stok Opname (-)';
+            tipeTampil = (mAwal > 0 && running == 0)
+                ? 'Stok Opname (Dinolkan)'
+                : 'Stok Opname (-)';
           } else {
             tipeTampil = 'Stok Opname (=)';
           }

@@ -1216,7 +1216,7 @@ class _TabOrder extends StatefulWidget {
 }
 
 class _TabOrderState extends State<_TabOrder> with JejakGalat {
-  static const _pageSize = 10;
+  static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -1567,7 +1567,7 @@ class _TabSesi extends StatefulWidget {
 }
 
 class _TabSesiState extends State<_TabSesi> with JejakGalat {
-  static const _pageSize = 10;
+  static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -1838,7 +1838,7 @@ class _TabTransaksiPerKasir extends StatefulWidget {
 
 class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir>
     with JejakGalat {
-  static const _pageSize = 10;
+  static const _pageSize = 15;
   late DateTime _mulai;
   late DateTime _sampai;
   bool _memuat = true;
@@ -2038,9 +2038,7 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir>
             .trim();
     final pelangganTampil = pelangganRaw.isNotEmpty
         ? pelangganRaw
-        : (jenis == 'TOTAL'
-            ? ''
-            : (barisRekonsiliasi ? '-' : 'Umum'));
+        : (jenis == 'TOTAL' ? '' : (barisRekonsiliasi ? '-' : 'Umum'));
     return [
       _formatWaktu(row['waktu']),
       '${row['jenis'] ?? '-'}',
@@ -2606,7 +2604,7 @@ class _TabPayment extends StatefulWidget {
 }
 
 class _TabPaymentState extends State<_TabPayment> with JejakGalat {
-  static const _pageSize = 10;
+  static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -2814,7 +2812,7 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
     'SHOPEEFOOD': 'ShopeeFood',
     'ONLINE_LAIN': 'Online Lain',
   };
-  static const _pageSize = 10;
+  static const _pageSize = 15;
   late DateTime _mulai;
   late DateTime _sampai;
   bool _memuat = true;
@@ -3365,7 +3363,7 @@ class _TabPenerimaanKasir extends StatefulWidget {
 
 class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
     with JejakGalat {
-  static const _pageSize = 10;
+  static const _pageSize = 15;
   late DateTime _mulai;
   late DateTime _sampai;
   bool _memuat = true;
@@ -4136,7 +4134,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
   // Paginasi dihitung dalam TRANSAKSI (sama seperti Report Order); satu halaman
   // memuat seluruh item milik transaksi di halaman itu supaya sebuah nota tidak
   // pernah terpotong di tengah.
-  static const _pageSize = 10;
+  static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];

@@ -24,7 +24,7 @@ class AnggotaTabPengajuanLimit extends StatefulWidget {
 }
 
 class _AnggotaTabPengajuanLimitState extends State<AnggotaTabPengajuanLimit> {
-  static const _pageSize = 25;
+  static const _pageSize = 15;
   final _cari = TextEditingController();
   List<Map<String, dynamic>> _data = [];
   bool _memuat = true;
@@ -253,7 +253,7 @@ class _AnggotaTabPengajuanLimitState extends State<AnggotaTabPengajuanLimit> {
                     : SingleChildScrollView(
                         child: SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
-                          child: DataTable(
+                          child: AppPagedDataTable(
                             columns: const [
                               DataColumn(label: Text('Member')),
                               DataColumn(label: Text('Kode Transaksi')),

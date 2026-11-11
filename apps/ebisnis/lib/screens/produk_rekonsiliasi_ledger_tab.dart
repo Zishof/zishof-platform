@@ -173,7 +173,7 @@ class _ProdukRekonsiliasiLedgerTabState
           else
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              child: DataTable(
+              child: AppPagedDataTable(
                 columns: const [
                   DataColumn(label: Text('Produk')),
                   DataColumn(label: Text('Kode / Barcode')),

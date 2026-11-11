@@ -570,10 +570,10 @@ class _DialogRiwayatAnggotaState extends State<_DialogRiwayatAnggota> {
 
   @override
   Widget build(BuildContext context) {
-    final totalMasuk = _daftar.fold<double>(
-        0, (s, r) => s + _angkaSaldoVoucher(r['masuk']));
-    final totalKeluar = _daftar.fold<double>(
-        0, (s, r) => s + _angkaSaldoVoucher(r['keluar']));
+    final totalMasuk =
+        _daftar.fold<double>(0, (s, r) => s + _angkaSaldoVoucher(r['masuk']));
+    final totalKeluar =
+        _daftar.fold<double>(0, (s, r) => s + _angkaSaldoVoucher(r['keluar']));
     final saldoAkhirTampil = _daftar.isNotEmpty
         ? _angkaSaldoVoucher(_daftar.last['saldoPerPenabung'])
         : widget.saldoAkhirDefault;
@@ -600,7 +600,8 @@ class _DialogRiwayatAnggotaState extends State<_DialogRiwayatAnggota> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(_galat!, style: const TextStyle(color: Colors.red)),
+                        Text(_galat!,
+                            style: const TextStyle(color: Colors.red)),
                         const SizedBox(height: 8),
                         FilledButton(
                             onPressed: _muat, child: const Text('Coba Lagi')),
@@ -625,18 +626,20 @@ class _DialogRiwayatAnggotaState extends State<_DialogRiwayatAnggota> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Row(
-                              mainAxisAlignment:
-                                  MainAxisAlignment.spaceBetween,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text('Total Masuk: ${_fmtRp.format(totalMasuk)}',
+                                Text(
+                                    'Total Masuk: ${_fmtRp.format(totalMasuk)}',
                                     style: const TextStyle(
                                         color: Colors.green,
                                         fontWeight: FontWeight.w600)),
-                                Text('Total Keluar: ${_fmtRp.format(totalKeluar)}',
+                                Text(
+                                    'Total Keluar: ${_fmtRp.format(totalKeluar)}',
                                     style: const TextStyle(
                                         color: Colors.red,
                                         fontWeight: FontWeight.w600)),
-                                Text('Saldo Akhir: ${_fmtRp.format(saldoAkhirTampil)}',
+                                Text(
+                                    'Saldo Akhir: ${_fmtRp.format(saldoAkhirTampil)}',
                                     style: const TextStyle(
                                         fontWeight: FontWeight.w800)),
                               ],
@@ -645,7 +648,7 @@ class _DialogRiwayatAnggotaState extends State<_DialogRiwayatAnggota> {
                           const SizedBox(height: 8),
                           Expanded(
                             child: SingleChildScrollView(
-                              child: DataTable(
+                              child: AppPagedDataTable(
                                 columnSpacing: 16,
                                 columns: const [
                                   DataColumn(label: Text('Waktu')),
@@ -666,7 +669,8 @@ class _DialogRiwayatAnggotaState extends State<_DialogRiwayatAnggota> {
                                           Text('${m['jenisMutasi'] ?? '-'}')),
                                       DataCell(SizedBox(
                                           width: 240,
-                                          child: Text('${m['keterangan'] ?? '-'}',
+                                          child: Text(
+                                              '${m['keterangan'] ?? '-'}',
                                               maxLines: 2,
                                               overflow:
                                                   TextOverflow.ellipsis))),
@@ -946,8 +950,8 @@ class _DialogPenyesuaianSaldoState extends State<_DialogPenyesuaianSaldo> {
       }
       Navigator.of(context).pop(true);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content:
-              Text('${hasil['description'] ?? 'Cutoff saldo massal selesai.'}')));
+          content: Text(
+              '${hasil['description'] ?? 'Cutoff saldo massal selesai.'}')));
     } catch (e) {
       setStateIfMounted(() => _pesan = 'Gagal menjalankan cutoff massal: $e');
     } finally {

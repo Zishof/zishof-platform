@@ -650,7 +650,7 @@ class _SetupLaporanScreenState extends State<SetupLaporanScreen> {
     }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      child: DataTable(
+      child: AppPagedDataTable(
         headingRowHeight: 38,
         dataRowMinHeight: 38,
         dataRowMaxHeight: 52,

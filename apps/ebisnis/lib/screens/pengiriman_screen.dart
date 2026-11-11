@@ -1,3 +1,4 @@
+import '../widgets/app_components.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -175,7 +176,7 @@ class _PengirimanScreenState extends State<PengirimanScreen> {
                 : SingleChildScrollView(
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
-                      child: DataTable(
+                      child: AppPagedDataTable(
                         columns: const [
                           DataColumn(label: Text('Tanggal')),
                           DataColumn(label: Text('Outlet')),

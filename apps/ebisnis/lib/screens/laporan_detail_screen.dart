@@ -801,13 +801,17 @@ class _TabelLaporanState extends State<_TabelLaporan> {
       // Bila kolom yang diklik adalah Penyesuaian / Stok Opname atau laporan mutasi item/gudang,
       // jangan paksa memanggil transaksi penjualan kasir karena penyesuaian berasal dari
       // stok fisik opname, bukan nota kasir.
-      final labelKolomDiklik = (kolom.length > kolomKe ? '${kolom[kolomKe]['l'] ?? ''}' : '').toLowerCase();
+      final labelKolomDiklik =
+          (kolom.length > kolomKe ? '${kolom[kolomKe]['l'] ?? ''}' : '')
+              .toLowerCase();
       final apakahKolomPenyesuaian = labelKolomDiklik.contains('penyesuaian') ||
           labelKolomDiklik.contains('opname') ||
           labelKolomDiklik.contains('stok awal') ||
           labelKolomDiklik.contains('stok akhir') ||
           labelKolomDiklik.contains('pakai bahan') ||
-          (widget.idLaporan.startsWith('gud_') && !labelKolomDiklik.contains('keluar') && !labelKolomDiklik.contains('jual'));
+          (widget.idLaporan.startsWith('gud_') &&
+              !labelKolomDiklik.contains('keluar') &&
+              !labelKolomDiklik.contains('jual'));
       // Dimensi baris dikenali dari LABEL kolomnya, lalu dikirim ke aksi
       // laporan_rincian_transaksi supaya popup menampilkan NOTA-nya, bukan
       // sekadar mengulang isi baris ringkasan (permintaan 21-08-2026).
@@ -824,8 +828,13 @@ class _TabelLaporanState extends State<_TabelLaporan> {
       String noJurnalDitemukan = '';
       for (var ci = 0; ci < kolom.length; ci++) {
         final labelCol = '${kolom[ci]['l'] ?? ''}'.toLowerCase();
-        if (labelCol.contains('jurnal') || labelCol.contains('bukti') || labelCol.contains('transaksi')) {
-          if (ci < baris.length && baris[ci] != null && '${baris[ci]}'.trim().isNotEmpty && '${baris[ci]}' != '-') {
+        if (labelCol.contains('jurnal') ||
+            labelCol.contains('bukti') ||
+            labelCol.contains('transaksi')) {
+          if (ci < baris.length &&
+              baris[ci] != null &&
+              '${baris[ci]}'.trim().isNotEmpty &&
+              '${baris[ci]}' != '-') {
             noJurnalDitemukan = '${baris[ci]}'.trim();
             break;
           }
@@ -833,7 +842,8 @@ class _TabelLaporanState extends State<_TabelLaporan> {
       }
 
       // Deteksi kode akun akuntansi
-      final apakahLaporanAkuntansi = widget.idLaporan.startsWith('akn_') || widget.idLaporan.startsWith('lk_');
+      final apakahLaporanAkuntansi = widget.idLaporan.startsWith('akn_') ||
+          widget.idLaporan.startsWith('lk_');
       String kodeAkunDitemukan = '';
       if (apakahLaporanAkuntansi && judul.isNotEmpty) {
         final match = RegExp(r'\b[1-9]\d{3,7}\b').firstMatch(judul);
@@ -841,7 +851,8 @@ class _TabelLaporanState extends State<_TabelLaporan> {
           kodeAkunDitemukan = match.group(0)!;
         } else if (judul.contains('-')) {
           kodeAkunDitemukan = judul.split('-').first.trim();
-        } else if (judul.toUpperCase().contains('KAS') || judul.toUpperCase().contains('BANK')) {
+        } else if (judul.toUpperCase().contains('KAS') ||
+            judul.toUpperCase().contains('BANK')) {
           kodeAkunDitemukan = '1101'; // Kode pos Kas & Bank
         } else {
           kodeAkunDitemukan = judul.trim();
@@ -882,7 +893,8 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                     padding: const EdgeInsets.only(top: 10),
                     child: Text(
                         apakahKolomPenyesuaian
-                            ? (labelKolomDiklik.contains('penyesuaian') || labelKolomDiklik.contains('opname')
+                            ? (labelKolomDiklik.contains('penyesuaian') ||
+                                    labelKolomDiklik.contains('opname')
                                 ? 'Angka Penyesuaian berasal dari selisih fisik saat Stok Opname (koreksi stok plus/minus), bukan dari nota transaksi penjualan.'
                                 : (labelKolomDiklik.contains('stok awal')
                                     ? 'Stok Awal adalah akumulasi mutasi sebelum tanggal mulai periode yang dipilih.'
@@ -898,7 +910,8 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                                 : 'Angka ini tidak berasal dari transaksi penjualan kasir '
                                     '(mis. stok opname, mutasi logistik, atau data master), sehingga tidak ada '
                                     'nota penjualan yang bisa ditampilkan.'),
-                        style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
+                        style: const TextStyle(
+                            fontSize: 11, fontStyle: FontStyle.italic)),
                   ),
                 if (dimensi.isNotEmpty) ...[
                   const Divider(height: 22),
@@ -923,7 +936,8 @@ class _TabelLaporanState extends State<_TabelLaporan> {
             ),
           ),
           actions: [
-            if (kodeAkunDitemukan.isNotEmpty && widget.idLaporan != 'akn_buku_besar')
+            if (kodeAkunDitemukan.isNotEmpty &&
+                widget.idLaporan != 'akn_buku_besar')
               FilledButton.icon(
                 icon: const Icon(Icons.menu_book, size: 16),
                 label: const Text('Telusuri Mutasi Buku Besar'),
@@ -993,7 +1007,7 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: SingleChildScrollView(
-                          child: DataTable(
+                          child: AppPagedDataTable(
                             columnSpacing: 18,
                             columns: [
                               for (final k in kol)
@@ -1074,8 +1088,8 @@ class _TabelLaporanState extends State<_TabelLaporan> {
               final d = snap.data!;
               final kepala =
                   (d['kepala'] as Map?)?.cast<String, dynamic>() ?? {};
-              final baris = ((d['baris'] as List?) ?? [])
-                  .cast<Map<String, dynamic>>();
+              final baris =
+                  ((d['baris'] as List?) ?? []).cast<Map<String, dynamic>>();
               final fmtRp = NumberFormat.decimalPattern('id');
 
               double totDebet = 0;
@@ -1102,16 +1116,13 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                       children: [
                         Row(
                           children: [
-                            Text(
-                                'Nomor Bukti: ${kepala['kode'] ?? noJurnal}',
+                            Text('Nomor Bukti: ${kepala['kode'] ?? noJurnal}',
                                 style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13)),
+                                    fontWeight: FontWeight.bold, fontSize: 13)),
                             const Spacer(),
                             Text('Tanggal: ${kepala['tanggal'] ?? '-'}',
                                 style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13)),
+                                    fontWeight: FontWeight.w600, fontSize: 13)),
                           ],
                         ),
                         const SizedBox(height: 6),
@@ -1146,7 +1157,7 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                   const SizedBox(height: 6),
                   Expanded(
                     child: SingleChildScrollView(
-                      child: DataTable(
+                      child: AppPagedDataTable(
                         columnSpacing: 16,
                         headingRowHeight: 38,
                         columns: const [
@@ -1184,8 +1195,8 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                               DataCell(Text(
                                 (b['debet'] as num?)?.toDouble() != null &&
                                         (b['debet'] as num) > 0
-                                    ? fmtRp.format(
-                                        (b['debet'] as num).toDouble())
+                                    ? fmtRp
+                                        .format((b['debet'] as num).toDouble())
                                     : '-',
                                 style: const TextStyle(
                                     fontFamily: 'monospace', fontSize: 12),
@@ -1193,8 +1204,8 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                               DataCell(Text(
                                 (b['kredit'] as num?)?.toDouble() != null &&
                                         (b['kredit'] as num) > 0
-                                    ? fmtRp.format(
-                                        (b['kredit'] as num).toDouble())
+                                    ? fmtRp
+                                        .format((b['kredit'] as num).toDouble())
                                     : '-',
                                 style: const TextStyle(
                                     fontFamily: 'monospace', fontSize: 12),
@@ -1339,14 +1350,12 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                             style: const pw.TextStyle(fontSize: 8.5))),
                     pw.Padding(
                         padding: const pw.EdgeInsets.all(6),
-                        child: pw.Text(
-                            dLine > 0 ? fmtRp.format(dLine) : '-',
+                        child: pw.Text(dLine > 0 ? fmtRp.format(dLine) : '-',
                             textAlign: pw.TextAlign.right,
                             style: const pw.TextStyle(fontSize: 8.5))),
                     pw.Padding(
                         padding: const pw.EdgeInsets.all(6),
-                        child: pw.Text(
-                            kLine > 0 ? fmtRp.format(kLine) : '-',
+                        child: pw.Text(kLine > 0 ? fmtRp.format(kLine) : '-',
                             textAlign: pw.TextAlign.right,
                             style: const pw.TextStyle(fontSize: 8.5))),
                   ],
@@ -1530,12 +1539,11 @@ class _TabelLaporanState extends State<_TabelLaporan> {
               }
               if (snap.hasError || snap.data == null) {
                 return Center(
-                    child: Text(
-                        'Gagal memuat mutasi buku besar: ${snap.error}'));
+                    child:
+                        Text('Gagal memuat mutasi buku besar: ${snap.error}'));
               }
               final d = snap.data!;
-              final rows =
-                  ((d['baris'] as List?) ?? []).cast<List<dynamic>>();
+              final rows = ((d['baris'] as List?) ?? []).cast<List<dynamic>>();
               if (rows.isEmpty) {
                 return const Center(
                     child: Text(
@@ -1548,13 +1556,14 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                 children: [
                   const Text(
                       'Pilih "Voucher" pada salah satu baris untuk membuka Bukti Transaksi:',
-                      style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
+                      style:
+                          TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
                   const SizedBox(height: 8),
                   Expanded(
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: SingleChildScrollView(
-                        child: DataTable(
+                        child: AppPagedDataTable(
                           columnSpacing: 16,
                           headingRowHeight: 38,
                           columns: const [
@@ -1572,13 +1581,13 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                                         fontWeight: FontWeight.bold))),
                             DataColumn(
                                 label: Text('Debet (Rp)',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold)),
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold)),
                                 numeric: true),
                             DataColumn(
                                 label: Text('Kredit (Rp)',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold)),
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold)),
                                 numeric: true),
                             DataColumn(
                                 label: Text('Aksi',
@@ -1604,8 +1613,7 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                                   r.length > 4 &&
                                           r[4] is num &&
                                           (r[4] as num) > 0
-                                      ? fmtRp
-                                          .format((r[4] as num).toDouble())
+                                      ? fmtRp.format((r[4] as num).toDouble())
                                       : '-',
                                   style: const TextStyle(
                                       fontFamily: 'monospace', fontSize: 12),
@@ -1614,8 +1622,7 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                                   r.length > 5 &&
                                           r[5] is num &&
                                           (r[5] as num) > 0
-                                      ? fmtRp
-                                          .format((r[5] as num).toDouble())
+                                      ? fmtRp.format((r[5] as num).toDouble())
                                       : '-',
                                   style: const TextStyle(
                                       fontFamily: 'monospace', fontSize: 12),
@@ -2108,16 +2115,23 @@ Uint8List buildLaporanDetailXlsx(
     final colNum = i + 1;
     final label = (kolom[i]['l'] as String?)?.toLowerCase() ?? '';
     var width = 16.0;
-    if (label.contains('cabang') || label.contains('toko') || label.contains('nama')) {
+    if (label.contains('cabang') ||
+        label.contains('toko') ||
+        label.contains('nama')) {
       width = 24.0;
     } else if (label.contains('tanggal') || label.contains('tgl')) {
       width = 15.0;
     } else if (label.contains('transaksi') || label.contains('kategori')) {
       width = 18.0;
-    } else if (label.contains('penjualan') || label.contains('bpp') || label.contains('laba') || label.contains('omzet') || label.contains('total')) {
+    } else if (label.contains('penjualan') ||
+        label.contains('bpp') ||
+        label.contains('laba') ||
+        label.contains('omzet') ||
+        label.contains('total')) {
       width = 17.0;
     }
-    sheetXml.write('<col min="$colNum" max="$colNum" width="$width" customWidth="1"/>');
+    sheetXml.write(
+        '<col min="$colNum" max="$colNum" width="$width" customWidth="1"/>');
   }
   sheetXml.write('</cols>');
 
@@ -2154,7 +2168,8 @@ Uint8List buildLaporanDetailXlsx(
         sheetXml.write('<c r="$ref" s="$s"><v>$v</v></c>');
       } else {
         var teks = v.toString();
-        if (tipe == 'tgl' && RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(teks.trim())) {
+        if (tipe == 'tgl' &&
+            RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(teks.trim())) {
           final dt = DateTime.tryParse(teks.trim().substring(0, 10));
           if (dt != null) {
             teks = DateFormat('dd MMM yyyy').format(dt);
@@ -2431,7 +2446,7 @@ class _RincianTransaksi extends StatelessWidget {
           children: [
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              child: DataTable(
+              child: AppPagedDataTable(
                 columnSpacing: 18,
                 headingRowHeight: 34,
                 dataRowMinHeight: 30,

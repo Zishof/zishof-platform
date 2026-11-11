@@ -70,6 +70,11 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
   String _rakTerpilihKode = '';
   bool _memuatProdukRak = false;
   List<Map<String, dynamic>> _produkDiRak = [];
+  static const int _pageSizeProdukRak = kBarisPerHalamanTabel;
+  int _halamanProdukRak = 1;
+  int _totalProdukRak = 0;
+  double _totalStokProdukRak = 0;
+  double _totalNilaiProdukRak = 0;
   final Set<int> _produkTerpilihIds = <int>{};
 
   final TextEditingController _cariRakCtrl = TextEditingController();
@@ -234,8 +239,9 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
                 'totalRak': res['totalRak'] ?? list.length,
                 'totalProdukTerpetakan':
                     res['totalProdukTerpetakan'] ?? res['totalItemRak'] ?? 0,
-                'totalProdukBelumBerRak':
-                    res['totalProdukBelumBerRak'] ?? res['produkBelumAdaRak'] ?? 0,
+                'totalProdukBelumBerRak': res['totalProdukBelumBerRak'] ??
+                    res['produkBelumAdaRak'] ??
+                    0,
                 'totalStokBelumBerRak':
                     res['totalStokBelumBerRak'] ?? res['stokBelumAdaRak'] ?? 0,
                 'totalStokSemuaRak':
@@ -288,13 +294,18 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
     }
   }
 
-  Future<void> _muatProdukDiRak(int rakId) async {
+  /// Meminta satu potongan data rak agar perangkat tidak perlu menerima ribuan
+  /// baris hanya untuk menggambar tabel. Jumlah dan nilai seluruh hasil tetap
+  /// dihitung di layanan, sehingga ringkasan tidak berubah saat halaman diganti.
+  Future<void> _muatProdukDiRak(int rakId,
+      {int? halaman, bool hapusPilihan = false}) async {
+    final halamanDiminta = halaman ?? _halamanProdukRak;
     setStateIfMounted(() => _memuatProdukRak = true);
     try {
       final payload = <String, dynamic>{
         'rak_id': rakId,
-        'page': 1,
-        'page_size': 500,
+        'page': halamanDiminta,
+        'page_size': _pageSizeProdukRak,
       };
       if (_tokoIdAktif != null && _tokoIdAktif! > 0) {
         payload['toko_id'] = _tokoIdAktif;
@@ -310,7 +321,12 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
       if (mounted) {
         setStateIfMounted(() {
           _produkDiRak = list;
-          _produkTerpilihIds.clear();
+          _halamanProdukRak = (res['page'] as num?)?.toInt() ?? halamanDiminta;
+          _totalProdukRak = (res['total'] as num?)?.toInt() ?? list.length;
+          _totalStokProdukRak = (res['totalStokRak'] as num?)?.toDouble() ?? 0;
+          _totalNilaiProdukRak =
+              (res['totalNilaiRak'] as num?)?.toDouble() ?? 0;
+          if (hapusPilihan) _produkTerpilihIds.clear();
           _memuatProdukRak = false;
         });
       }
@@ -971,7 +987,8 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
       tugas: (update) async {
         update(0.35, 'Mengirim data rak ke server...');
         final res = await ApiClient.instance.aksi('rak_simpan', {
-          if (_tokoIdAktif != null && _tokoIdAktif! > 0) 'toko_id': _tokoIdAktif,
+          if (_tokoIdAktif != null && _tokoIdAktif! > 0)
+            'toko_id': _tokoIdAktif,
           if (awal?['id'] != null) 'id': awal!['id'],
           'kode': kodeCtrl.text.trim(),
           'nama': namaCtrl.text.trim().isEmpty
@@ -1208,7 +1225,8 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
       await _jalankanDenganProgress(
         judul: 'Memuat Data Rak & Produk Standar Toko',
         tugas: (update) async {
-          update(0.30, 'Memproses pemetaan 10 rak standar & produk di server...');
+          update(
+              0.30, 'Memproses pemetaan 10 rak standar & produk di server...');
           res = await ApiClient.instance.aksi('rak_seed_standar', {
             if (_tokoIdAktif != null && _tokoIdAktif! > 0)
               'toko_id': _tokoIdAktif,
@@ -1248,28 +1266,24 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
   Widget build(BuildContext context) {
     final totalRak = (_ringkasan['totalRak'] as num?)?.toInt() ??
         _daftarRak.where((r) => ((r['id'] as num?)?.toInt() ?? 0) > 0).length;
-    final produkTerpetakan =
-        (_ringkasan['totalProdukTerpetakan'] as num?)?.toInt() ??
-            (_ringkasan['totalItemRak'] as num?)?.toInt() ??
-            _daftarRak
-                .where((r) => ((r['id'] as num?)?.toInt() ?? 0) > 0)
-                .fold<int>(
-                    0,
-                    (sum, r) =>
-                        sum + ((r['jumlahProduk'] as num?)?.toInt() ?? 0));
+    final produkTerpetakan = (_ringkasan['totalProdukTerpetakan'] as num?)
+            ?.toInt() ??
+        (_ringkasan['totalItemRak'] as num?)?.toInt() ??
+        _daftarRak
+            .where((r) => ((r['id'] as num?)?.toInt() ?? 0) > 0)
+            .fold<int>(0,
+                (sum, r) => sum + ((r['jumlahProduk'] as num?)?.toInt() ?? 0));
     final produkBelumBerRak =
         (_ringkasan['totalProdukBelumBerRak'] as num?)?.toInt() ??
             (_ringkasan['produkBelumAdaRak'] as num?)?.toInt() ??
             0;
-    final stokSemuaRak =
-        (_ringkasan['totalStokSemuaRak'] as num?)?.toDouble() ??
-            (_ringkasan['totalStokTerpetakan'] as num?)?.toDouble() ??
-            _daftarRak
-                .where((r) => ((r['id'] as num?)?.toInt() ?? 0) > 0)
-                .fold<double>(
-                    0,
-                    (sum, r) =>
-                        sum + ((r['totalStok'] as num?)?.toDouble() ?? 0));
+    final stokSemuaRak = (_ringkasan['totalStokSemuaRak'] as num?)
+            ?.toDouble() ??
+        (_ringkasan['totalStokTerpetakan'] as num?)?.toDouble() ??
+        _daftarRak
+            .where((r) => ((r['id'] as num?)?.toInt() ?? 0) > 0)
+            .fold<double>(0,
+                (sum, r) => sum + ((r['totalStok'] as num?)?.toDouble() ?? 0));
     final stokTotalProduk =
         (_ringkasan['totalStokProdukToko'] as num?)?.toDouble() ??
             (_ringkasan['totalStokToko'] as num?)?.toDouble() ??
@@ -1422,8 +1436,8 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
           if (_error != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child:
-                  Text(_error!, style: const TextStyle(color: AppColors.danger)),
+              child: Text(_error!,
+                  style: const TextStyle(color: AppColors.danger)),
             ),
           LayoutBuilder(
             builder: (context, constraints) {
@@ -1619,8 +1633,10 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
                           _rakTerpilihId = id;
                           _rakTerpilihNama = nama;
                           _rakTerpilihKode = kode;
+                          _halamanProdukRak = 1;
+                          _produkTerpilihIds.clear();
                         });
-                        _muatProdukDiRak(id);
+                        _muatProdukDiRak(id, halaman: 1, hapusPilihan: true);
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(
@@ -1768,8 +1784,8 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
               decoration: BoxDecoration(
                 color: AppColors.primary.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(10),
-                border:
-                    Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+                border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.25)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1805,8 +1821,8 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
                       ),
                       const SizedBox(width: 8),
                       FilledButton.icon(
-                        onPressed: () =>
-                            _tambahProdukKeRakDariBanbox(_banboxProdukCtrl.text),
+                        onPressed: () => _tambahProdukKeRakDariBanbox(
+                            _banboxProdukCtrl.text),
                         icon: const Icon(Icons.add, size: 18),
                         label: const Text('Masukkan ke Rak'),
                       ),
@@ -1839,7 +1855,9 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
                             onPressed: () {
                               _cariProdukRakCtrl.clear();
                               if (_rakTerpilihId != null) {
-                                _muatProdukDiRak(_rakTerpilihId!);
+                                _halamanProdukRak = 1;
+                                _muatProdukDiRak(_rakTerpilihId!,
+                                    halaman: 1, hapusPilihan: true);
                               }
                             },
                           )
@@ -1850,7 +1868,9 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
                   ),
                   onSubmitted: (_) {
                     if (_rakTerpilihId != null) {
-                      _muatProdukDiRak(_rakTerpilihId!);
+                      _halamanProdukRak = 1;
+                      _muatProdukDiRak(_rakTerpilihId!,
+                          halaman: 1, hapusPilihan: true);
                     }
                   },
                 ),
@@ -1868,7 +1888,7 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
               OutlinedButton.icon(
                 onPressed: () => _tampilkanPopupProdukSaatIni(judulRak),
                 icon: const Icon(Icons.table_view_outlined, size: 17),
-                label: Text('Rincian & Ekspor (${_produkDiRak.length})'),
+                label: Text('Rincian Halaman Ini (${_produkDiRak.length})'),
               ),
             ],
           ),
@@ -1891,171 +1911,227 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
               ),
             )
           else
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                headingRowColor:
-                    WidgetStatePropertyAll(Colors.grey.withValues(alpha: 0.08)),
-                columns: const [
-                  DataColumn(label: Text('KODE / BARCODE')),
-                  DataColumn(label: Text('NAMA PRODUK')),
-                  DataColumn(label: Text('KATEGORI')),
-                  DataColumn(label: Text('RAK & STATUS UTAMA')),
-                  DataColumn(numeric: true, label: Text('STOK DI RAK INI')),
-                  DataColumn(numeric: true, label: Text('STOK TOTAL PRODUK')),
-                  DataColumn(label: Text('AKSI')),
-                ],
-                rows: _produkDiRak.map((p) {
-                  final produkId =
-                      ((p['produkId'] ?? p['id']) as num?)?.toInt() ?? 0;
-                  final isRakUtama = p['utama'] == true ||
-                      ((p['rakUtamaId'] as num?)?.toInt() != null &&
-                          (p['rakUtamaId'] as num?)?.toInt() == _rakTerpilihId);
-                  final rakUtamaNama = '${p['rakUtamaNama'] ?? 'RAK Utama'}';
-                  final kode = '${p['produkKode'] ?? p['kode'] ?? '-'}';
-                  final barcode = '${p['barcode'] ?? ''}';
-                  final nama = '${p['produkNama'] ?? p['nama'] ?? '-'}';
-                  final kat = '${p['kategori'] ?? '-'}';
-                  final rakNama =
-                      '${p['rakNama'] ?? (_rakTerpilihNama.isEmpty ? 'Rak Belum Ditentukan' : _rakTerpilihNama)}';
-                  final stokRak = (p['stokRak'] ?? p['stok'] ?? 0) is num
-                      ? ((p['stokRak'] ?? p['stok'] ?? 0) as num).toDouble()
-                      : 0.0;
-                  final stokTotal =
-                      (p['stokTotalProduk'] ?? p['stokTotal'] ?? stokRak) is num
-                          ? ((p['stokTotalProduk'] ??
-                                  p['stokTotal'] ??
-                                  stokRak) as num)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: AppPagedDataTable(
+                    headingRowColor: WidgetStatePropertyAll(
+                        Colors.grey.withValues(alpha: 0.08)),
+                    columns: const [
+                      DataColumn(label: Text('KODE / BARCODE')),
+                      DataColumn(label: Text('NAMA PRODUK')),
+                      DataColumn(label: Text('KATEGORI')),
+                      DataColumn(label: Text('RAK & STATUS UTAMA')),
+                      DataColumn(numeric: true, label: Text('STOK DI RAK INI')),
+                      DataColumn(
+                          numeric: true, label: Text('STOK TOTAL PRODUK')),
+                      DataColumn(label: Text('AKSI')),
+                    ],
+                    rows: _produkDiRak.map((p) {
+                      final produkId =
+                          ((p['produkId'] ?? p['id']) as num?)?.toInt() ?? 0;
+                      final isRakUtama = p['utama'] == true ||
+                          ((p['rakUtamaId'] as num?)?.toInt() != null &&
+                              (p['rakUtamaId'] as num?)?.toInt() ==
+                                  _rakTerpilihId);
+                      final rakUtamaNama =
+                          '${p['rakUtamaNama'] ?? 'RAK Utama'}';
+                      final kode = '${p['produkKode'] ?? p['kode'] ?? '-'}';
+                      final barcode = '${p['barcode'] ?? ''}';
+                      final nama = '${p['produkNama'] ?? p['nama'] ?? '-'}';
+                      final kat = '${p['kategori'] ?? '-'}';
+                      final rakNama =
+                          '${p['rakNama'] ?? (_rakTerpilihNama.isEmpty ? 'Rak Belum Ditentukan' : _rakTerpilihNama)}';
+                      final stokRak = (p['stokRak'] ?? p['stok'] ?? 0) is num
+                          ? ((p['stokRak'] ?? p['stok'] ?? 0) as num).toDouble()
+                          : 0.0;
+                      final stokTotal = (p['stokTotalProduk'] ??
+                              p['stokTotal'] ??
+                              stokRak) is num
+                          ? ((p['stokTotalProduk'] ?? p['stokTotal'] ?? stokRak)
+                                  as num)
                               .toDouble()
                           : stokRak;
-                  return DataRow(
-                    selected:
-                        produkId > 0 && _produkTerpilihIds.contains(produkId),
-                    onSelectChanged: produkId <= 0
-                        ? null
-                        : (v) {
-                            setStateIfMounted(() {
-                              if (v == true) {
-                                _produkTerpilihIds.add(produkId);
-                              } else {
-                                _produkTerpilihIds.remove(produkId);
-                              }
-                            });
-                          },
-                    cells: [
-                      DataCell(Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(kode,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w700, fontSize: 12)),
-                          if (barcode.isNotEmpty && barcode != kode)
-                            Text(barcode,
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    color:
-                                        AppColors.textSecondaryOf(context))),
-                        ],
-                      )),
-                      DataCell(ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 260),
-                        child: Text(nama,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style:
-                                const TextStyle(fontWeight: FontWeight.w600)),
-                      )),
-                      DataCell(Text(kat, style: const TextStyle(fontSize: 12))),
-                      DataCell(Wrap(
-                        spacing: 4,
-                        runSpacing: 4,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          _chipKecil(
-                            rakNama,
-                            rakNama == 'Rak Belum Ditentukan'
-                                ? Colors.orange.shade800
-                                : const Color(0xFF047857),
-                          ),
-                          if (isRakUtama)
-                            _chipKecil('RAK Utama', AppColors.primary)
-                          else if (rakUtamaNama.isNotEmpty)
-                            _chipKecil(
-                                'Utama: $rakUtamaNama', Colors.blueGrey),
-                        ],
-                      )),
-                      DataCell(
-                        InkWell(
-                          onTap: _bukaStokOpname,
-                          child: Text(
-                            _fmtAngka.format(stokRak),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF047857),
-                            ),
-                          ),
-                        ),
-                      ),
-                      DataCell(Text(
-                        _fmtAngka.format(stokTotal),
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      )),
-                      DataCell(
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Tooltip(
-                              message:
-                                  'Ubah jumlah stok di rak melalui Stok Opname',
-                              child: IconButton(
-                                icon: Icon(Icons.fact_check_outlined,
-                                    size: 18, color: AppColors.primary),
-                                onPressed: _bukaStokOpname,
+                      return DataRow(
+                        selected: produkId > 0 &&
+                            _produkTerpilihIds.contains(produkId),
+                        onSelectChanged: produkId <= 0
+                            ? null
+                            : (v) {
+                                setStateIfMounted(() {
+                                  if (v == true) {
+                                    _produkTerpilihIds.add(produkId);
+                                  } else {
+                                    _produkTerpilihIds.remove(produkId);
+                                  }
+                                });
+                              },
+                        cells: [
+                          DataCell(Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(kode,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12)),
+                              if (barcode.isNotEmpty && barcode != kode)
+                                Text(barcode,
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.textSecondaryOf(
+                                            context))),
+                            ],
+                          )),
+                          DataCell(ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 260),
+                            child: Text(nama,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600)),
+                          )),
+                          DataCell(
+                              Text(kat, style: const TextStyle(fontSize: 12))),
+                          DataCell(Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              _chipKecil(
+                                rakNama,
+                                rakNama == 'Rak Belum Ditentukan'
+                                    ? Colors.orange.shade800
+                                    : const Color(0xFF047857),
                               ),
-                            ),
-                            if (!isUnassigned && !isRakUtama)
-                              Tooltip(
-                                message:
-                                    'Jadikan Rak Ini sebagai RAK Utama Produk',
-                                child: IconButton(
-                                  icon: const Icon(Icons.star_outline_rounded,
-                                      size: 19, color: Colors.amber),
-                                  onPressed: () => _jadikanRakUtamaProduk(p),
+                              if (isRakUtama)
+                                _chipKecil('RAK Utama', AppColors.primary)
+                              else if (rakUtamaNama.isNotEmpty)
+                                _chipKecil(
+                                    'Utama: $rakUtamaNama', Colors.blueGrey),
+                            ],
+                          )),
+                          DataCell(
+                            InkWell(
+                              onTap: _bukaStokOpname,
+                              child: Text(
+                                _fmtAngka.format(stokRak),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF047857),
                                 ),
                               ),
-                            if (produkId > 0)
-                              Tooltip(
-                                message:
-                                    'Pindahkan produk ke rak lain (otomatis sesuaikan RAK Utama)',
-                                child: IconButton(
-                                  icon: const Icon(
-                                      Icons.drive_file_move_outlined,
-                                      size: 18,
-                                      color: Colors.indigo),
-                                  onPressed: () =>
-                                      _bukaDialogPindahkanKeRakLain(
-                                    daftarProdukId: [produkId],
-                                    labelProduk: '$kode — $nama',
+                            ),
+                          ),
+                          DataCell(Text(
+                            _fmtAngka.format(stokTotal),
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          )),
+                          DataCell(
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Tooltip(
+                                  message:
+                                      'Ubah jumlah stok di rak melalui Stok Opname',
+                                  child: IconButton(
+                                    icon: Icon(Icons.fact_check_outlined,
+                                        size: 18, color: AppColors.primary),
+                                    onPressed: _bukaStokOpname,
                                   ),
                                 ),
-                              ),
-                            if (!isUnassigned)
-                              Tooltip(
-                                message: 'Keluarkan produk dari rak ini',
-                                child: IconButton(
-                                  icon: const Icon(Icons.remove_circle_outline,
-                                      size: 18, color: AppColors.danger),
-                                  onPressed: () => _hapusProdukDariRak(p),
-                                ),
-                              ),
-                          ],
+                                if (!isUnassigned && !isRakUtama)
+                                  Tooltip(
+                                    message:
+                                        'Jadikan Rak Ini sebagai RAK Utama Produk',
+                                    child: IconButton(
+                                      icon: const Icon(
+                                          Icons.star_outline_rounded,
+                                          size: 19,
+                                          color: Colors.amber),
+                                      onPressed: () =>
+                                          _jadikanRakUtamaProduk(p),
+                                    ),
+                                  ),
+                                if (produkId > 0)
+                                  Tooltip(
+                                    message:
+                                        'Pindahkan produk ke rak lain (otomatis sesuaikan RAK Utama)',
+                                    child: IconButton(
+                                      icon: const Icon(
+                                          Icons.drive_file_move_outlined,
+                                          size: 18,
+                                          color: Colors.indigo),
+                                      onPressed: () =>
+                                          _bukaDialogPindahkanKeRakLain(
+                                        daftarProdukId: [produkId],
+                                        labelProduk: '$kode — $nama',
+                                      ),
+                                    ),
+                                  ),
+                                if (!isUnassigned)
+                                  Tooltip(
+                                    message: 'Keluarkan produk dari rak ini',
+                                    child: IconButton(
+                                      icon: const Icon(
+                                          Icons.remove_circle_outline,
+                                          size: 18,
+                                          color: AppColors.danger),
+                                      onPressed: () => _hapusProdukDariRak(p),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _totalProdukRak == 0
+                              ? '0 produk'
+                              : '${((_halamanProdukRak - 1) * _pageSizeProdukRak) + 1}–${((_halamanProdukRak - 1) * _pageSizeProdukRak + _produkDiRak.length)} dari $_totalProdukRak produk • Stok ${_fmtAngka.format(_totalStokProdukRak)} • Nilai ${_fmtRupiah.format(_totalNilaiProdukRak)}',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondaryOf(context)),
                         ),
                       ),
+                      IconButton(
+                        tooltip: 'Halaman sebelumnya',
+                        onPressed: _halamanProdukRak <= 1 || _memuatProdukRak
+                            ? null
+                            : () => _muatProdukDiRak(_rakTerpilihId!,
+                                halaman: _halamanProdukRak - 1),
+                        icon: const Icon(Icons.chevron_left),
+                      ),
+                      Text(
+                        'Halaman $_halamanProdukRak / ${((_totalProdukRak / _pageSizeProdukRak).ceil()).clamp(1, 1 << 30)}',
+                        style: const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                      IconButton(
+                        tooltip: 'Halaman berikutnya',
+                        onPressed: _halamanProdukRak * _pageSizeProdukRak >=
+                                    _totalProdukRak ||
+                                _memuatProdukRak
+                            ? null
+                            : () => _muatProdukDiRak(_rakTerpilihId!,
+                                halaman: _halamanProdukRak + 1),
+                        icon: const Icon(Icons.chevron_right),
+                      ),
                     ],
-                  );
-                }).toList(),
-              ),
+                  ),
+                ),
+              ],
             ),
         ],
       ),
@@ -2110,7 +2186,8 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
     tampilkanRincianKlikDialog(
       context,
       judul: judul,
-      subjudul: '${Sesi.instance.tokoNama} • ${_produkDiRak.length} Produk',
+      subjudul:
+          '${Sesi.instance.tokoNama} • ${_produkDiRak.length} produk pada halaman $_halamanProdukRak dari $_totalProdukRak',
       kolom: const [
         'Kode Produk',
         'Barcode',

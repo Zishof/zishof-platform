@@ -1,4 +1,5 @@
 import 'package:ebisnis/widgets/app_components.dart';
+import 'package:ebisnis/widgets/rincian_intip_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -13,6 +14,11 @@ void main() {
   List<AppTableRowData> baris(int n) => List.generate(
         n,
         (i) => AppTableRowData(cells: [AppTableCell.text('Baris ${i + 1}')]),
+      );
+
+  List<DataRow> barisMaterial(int n) => List.generate(
+        n,
+        (i) => DataRow(cells: [DataCell(Text('Rincian ${i + 1}'))]),
       );
 
   const kolom = [AppTableColumn('Nama')];
@@ -37,6 +43,73 @@ void main() {
     expect(find.text('Baris 16'), findsNothing);
     expect(find.text('20 data'), findsOneWidget);
     expect(find.text('Halaman 1 / 2'), findsOneWidget);
+  });
+
+  testWidgets('tabel Material juga membatasi render menjadi 15 baris',
+      (t) async {
+    await pasang(
+      t,
+      AppPagedDataTable(
+        columns: const [DataColumn(label: Text('Nama'))],
+        rows: barisMaterial(35),
+      ),
+    );
+    expect(find.text('Rincian 1'), findsOneWidget);
+    expect(find.text('Rincian 15'), findsOneWidget);
+    expect(find.text('Rincian 16'), findsNothing);
+    expect(find.text('35 data'), findsOneWidget);
+    expect(find.text('Halaman 1 / 3'), findsOneWidget);
+  });
+
+  testWidgets('halaman tabel Material berganti tepat 15 baris', (t) async {
+    await pasang(
+      t,
+      AppPagedDataTable(
+        columns: const [DataColumn(label: Text('Nama'))],
+        rows: barisMaterial(35),
+      ),
+    );
+    await t.tap(find.byIcon(Icons.chevron_right));
+    await t.pumpAndSettle();
+    expect(find.text('Rincian 16'), findsOneWidget);
+    expect(find.text('Rincian 30'), findsOneWidget);
+    expect(find.text('Rincian 15'), findsNothing);
+    expect(find.text('Halaman 2 / 3'), findsOneWidget);
+  });
+
+  testWidgets('popup rincian kartu juga menampilkan 15 baris per halaman',
+      (t) async {
+    t.view.physicalSize = const Size(1400, 2200);
+    t.view.devicePixelRatio = 1.0;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(MaterialApp(
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: TextButton(
+            onPressed: () => tampilkanRincianKlikDialog(
+              context,
+              judul: 'Rincian kartu',
+              kolom: const ['Nama'],
+              baris: List.generate(35, (i) => ['Rincian ${i + 1}']),
+            ),
+            child: const Text('Buka rincian'),
+          ),
+        ),
+      ),
+    ));
+    await t.tap(find.text('Buka rincian'));
+    await t.pumpAndSettle();
+    expect(find.text('Rincian 1'), findsOneWidget);
+    expect(find.text('Rincian 15'), findsOneWidget);
+    expect(find.text('Rincian 16'), findsNothing);
+    expect(find.text('Halaman 1 / 3'), findsOneWidget);
+
+    await t.tap(find.byIcon(Icons.chevron_right).last);
+    await t.pumpAndSettle();
+    expect(find.text('Rincian 16'), findsOneWidget);
+    expect(find.text('Rincian 30'), findsOneWidget);
+    expect(find.text('Rincian 15'), findsNothing);
+    expect(find.text('Halaman 2 / 3'), findsOneWidget);
   });
 
   testWidgets('area tabel terbatas selalu menyediakan scrollbar desktop',
@@ -73,10 +146,8 @@ void main() {
   });
 
   testWidgets('pagingOtomatis:false menampilkan semuanya', (t) async {
-    await pasang(
-        t,
-        AppDataTable(
-            columns: kolom, rows: baris(20), pagingOtomatis: false));
+    await pasang(t,
+        AppDataTable(columns: kolom, rows: baris(20), pagingOtomatis: false));
     expect(find.text('Baris 20'), findsOneWidget);
     expect(find.textContaining('Halaman'), findsNothing);
   });

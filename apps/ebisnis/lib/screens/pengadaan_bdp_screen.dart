@@ -48,7 +48,7 @@ class _PengadaanBdpScreenState extends State<PengadaanBdpScreen> {
   int _jumlahTerlambat = 0;
   int _jumlahDisetujui = 0;
   double _nilaiDisetujui = 0;
-  static const _pageSize = 25;
+  static const _pageSize = 15;
 
   @override
   void initState() {
@@ -86,7 +86,8 @@ class _PengadaanBdpScreenState extends State<PengadaanBdpScreen> {
           final sukses = res['status'] == '00' || res['status'] == 'success';
           if (!sukses) {
             setStateIfMounted(() {
-              _galat = '${res['description'] ?? 'Gagal memuat Barang Dalam Proses.'}';
+              _galat =
+                  '${res['description'] ?? 'Gagal memuat Barang Dalam Proses.'}';
               _memuat = false;
             });
             return;
@@ -228,22 +229,26 @@ class _PengadaanBdpScreenState extends State<PengadaanBdpScreen> {
         if (!_memuat && _galat == null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            child: Wrap(spacing: 10, runSpacing: 8, children: _modeBast
-                ? [
-                    _kotak('Total BAST', '$_total'),
-                    _kotak('Total nilai', _fmtRp.format(_totalNilai)),
-                    _kotak('Sudah disetujui',
-                        '$_jumlahDisetujui · ${_fmtRp.format(_nilaiDisetujui)}'),
-                    _kotak('Belum disetujui',
-                        '${_total - _jumlahDisetujui} · ${_fmtRp.format(_totalNilai - _nilaiDisetujui)}',
-                        merah: _total - _jumlahDisetujui > 0),
-                  ]
-                : [
-                    _kotak('Baris', '$_total'),
-                    _kotak('Nilai belum datang', _fmtRp.format(_totalNilai)),
-                    _kotak('Lewat batas kirim', '$_jumlahTerlambat',
-                        merah: _jumlahTerlambat > 0),
-                  ]),
+            child: Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                children: _modeBast
+                    ? [
+                        _kotak('Total BAST', '$_total'),
+                        _kotak('Total nilai', _fmtRp.format(_totalNilai)),
+                        _kotak('Sudah disetujui',
+                            '$_jumlahDisetujui · ${_fmtRp.format(_nilaiDisetujui)}'),
+                        _kotak('Belum disetujui',
+                            '${_total - _jumlahDisetujui} · ${_fmtRp.format(_totalNilai - _nilaiDisetujui)}',
+                            merah: _total - _jumlahDisetujui > 0),
+                      ]
+                    : [
+                        _kotak('Baris', '$_total'),
+                        _kotak(
+                            'Nilai belum datang', _fmtRp.format(_totalNilai)),
+                        _kotak('Lewat batas kirim', '$_jumlahTerlambat',
+                            merah: _jumlahTerlambat > 0),
+                      ]),
           ),
         Expanded(child: _isiTabel(totalHalaman)),
       ]),
@@ -262,8 +267,7 @@ class _PengadaanBdpScreenState extends State<PengadaanBdpScreen> {
         const SizedBox(height: 2),
         Text(nilai,
             style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color: merah ? Colors.red : null)),
+                fontWeight: FontWeight.w800, color: merah ? Colors.red : null)),
       ]),
     );
   }
@@ -419,8 +423,10 @@ class _PengadaanBdpScreenState extends State<PengadaanBdpScreen> {
       ),
       AppTableCell.text('${row['penyedia'] ?? '-'}', flex: 3),
       AppTableCell.text('${row['barang'] ?? '-'}', flex: 3),
-      AppTableCell.text(_angka(row['dipesan']), flex: 2, align: TextAlign.right),
-      AppTableCell.text(_angka(row['diterima']), flex: 2, align: TextAlign.right),
+      AppTableCell.text(_angka(row['dipesan']),
+          flex: 2, align: TextAlign.right),
+      AppTableCell.text(_angka(row['diterima']),
+          flex: 2, align: TextAlign.right),
       AppTableCell(
         flex: 2,
         child: Text(_angka(row['sisa']),

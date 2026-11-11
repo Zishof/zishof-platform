@@ -17,8 +17,7 @@ class BantuanScreen extends StatefulWidget {
   /// tombol bantuan mengambang agar layar langsung terbuka pada bagian tanya jawab
   /// halaman yang bersangkutan, bukan di pucuk artikel.
   final String? cariAwal;
-  const BantuanScreen(
-      {super.key, this.menuId, this.menuJudul, this.cariAwal});
+  const BantuanScreen({super.key, this.menuId, this.menuJudul, this.cariAwal});
 
   @override
   State<BantuanScreen> createState() => _BantuanScreenState();
@@ -348,18 +347,36 @@ class _DiagramPenyesuaianSaldo extends StatelessWidget {
   const _DiagramPenyesuaianSaldo();
 
   static const tahap = <(String, String, IconData)>[
-    ('1. Telusuri dulu', 'Buka Mutasi Voucher anggota — sering kali selisih ternyata transaksi yang belum tersinkron, bukan salah catat',
-        Icons.search),
-    ('2. Baca saldo sistem', 'Aplikasi menghitung ulang: seluruh topup dikurangi seluruh pemakaian',
-        Icons.calculate_outlined),
-    ('3. Isi saldo seharusnya', 'Angka yang benar menurut pemeriksaan Anda — sejajar dengan "stok fisik" pada opname barang',
-        Icons.edit_outlined),
-    ('4. Selisih & alasan', 'Selisih dihitung otomatis; alasan wajib diisi beserta buktinya',
-        Icons.rule),
-    ('5. Mutasi koreksi dibuat', 'Sistem menambah SATU baris mutasi senilai selisih — riwayat lama tetap utuh, tidak ada yang ditimpa',
-        Icons.playlist_add_check),
-    ('6. Tercatat & dapat dilaporkan', 'Saldo langsung cocok; catatannya muncul di Laporan-Laporan > Deposit / Saldo',
-        Icons.assessment_outlined),
+    (
+      '1. Telusuri dulu',
+      'Buka Mutasi Voucher anggota — sering kali selisih ternyata transaksi yang belum tersinkron, bukan salah catat',
+      Icons.search
+    ),
+    (
+      '2. Baca saldo sistem',
+      'Aplikasi menghitung ulang: seluruh topup dikurangi seluruh pemakaian',
+      Icons.calculate_outlined
+    ),
+    (
+      '3. Isi saldo seharusnya',
+      'Angka yang benar menurut pemeriksaan Anda — sejajar dengan "stok fisik" pada opname barang',
+      Icons.edit_outlined
+    ),
+    (
+      '4. Selisih & alasan',
+      'Selisih dihitung otomatis; alasan wajib diisi beserta buktinya',
+      Icons.rule
+    ),
+    (
+      '5. Mutasi koreksi dibuat',
+      'Sistem menambah SATU baris mutasi senilai selisih — riwayat lama tetap utuh, tidak ada yang ditimpa',
+      Icons.playlist_add_check
+    ),
+    (
+      '6. Tercatat & dapat dilaporkan',
+      'Saldo langsung cocok; catatannya muncul di Laporan-Laporan > Deposit / Saldo',
+      Icons.assessment_outlined
+    ),
   ];
 
   @override
@@ -368,7 +385,8 @@ class _DiagramPenyesuaianSaldo extends StatelessWidget {
         color: const Color(0xFFEFF3FB),
         child: Padding(
           padding: const EdgeInsets.all(18),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Diagram alur Penyesuaian Saldo (opname saldo voucher)',
                 style: Theme.of(context)
                     .textTheme
@@ -381,29 +399,34 @@ class _DiagramPenyesuaianSaldo extends StatelessWidget {
             const SizedBox(height: 14),
             ...tahap.map((t) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFFC3D2EA))),
-                      child: Icon(t.$3, size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(t.$1,
-                                style: const TextStyle(fontWeight: FontWeight.w700)),
-                            Text(t.$2,
-                                style: Theme.of(context).textTheme.bodySmall),
-                          ]),
-                    ),
-                  ]),
+                  child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border:
+                                  Border.all(color: const Color(0xFFC3D2EA))),
+                          child: Icon(t.$3, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(t.$1,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w700)),
+                                Text(t.$2,
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall),
+                              ]),
+                        ),
+                      ]),
                 )),
             const Divider(height: 20),
             const Text(
@@ -420,18 +443,36 @@ class _DiagramSiklusAkuntansi extends StatelessWidget {
   const _DiagramSiklusAkuntansi();
 
   static const tahap = <(String, String, IconData)>[
-    ('1. Kejadian di toko', 'Penjualan kasir, kulakan, retur, opname, bayar utang',
-        Icons.storefront_outlined),
-    ('2. Jurnal', 'Kejadian diterjemahkan jadi debet & kredit — otomatis lewat Posting, atau manual lewat Jurnal Umum',
-        Icons.edit_note),
-    ('3. Posting', 'Jurnal draf resmi masuk buku besar. Sebelum tahap ini, laporan BELUM berubah',
-        Icons.check_circle_outline),
-    ('4. Buku Besar', 'Tiap akun terkumpul mutasi dan saldonya',
-        Icons.menu_book_outlined),
-    ('5. Neraca Saldo', 'Total debet harus sama dengan total kredit',
-        Icons.balance),
-    ('6. Laporan', 'Laba Rugi, Neraca, dan Arus Kas terbentuk dari saldo tiap akun',
-        Icons.assessment_outlined),
+    (
+      '1. Kejadian di toko',
+      'Penjualan kasir, kulakan, retur, opname, bayar utang',
+      Icons.storefront_outlined
+    ),
+    (
+      '2. Jurnal',
+      'Kejadian diterjemahkan jadi debet & kredit — otomatis lewat Posting, atau manual lewat Jurnal Umum',
+      Icons.edit_note
+    ),
+    (
+      '3. Posting',
+      'Jurnal draf resmi masuk buku besar. Sebelum tahap ini, laporan BELUM berubah',
+      Icons.check_circle_outline
+    ),
+    (
+      '4. Buku Besar',
+      'Tiap akun terkumpul mutasi dan saldonya',
+      Icons.menu_book_outlined
+    ),
+    (
+      '5. Neraca Saldo',
+      'Total debet harus sama dengan total kredit',
+      Icons.balance
+    ),
+    (
+      '6. Laporan',
+      'Laba Rugi, Neraca, dan Arus Kas terbentuk dari saldo tiap akun',
+      Icons.assessment_outlined
+    ),
   ];
 
   @override
@@ -440,7 +481,8 @@ class _DiagramSiklusAkuntansi extends StatelessWidget {
         color: const Color(0xFFEFF7EE),
         child: Padding(
           padding: const EdgeInsets.all(18),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Diagram siklus akuntansi: dari transaksi sampai laporan',
                 style: Theme.of(context)
                     .textTheme
@@ -454,29 +496,34 @@ class _DiagramSiklusAkuntansi extends StatelessWidget {
             const SizedBox(height: 14),
             ...tahap.map((t) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFFBFD8BD))),
-                      child: Icon(t.$3, size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(t.$1,
-                                style: const TextStyle(fontWeight: FontWeight.w700)),
-                            Text(t.$2,
-                                style: Theme.of(context).textTheme.bodySmall),
-                          ]),
-                    ),
-                  ]),
+                  child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border:
+                                  Border.all(color: const Color(0xFFBFD8BD))),
+                          child: Icon(t.$3, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(t.$1,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w700)),
+                                Text(t.$2,
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall),
+                              ]),
+                        ),
+                      ]),
                 )),
             const Divider(height: 20),
             const Text(
@@ -496,7 +543,11 @@ class _DiagramDebetKredit extends StatelessWidget {
 
   static const baris = <(String, String, String)>[
     ('Harta / Aset (kas, bank, persediaan, piutang)', 'Bertambah', 'Berkurang'),
-    ('Utang / Kewajiban (utang supplier, utang pajak)', 'Berkurang', 'Bertambah'),
+    (
+      'Utang / Kewajiban (utang supplier, utang pajak)',
+      'Berkurang',
+      'Bertambah'
+    ),
     ('Modal / Ekuitas', 'Berkurang', 'Bertambah'),
     ('Pendapatan (penjualan, jasa, bunga)', 'Berkurang', 'Bertambah'),
     ('Beban / Biaya (HPP, listrik, gaji)', 'Bertambah', 'Berkurang'),
@@ -508,7 +559,8 @@ class _DiagramDebetKredit extends StatelessWidget {
         color: const Color(0xFFFFF6E6),
         child: Padding(
           padding: const EdgeInsets.all(18),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Diagram aturan debet dan kredit',
                 style: Theme.of(context)
                     .textTheme
@@ -521,7 +573,7 @@ class _DiagramDebetKredit extends StatelessWidget {
             const SizedBox(height: 12),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              child: DataTable(
+              child: AppPagedDataTable(
                 columnSpacing: 24,
                 headingRowHeight: 38,
                 dataRowMinHeight: 34,

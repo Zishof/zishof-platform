@@ -1638,7 +1638,7 @@ class _DialogPerbandinganTransaksiState
                         child: SingleChildScrollView(
                           child: SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
-                            child: DataTable(
+                            child: AppPagedDataTable(
                               columns: const [
                                 DataColumn(label: Text('Kode transaksi')),
                                 DataColumn(label: Text('Status')),

@@ -1,3 +1,4 @@
+import '../widgets/app_components.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -552,7 +553,7 @@ class _RekapPenjualanItemDialogState extends State<RekapPenjualanItemDialog> {
                                     scrollDirection: Axis.vertical,
                                     child: SingleChildScrollView(
                                       scrollDirection: Axis.horizontal,
-                                      child: DataTable(
+                                      child: AppPagedDataTable(
                                         headingRowColor:
                                             WidgetStateProperty.all(
                                                 Colors.grey.shade100),

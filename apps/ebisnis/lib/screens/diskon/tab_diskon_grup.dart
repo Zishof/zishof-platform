@@ -171,7 +171,7 @@ class _TabDiskonGrupState extends State<TabDiskonGrup> with JejakGalat {
               clipBehavior: Clip.antiAlias,
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                child: DataTable(
+                child: AppPagedDataTable(
                   columns: const [
                     DataColumn(label: Text('GRUP DISKON')),
                     DataColumn(label: Text('PERIODE')),

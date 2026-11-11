@@ -758,23 +758,23 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
         .startsWith('stok'));
     final barisTampil = hasil.baris
         .where((r) {
-      if (iStok < 0 || iStok >= r.length) return true;
-      final v = r[iStok];
-      final s = v is num
-          ? v.toDouble()
-          : (double.tryParse('$v'.replaceAll(',', '.')) ?? 0);
-      switch (filter) {
-        case 'tersedia':
-          return s > 0;
-        case 'menipis':
-          return s > 0 && s <= 5;
-        case 'habis':
-          return s == 0;
-        case 'minus':
-          return s < 0;
-        default:
-          return true;
-      }
+          if (iStok < 0 || iStok >= r.length) return true;
+          final v = r[iStok];
+          final s = v is num
+              ? v.toDouble()
+              : (double.tryParse('$v'.replaceAll(',', '.')) ?? 0);
+          switch (filter) {
+            case 'tersedia':
+              return s > 0;
+            case 'menipis':
+              return s > 0 && s <= 5;
+            case 'habis':
+              return s == 0;
+            case 'minus':
+              return s < 0;
+            default:
+              return true;
+          }
         })
         .map((r) => r.map<Object?>((c) => c).toList())
         .toList();
@@ -1063,24 +1063,24 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
               ikon: Icons.visibility_outlined,
               label: 'Preview',
               onTap:
-              sibuk ? null : () => _aturAtauPreviewLaporan(preview: true),
-        ),
+                  sibuk ? null : () => _aturAtauPreviewLaporan(preview: true),
+            ),
             AksiBaris(
               ikon: Icons.tune,
               label: 'Atur Model',
               onTap:
-              sibuk ? null : () => _aturAtauPreviewLaporan(preview: false),
-        ),
+                  sibuk ? null : () => _aturAtauPreviewLaporan(preview: false),
+            ),
             AksiBaris(
               ikon: Icons.picture_as_pdf_outlined,
               label: 'PDF',
               onTap: sibuk ? null : () => _eksporLaporan('pdf'),
-        ),
+            ),
             AksiBaris(
               ikon: Icons.table_view_outlined,
               label: 'Excel',
               onTap: sibuk ? null : () => _eksporLaporan('excel'),
-        ),
+            ),
             AksiBaris(
               ikon: Icons.description_outlined,
               label: 'Word',
@@ -1687,7 +1687,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
             AksiBarisMenu(
               aksi: tombolAksi,
               tooltip: 'Aksi manajemen produk',
-                ),
+            ),
           ],
           scrollable: false,
           floatingActionButton: null,
@@ -1736,351 +1736,351 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                         ? const Center(
                                             child: CircularProgressIndicator())
                                         : _daftarKebijakanRetur())
-                                : (_memuat && _semuaProduk.isEmpty
-                                    ? const Center(
-                                        child: CircularProgressIndicator())
-                                    : _pesanError != null &&
-                                            _semuaProduk.isEmpty
-                                        ? Center(
-                                            child: Padding(
+                                    : (_memuat && _semuaProduk.isEmpty
+                                        ? const Center(
+                                            child: CircularProgressIndicator())
+                                        : _pesanError != null &&
+                                                _semuaProduk.isEmpty
+                                            ? Center(
+                                                child: Padding(
                                                   padding:
                                                       const EdgeInsets.all(24),
-                                              child: Column(
+                                                  child: Column(
                                                     mainAxisSize:
                                                         MainAxisSize.min,
-                                                children: [
-                                                  const Icon(
-                                                      Icons.error_outline,
-                                                      size: 48,
-                                                      color: Colors.red),
+                                                    children: [
+                                                      const Icon(
+                                                          Icons.error_outline,
+                                                          size: 48,
+                                                          color: Colors.red),
                                                       const SizedBox(
                                                           height: 12),
-                                                  Text(_pesanError!,
-                                                      textAlign:
-                                                          TextAlign.center),
-                                                  AppDetailGalatOpsional(
-                                                      detail: detailUntuk(
-                                                          _pesanError)),
+                                                      Text(_pesanError!,
+                                                          textAlign:
+                                                              TextAlign.center),
+                                                      AppDetailGalatOpsional(
+                                                          detail: detailUntuk(
+                                                              _pesanError)),
                                                       const SizedBox(
                                                           height: 16),
-                                                  ElevatedButton(
-                                                      onPressed: _muatSemua,
-                                                      child: const Text(
-                                                          'Coba Lagi')),
-                                                ],
-                                              ),
-                                            ),
-                                          )
-                                        : RefreshIndicator(
-                                            onRefresh: _muatSemua,
-                                            child: ListView(
-                                              padding:
-                                                  const EdgeInsets.fromLTRB(
-                                                      12, 12, 12, 90),
-                                              children: [
-                                                PenandaDataTersimpan(
-                                                    tampil:
-                                                        _statistikDariCache),
+                                                      ElevatedButton(
+                                                          onPressed: _muatSemua,
+                                                          child: const Text(
+                                                              'Coba Lagi')),
+                                                    ],
+                                                  ),
+                                                ),
+                                              )
+                                            : RefreshIndicator(
+                                                onRefresh: _muatSemua,
+                                                child: ListView(
+                                                  padding:
+                                                      const EdgeInsets.fromLTRB(
+                                                          12, 12, 12, 90),
+                                                  children: [
+                                                    PenandaDataTersimpan(
+                                                        tampil:
+                                                            _statistikDariCache),
                                                     if (_pesanError !=
                                                         null) ...[
-                                                  Card(
-                                                    color: Theme.of(context)
-                                                        .colorScheme
-                                                        .errorContainer,
-                                                    child: Padding(
-                                                      padding:
+                                                      Card(
+                                                        color: Theme.of(context)
+                                                            .colorScheme
+                                                            .errorContainer,
+                                                        child: Padding(
+                                                          padding:
                                                               const EdgeInsets
                                                                   .all(12),
-                                                      child: Row(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .start,
-                                                        children: [
-                                                          Icon(
-                                                            Icons
-                                                                .cloud_off_outlined,
-                                                            color: Theme.of(
-                                                                    context)
-                                                                .colorScheme
-                                                                .onErrorContainer,
-                                                          ),
-                                                          const SizedBox(
-                                                              width: 10),
-                                                          Expanded(
-                                                            child: Text(
-                                                              _pesanError!,
-                                                                  style:
-                                                                      TextStyle(
+                                                          child: Row(
+                                                            crossAxisAlignment:
+                                                                CrossAxisAlignment
+                                                                    .start,
+                                                            children: [
+                                                              Icon(
+                                                                Icons
+                                                                    .cloud_off_outlined,
                                                                 color: Theme.of(
                                                                         context)
                                                                     .colorScheme
                                                                     .onErrorContainer,
                                                               ),
-                                                            ),
-                                                          ),
-                                                          TextButton.icon(
-                                                            onPressed: _memuat
-                                                                ? null
-                                                                : _muatSemua,
+                                                              const SizedBox(
+                                                                  width: 10),
+                                                              Expanded(
+                                                                child: Text(
+                                                                  _pesanError!,
+                                                                  style:
+                                                                      TextStyle(
+                                                                    color: Theme.of(
+                                                                            context)
+                                                                        .colorScheme
+                                                                        .onErrorContainer,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                              TextButton.icon(
+                                                                onPressed: _memuat
+                                                                    ? null
+                                                                    : _muatSemua,
                                                                 icon: const Icon(
                                                                     Icons
-                                                                .refresh_outlined),
-                                                            label: const Text(
-                                                                'Coba Lagi'),
+                                                                        .refresh_outlined),
+                                                                label: const Text(
+                                                                    'Coba Lagi'),
+                                                              ),
+                                                            ],
                                                           ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 8),
-                                                ],
-                                                if (_tanggalStok != null)
-                                                  _ringkasanStokTanggal()
-                                                else if (_statistik != null)
-                                                  _KartuStatistik(
-                                                    statistik: _statistik!,
-                                                        onTap:
-                                                            _bukaDetailStatistik,
-                                                  ),
-                                                const SizedBox(height: 12),
-                                                AppSearchField(
-                                                  controller:
-                                                      _controllerCariProduk,
-                                                  scanProduk: true,
-                                                  debounce: const Duration(
-                                                      milliseconds: 350),
-                                                  hintText:
-                                                      'Cari produk (nama/kode/barcode)...',
-                                                  onChanged: (v) {
-                                                    setStateIfMounted(() {
-                                                      _kataKunci = v;
-                                                      _halaman = 0;
-                                                    });
-                                                    _muatSemua();
-                                                    // Stok per tanggal ikut
-                                                    // disaring kata kunci, jadi
-                                                    // harus ditarik ulang.
-                                                    _muatStokTanggal();
-                                                  },
-                                                ),
-                                                const SizedBox(height: 10),
-                                                _bilahStokDanLaporan(),
-                                                const SizedBox(height: 10),
-                                                Align(
-                                                  alignment:
-                                                      Alignment.centerLeft,
-                                                      child: SegmentedButton<
-                                                          String>(
-                                                    segments: const [
-                                                      ButtonSegment(
-                                                          value: 'SEMUA',
-                                                              label: Text(
-                                                                  'Semua')),
-                                                      ButtonSegment(
-                                                          value: 'JUAL',
-                                                              label: Text(
-                                                                  'Produk')),
-                                                      ButtonSegment(
-                                                          value: 'BAHAN',
-                                                              label: Text(
-                                                                  'Bahan')),
-                                                      ButtonSegment(
-                                                          value: 'EKSTRA',
-                                                              label: Text(
-                                                                  'Ekstra')),
-                                                      ButtonSegment(
-                                                          value: 'PAKET',
-                                                          label: Text(
-                                                              'Produk Paket')),
-                                                    ],
-                                                    selected: {
-                                                      _filterJenisItem
-                                                    },
-                                                        onSelectionChanged:
-                                                            (s) {
-                                                      setStateIfMounted(() {
-                                                        _filterJenisItem =
-                                                            s.first;
-                                                        _halaman = 0;
-                                                      });
-                                                      _muatSemua();
-                                                    },
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 10),
-                                                Wrap(
-                                                  spacing: 8,
-                                                  runSpacing: 8,
-                                                  crossAxisAlignment:
-                                                          WrapCrossAlignment
-                                                              .center,
-                                                  children: [
-                                                    _pemilihFilterPemasok(),
-                                                  ],
-                                                ),
-                                                const SizedBox(height: 10),
-                                                SizedBox(
-                                                  height: 40,
-                                                  child: ListView(
-                                                    scrollDirection:
-                                                        Axis.horizontal,
-                                                    children: [
-                                                      Padding(
-                                                        padding:
-                                                            const EdgeInsets
-                                                                    .only(
-                                                                    right: 8),
-                                                        child: ChoiceChip(
-                                                          label: const Text(
-                                                              'Semua'),
-                                                          selected:
-                                                              _kategoriTerpilih ==
-                                                                  null,
-                                                          onSelected: (_) {
-                                                            setStateIfMounted(
-                                                                () {
-                                                              _kategoriTerpilih =
-                                                                  null;
-                                                              _halaman = 0;
-                                                            });
-                                                            _muatSemua();
-                                                          },
                                                         ),
                                                       ),
-                                                          ..._kategori
-                                                              .map(
-                                                                  (k) =>
+                                                      const SizedBox(height: 8),
+                                                    ],
+                                                    if (_tanggalStok != null)
+                                                      _ringkasanStokTanggal()
+                                                    else if (_statistik != null)
+                                                      _KartuStatistik(
+                                                        statistik: _statistik!,
+                                                        onTap:
+                                                            _bukaDetailStatistik,
+                                                      ),
+                                                    const SizedBox(height: 12),
+                                                    AppSearchField(
+                                                      controller:
+                                                          _controllerCariProduk,
+                                                      scanProduk: true,
+                                                      debounce: const Duration(
+                                                          milliseconds: 350),
+                                                      hintText:
+                                                          'Cari produk (nama/kode/barcode)...',
+                                                      onChanged: (v) {
+                                                        setStateIfMounted(() {
+                                                          _kataKunci = v;
+                                                          _halaman = 0;
+                                                        });
+                                                        _muatSemua();
+                                                        // Stok per tanggal ikut
+                                                        // disaring kata kunci, jadi
+                                                        // harus ditarik ulang.
+                                                        _muatStokTanggal();
+                                                      },
+                                                    ),
+                                                    const SizedBox(height: 10),
+                                                    _bilahStokDanLaporan(),
+                                                    const SizedBox(height: 10),
+                                                    Align(
+                                                      alignment:
+                                                          Alignment.centerLeft,
+                                                      child: SegmentedButton<
+                                                          String>(
+                                                        segments: const [
+                                                          ButtonSegment(
+                                                              value: 'SEMUA',
+                                                              label: Text(
+                                                                  'Semua')),
+                                                          ButtonSegment(
+                                                              value: 'JUAL',
+                                                              label: Text(
+                                                                  'Produk')),
+                                                          ButtonSegment(
+                                                              value: 'BAHAN',
+                                                              label: Text(
+                                                                  'Bahan')),
+                                                          ButtonSegment(
+                                                              value: 'EKSTRA',
+                                                              label: Text(
+                                                                  'Ekstra')),
+                                                          ButtonSegment(
+                                                              value: 'PAKET',
+                                                              label: Text(
+                                                                  'Produk Paket')),
+                                                        ],
+                                                        selected: {
+                                                          _filterJenisItem
+                                                        },
+                                                        onSelectionChanged:
+                                                            (s) {
+                                                          setStateIfMounted(() {
+                                                            _filterJenisItem =
+                                                                s.first;
+                                                            _halaman = 0;
+                                                          });
+                                                          _muatSemua();
+                                                        },
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 10),
+                                                    Wrap(
+                                                      spacing: 8,
+                                                      runSpacing: 8,
+                                                      crossAxisAlignment:
+                                                          WrapCrossAlignment
+                                                              .center,
+                                                      children: [
+                                                        _pemilihFilterPemasok(),
+                                                      ],
+                                                    ),
+                                                    const SizedBox(height: 10),
+                                                    SizedBox(
+                                                      height: 40,
+                                                      child: ListView(
+                                                        scrollDirection:
+                                                            Axis.horizontal,
+                                                        children: [
                                                           Padding(
-                                                                        padding: const EdgeInsets
+                                                            padding:
+                                                                const EdgeInsets
                                                                     .only(
-                                                                            right:
-                                                                                8),
-                                                                        child:
-                                                                            ChoiceChip(
-                                                              label:
-                                                                  Text(k.nama),
+                                                                    right: 8),
+                                                            child: ChoiceChip(
+                                                              label: const Text(
+                                                                  'Semua'),
                                                               selected:
-                                                                              _kategoriTerpilih == k.id,
-                                                                          onSelected:
-                                                                              (_) {
-                                                                            setStateIfMounted(() {
-                                                                              _kategoriTerpilih = k.id;
+                                                                  _kategoriTerpilih ==
+                                                                      null,
+                                                              onSelected: (_) {
+                                                                setStateIfMounted(
+                                                                    () {
+                                                                  _kategoriTerpilih =
+                                                                      null;
                                                                   _halaman = 0;
                                                                 });
                                                                 _muatSemua();
                                                               },
                                                             ),
-                                                          )),
-                                                    ],
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 12),
-                                                BannerPerubahanServer(
-                                                  key: ValueKey(
-                                                      'perubahan:$_versiPerubahan'),
-                                                  baru: _idBaru.length,
+                                                          ),
+                                                          ..._kategori
+                                                              .map(
+                                                                  (k) =>
+                                                                      Padding(
+                                                                        padding: const EdgeInsets
+                                                                            .only(
+                                                                            right:
+                                                                                8),
+                                                                        child:
+                                                                            ChoiceChip(
+                                                                          label:
+                                                                              Text(k.nama),
+                                                                          selected:
+                                                                              _kategoriTerpilih == k.id,
+                                                                          onSelected:
+                                                                              (_) {
+                                                                            setStateIfMounted(() {
+                                                                              _kategoriTerpilih = k.id;
+                                                                              _halaman = 0;
+                                                                            });
+                                                                            _muatSemua();
+                                                                          },
+                                                                        ),
+                                                                      )),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 12),
+                                                    BannerPerubahanServer(
+                                                      key: ValueKey(
+                                                          'perubahan:$_versiPerubahan'),
+                                                      baru: _idBaru.length,
                                                       berubah:
                                                           _idBerubah.length,
-                                                  dihapus: _jumlahHapus,
-                                                ),
-                                                if (_memuat) ...[
-                                                  const LinearProgressIndicator(
-                                                      minHeight: 2),
+                                                      dihapus: _jumlahHapus,
+                                                    ),
+                                                    if (_memuat) ...[
+                                                      const LinearProgressIndicator(
+                                                          minHeight: 2),
                                                       const SizedBox(
                                                           height: 10),
-                                                ],
+                                                    ],
                                                     if (_produkTersaring
                                                         .isEmpty)
-                                                  const Padding(
+                                                      const Padding(
                                                         padding: EdgeInsets
                                                             .symmetric(
-                                                            vertical: 40),
-                                                    child: Center(
-                                                        child: Text(
-                                                            'Belum ada produk.')),
-                                                  )
-                                                else
-                                                  LayoutBuilder(
-                                                    builder: (context, constraints) => constraints
-                                                                .maxWidth >=
-                                                            kAmbangLebarDesktop
-                                                        ? _TabelProduk(
-                                                            produkList:
-                                                                _produkHalamanIni,
+                                                                vertical: 40),
+                                                        child: Center(
+                                                            child: Text(
+                                                                'Belum ada produk.')),
+                                                      )
+                                                    else
+                                                      LayoutBuilder(
+                                                        builder: (context, constraints) => constraints
+                                                                    .maxWidth >=
+                                                                kAmbangLebarDesktop
+                                                            ? _TabelProduk(
+                                                                produkList:
+                                                                    _produkHalamanIni,
                                                                 stokPerKode:
                                                                     _stokTanggal
-                                                                ?.stokPerKode,
-                                                            stokTanggalBelumTersedia:
-                                                                _tanggalStok != null &&
+                                                                        ?.stokPerKode,
+                                                                stokTanggalBelumTersedia:
+                                                                    _tanggalStok != null &&
                                                                         _stokTanggal ==
                                                                             null,
-                                                            idBaru: _idBaru,
-                                                            idBerubah:
-                                                                _idBerubah,
-                                                            onTap: (p) =>
-                                                                _bukaFormProduk(
+                                                                idBaru: _idBaru,
+                                                                idBerubah:
+                                                                    _idBerubah,
+                                                                onTap: (p) =>
+                                                                    _bukaFormProduk(
                                                                         produk:
                                                                             p),
-                                                            onRiwayat:
-                                                                _riwayatProduk)
-                                                        : Column(
-                                                            children: _produkHalamanIni
-                                                                .map((p) => _BarisProduk(
-                                                                    produk: p,
+                                                                onRiwayat:
+                                                                    _riwayatProduk)
+                                                            : Column(
+                                                                children: _produkHalamanIni
+                                                                    .map((p) => _BarisProduk(
+                                                                        produk: p,
                                                                         stokTanggal: _stokTanggal?.stokPerKode[p.kode],
                                                                         stokTanggalBelumTersedia: _tanggalStok != null && _stokTanggal == null,
                                                                         idBaru: _idBaru,
                                                                         idBerubah: _idBerubah,
-                                                                    onTap: () => _bukaFormProduk(produk: p),
-                                                                    onRiwayat: () => _riwayatProduk(p)))
-                                                                .toList()),
-                                                  ),
-                                                if (_totalProduk >
-                                                    _itemPerHalaman)
-                                                  Padding(
+                                                                        onTap: () => _bukaFormProduk(produk: p),
+                                                                        onRiwayat: () => _riwayatProduk(p)))
+                                                                    .toList()),
+                                                      ),
+                                                    if (_totalProduk >
+                                                        _itemPerHalaman)
+                                                      Padding(
                                                         padding:
                                                             const EdgeInsets
-                                                        .symmetric(
-                                                        vertical: 12),
-                                                    child: Row(
-                                                      mainAxisAlignment:
-                                                          MainAxisAlignment
-                                                              .center,
-                                                      children: [
-                                                        IconButton(
-                                                          icon: const Icon(Icons
-                                                              .chevron_left),
-                                                          onPressed:
-                                                              _halaman > 0
-                                                                  ? () {
+                                                                .symmetric(
+                                                                vertical: 12),
+                                                        child: Row(
+                                                          mainAxisAlignment:
+                                                              MainAxisAlignment
+                                                                  .center,
+                                                          children: [
+                                                            IconButton(
+                                                              icon: const Icon(Icons
+                                                                  .chevron_left),
+                                                              onPressed:
+                                                                  _halaman > 0
+                                                                      ? () {
                                                                           setStateIfMounted(() =>
                                                                               _halaman--);
+                                                                          _muatSemua();
+                                                                        }
+                                                                      : null,
+                                                            ),
+                                                            Text(
+                                                                'Halaman ${_halaman + 1} / $_totalHalaman'),
+                                                            IconButton(
+                                                              icon: const Icon(Icons
+                                                                  .chevron_right),
+                                                              onPressed: _halaman <
+                                                                      _totalHalaman -
+                                                                          1
+                                                                  ? () {
+                                                                      setStateIfMounted(
+                                                                          () =>
+                                                                              _halaman++);
                                                                       _muatSemua();
                                                                     }
                                                                   : null,
+                                                            ),
+                                                          ],
                                                         ),
-                                                        Text(
-                                                            'Halaman ${_halaman + 1} / $_totalHalaman'),
-                                                        IconButton(
-                                                          icon: const Icon(Icons
-                                                              .chevron_right),
-                                                          onPressed: _halaman <
-                                                                  _totalHalaman -
-                                                                      1
-                                                              ? () {
-                                                                  setStateIfMounted(
-                                                                      () =>
-                                                                          _halaman++);
-                                                                  _muatSemua();
-                                                                }
-                                                              : null,
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                              ],
-                                            ),
-                                          ))),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ))),
           ]),
         ));
   }
@@ -2250,7 +2250,7 @@ class _DialogDetailStatistikProdukState
   bool _mengekspor = false;
   String? _error;
   List<Map<String, dynamic>> _produk = const [];
-  int _barisPerHalaman = 10;
+  int _barisPerHalaman = 15;
   int _halaman = 0;
 
   int get _jumlahHalaman => _produk.isEmpty
@@ -2405,15 +2405,15 @@ class _DialogDetailStatistikProdukState
                             ikon: Icons.picture_as_pdf_outlined,
                             label: 'Cetak PDF',
                             onTap: _mengekspor || _produk.isEmpty
-                            ? null
-                            : () => _ekspor('pdf'),
-                      ),
+                                ? null
+                                : () => _ekspor('pdf'),
+                          ),
                           AksiBaris(
                             ikon: Icons.table_view_outlined,
                             label: 'Download Excel',
                             onTap: _mengekspor || _produk.isEmpty
-                            ? null
-                            : () => _ekspor('excel'),
+                                ? null
+                                : () => _ekspor('excel'),
                           ),
                           AksiBaris(
                             ikon: Icons.close,
@@ -2505,15 +2505,8 @@ class _DialogDetailStatistikProdukState
                                   initialFirstRowIndex:
                                       _halaman * _barisPerHalaman,
                                   rowsPerPage: _barisPerHalaman,
-                                  availableRowsPerPage: const [10, 25, 50, 100],
-                                  onRowsPerPageChanged: (value) {
-                                    if (value != null) {
-                                      setState(() {
-                                        _barisPerHalaman = value;
-                                        _halaman = 0;
-                                      });
-                                    }
-                                  },
+                                  availableRowsPerPage: const [15],
+                                  onRowsPerPageChanged: null,
                                   onPageChanged: (firstRowIndex) {
                                     final halaman =
                                         firstRowIndex ~/ _barisPerHalaman;

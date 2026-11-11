@@ -17,7 +17,7 @@ class UomScreen extends StatefulWidget {
 }
 
 class _UomScreenState extends State<UomScreen> {
-  static const int _pageSize = 25;
+  static const int _pageSize = 15;
   final TextEditingController _cari = TextEditingController();
   List<Map<String, dynamic>> _data = <Map<String, dynamic>>[];
   bool _memuat = true;

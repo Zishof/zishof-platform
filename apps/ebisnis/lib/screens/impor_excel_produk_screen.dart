@@ -123,7 +123,7 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
   // Seluruh hasil preview tetap berada lokal di memori aplikasi. Yang dirender
   // hanya 25 baris per halaman dan nomor navigasi ditampilkan per kelompok
   // maksimal lima halaman agar desktop maupun Android tetap ringan.
-  static const int _barisPerHalaman = 25;
+  static const int _barisPerHalaman = 15;
   static const int _maksTombolHalaman = 5;
 
   static const double _toleransiSelisihStok = 0.000001;
@@ -831,11 +831,11 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
                     warna: AppColors.info,
                     nilai: '$_diperbarui',
                     label: 'Diperbarui'),
-AppKpiCard(
-    icon: Icons.done_all_outlined,
-    warna: AppColors.textSecondary,
-    nilai: '$_tidakBerubah',
-    label: 'Tidak berubah'),
+                AppKpiCard(
+                    icon: Icons.done_all_outlined,
+                    warna: AppColors.textSecondary,
+                    nilai: '$_tidakBerubah',
+                    label: 'Tidak berubah'),
                 AppKpiCard(
                     icon: Icons.skip_next_outlined,
                     warna: AppColors.textSecondary,

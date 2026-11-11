@@ -41,7 +41,7 @@ class ProdukMutasiBarangTab extends StatefulWidget {
 
 class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
     with JejakGalat {
-  int get _pageSize => widget.modePerTanggalLengkap ? 40 : 15;
+  int get _pageSize => 15;
   late DateTime _dari;
   late DateTime _sampai;
   int _halaman = 1;

@@ -445,7 +445,7 @@ class _RiwayatPenjualanAnalisisScreenState
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: SingleChildScrollView(
-                      child: DataTable(
+                      child: AppPagedDataTable(
                         columns: header
                             .map((e) => DataColumn(label: Text(e)))
                             .toList(),
@@ -871,7 +871,12 @@ class _RiwayatPenjualanAnalisisScreenState
                 if (i == 0 || i == 1 || i == 2) {
                   _bukaDrilldown(
                     data[i].$4,
-                    const ['Tanggal', 'Transaksi (STD)', 'Omzet (SPD)', 'Rata-rata Struk (APC)'],
+                    const [
+                      'Tanggal',
+                      'Transaksi (STD)',
+                      'Omzet (SPD)',
+                      'Rata-rata Struk (APC)'
+                    ],
                     trenList
                         .map((e) => <Object?>[
                               e['tanggal'] ?? '-',
@@ -1376,7 +1381,9 @@ class _RiwayatPenjualanAnalisisScreenState
                 else if (_error != null)
                   Padding(
                       padding: const EdgeInsets.all(24),
-                      child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      child: Center(
+                          child:
+                              Column(mainAxisSize: MainAxisSize.min, children: [
                         Text(_error!),
                         AppDetailGalatOpsional(detail: detailUntuk(_error)),
                       ])))
