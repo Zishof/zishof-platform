@@ -256,6 +256,15 @@ class ApiClient {
     'distribusi_detail',
     'distribusi_simpan',
     'distribusi_status',
+    'posting_kulakan_draft',
+    'posting_kulakan_terapkan',
+    'posting_bayar_hutang_draft',
+    'posting_bayar_hutang_terapkan',
+    'posting_terima_piutang_draft',
+    'posting_terima_piutang_terapkan',
+    'posting_penyesuaian_draft',
+    'posting_penyesuaian_terapkan',
+    'laporan_keuangan_pendukung',
   };
 
   static bool _nilaiTokoValid(Object? nilai) {
@@ -690,6 +699,10 @@ class ApiClient {
     'stok_pergerakan_ekspor_excel',
     'so_grand_daftar',
     'so_grand_download_excel',
+    'posting_kulakan_draft',
+    'posting_bayar_hutang_draft',
+    'posting_terima_piutang_draft',
+    'posting_penyesuaian_draft',
   };
 
   bool _kegagalanYangDiharapkan(ApiException gagal) {
