@@ -68,6 +68,26 @@ Pengecualian wajib fail-closed dengan pesan: apa yang gagal, mengapa perlu serve
 apa yang perlu dilakukan pengguna, dan bahwa menekan tombol berulang tidak akan
 menyelesaikan penolakan bisnis.
 
+### Konfigurasi Pintasan Menu Utama yang dibagi antar admin
+
+Perubahan daftar Pintasan Menu Utama adalah pengecualian online-only. Daftar ini
+merupakan satu konfigurasi bersama untuk semua pengguna toko. Jika daftar lama
+disimpan pada perangkat offline lalu dikirim ulang otomatis, perubahan admin
+lain yang lebih baru dapat tertimpa tanpa disadari. Karena itu, aplikasi boleh
+menampilkan cache terakhir lebih dahulu, tetapi tombol Simpan dan Reset harus
+mendapat konfirmasi berhasil dari server sebelum memperbarui cache atau sesi.
+Saat server tidak dapat dijangkau, tampilkan bahwa perubahan belum tersimpan;
+jangan menyebutnya tersimpan lokal atau menunggu sinkronisasi karena tidak ada
+outbox untuk konfigurasi bersama ini. Pastikan cache pengelola terpisah dari
+cache pintasan pengguna yang telah disaring berdasarkan hak akses.
+
+Kontrak API harus dipertahankan lintas klien dan server: permintaan simpan
+menggunakan `items`; respons daftar admin memakai `semuaShortcut` dan
+`bolehKelolaShortcut`; item memakai `deskripsi` dan `aksesKunci`. Klien boleh
+memakai nama tampilan yang berbeda hanya bila melakukan normalisasi dua arah
+secara eksplisit dan memiliki uji kontrak agar field tidak hilang saat muat,
+simpan, atau reset.
+
 ## Gerbang review dan rilis
 
 Setiap sesi AI/developer wajib menjawab sebelum commit:

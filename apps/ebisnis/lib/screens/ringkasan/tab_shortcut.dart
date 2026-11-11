@@ -8,6 +8,7 @@ import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
+import '../../widgets/aksi_baris_menu.dart';
 import '../../widgets/jejak_galat.dart';
 import '../../widgets/safe_state.dart';
 import '../anggota_screen.dart';
@@ -26,6 +27,7 @@ import '../produk_screen.dart';
 import '../rak_produk_screen.dart';
 import '../retur_penjualan_screen.dart';
 import '../riwayat_penjualan_screen.dart';
+import '../ringkasan_screen.dart';
 import '../stok_opname_screen.dart';
 import '../supplier_screen.dart';
 import '../uom_screen.dart';
@@ -50,7 +52,8 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
       {
         'id': 'sc_pnj_per_cabang',
         'judul': 'Laporan Penjualan per Cabang',
-        'ket': 'Ringkasan penjualan, HPP/BPP, dan laba kotor per cabang/toko & harian',
+        'ket':
+            'Ringkasan penjualan, HPP/BPP, dan laba kotor per cabang/toko & harian',
         'grup': 'Laporan Vital & Harian',
         'jenis': 'LAPORAN',
         'target': 'pnj_per_cabang',
@@ -76,7 +79,8 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
       {
         'id': 'sc_mutasi_barang_tab',
         'judul': 'Mutasi Barang (Kartu Stok & Analisis)',
-        'ket': 'Rincian saldo awal, masuk, terjual, opname (+/-), saldo akhir & analisis cerdas',
+        'ket':
+            'Rincian saldo awal, masuk, terjual, opname (+/-), saldo akhir & analisis cerdas',
         'grup': 'Laporan Vital & Harian',
         'jenis': 'TAB',
         'target': 'produk:tab:1',
@@ -89,7 +93,8 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
       {
         'id': 'sc_mutasi_per_tanggal_tab',
         'judul': 'Mutasi Barang per Tanggal',
-        'ket': 'Rekapitulasi mutasi masuk, keluar, penjualan, dan SO barang per tanggal',
+        'ket':
+            'Rekapitulasi mutasi masuk, keluar, penjualan, dan SO barang per tanggal',
         'grup': 'Laporan Vital & Harian',
         'jenis': 'TAB',
         'target': 'produk:tab:2',
@@ -102,7 +107,8 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
       {
         'id': 'sc_stok_per_tanggal',
         'judul': 'Stok Barang per Tanggal',
-        'ket': 'Posisi kuantitas stok dan nilai persediaan barang pada tanggal acuan tertentu',
+        'ket':
+            'Posisi kuantitas stok dan nilai persediaan barang pada tanggal acuan tertentu',
         'grup': 'Laporan Vital & Harian',
         'jenis': 'LAPORAN',
         'target': 'stok_per_tanggal',
@@ -115,7 +121,8 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
       {
         'id': 'sc_penerimaan_kas_bank_harian',
         'judul': 'Penerimaan Kas per Bank (Harian)',
-        'ket': 'Rekap penerimaan harian per Kas/Bank (Tunai, QRIS, Transfer Bank, EDC, Voucher)',
+        'ket':
+            'Rekap penerimaan harian per Kas/Bank (Tunai, QRIS, Transfer Bank, EDC, Voucher)',
         'grup': 'Laporan Vital & Harian',
         'jenis': 'LAPORAN',
         'target': 'fin_penerimaan_per_metode',
@@ -128,7 +135,8 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
       {
         'id': 'sc_laporan_harian_outlet',
         'judul': 'Laporan Harian Outlet',
-        'ket': 'Rekapitulasi omzet harian outlet: jumlah nota, diskon, pajak, tunai & non-tunai',
+        'ket':
+            'Rekapitulasi omzet harian outlet: jumlah nota, diskon, pajak, tunai & non-tunai',
         'grup': 'Laporan Vital & Harian',
         'jenis': 'LAPORAN',
         'target': 'laporan_harian_outlet',
@@ -141,7 +149,8 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
       {
         'id': 'sc_pos_per_akun_bank',
         'judul': 'Penjualan per Akun Kas & Bank',
-        'ket': 'Penerimaan penjualan POS dikelompokkan per akun kas/bank penampung',
+        'ket':
+            'Penerimaan penjualan POS dikelompokkan per akun kas/bank penampung',
         'grup': 'Laporan Vital & Harian',
         'jenis': 'LAPORAN',
         'target': 'pos_per_akun_bank',
@@ -154,7 +163,8 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
       {
         'id': 'sc_gud_mutasi_item',
         'judul': 'Laporan Ringkasan Mutasi per Item',
-        'ket': 'Tabel laporan mutasi stok per barang (Masuk, Retur, Keluar/Terjual, Opname)',
+        'ket':
+            'Tabel laporan mutasi stok per barang (Masuk, Retur, Keluar/Terjual, Opname)',
         'grup': 'Laporan Vital & Harian',
         'jenis': 'LAPORAN',
         'target': 'gud_mutasi_item',
@@ -167,7 +177,8 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
       {
         'id': 'sc_mutasi_barang_per_tanggal_lap',
         'judul': 'Laporan Mutasi Barang per Tanggal (Cetak/Excel)',
-        'ket': 'Cetak PDF & ekspor Excel mutasi barang harian per tanggal transaksi',
+        'ket':
+            'Cetak PDF & ekspor Excel mutasi barang harian per tanggal transaksi',
         'grup': 'Laporan Vital & Harian',
         'jenis': 'LAPORAN',
         'target': 'mutasi_barang_per_tanggal',
@@ -184,7 +195,8 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
       {
         'id': 'sc_kasir_pos',
         'judul': 'Kasir / POS',
-        'ket': 'Layar transaksi penjualan kasir, scan barcode, dan cetak struk pelanggan',
+        'ket':
+            'Layar transaksi penjualan kasir, scan barcode, dan cetak struk pelanggan',
         'grup': 'Operasional & Persediaan',
         'jenis': 'MENU',
         'target': 'kasir',
@@ -197,7 +209,8 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
       {
         'id': 'sc_data_produk',
         'judul': 'Manajemen Produk & Stok Tanggal',
-        'ket': 'Kelola katalog barang, harga beli/jual, stok per tanggal, dan kartu stok',
+        'ket':
+            'Kelola katalog barang, harga beli/jual, stok per tanggal, dan kartu stok',
         'grup': 'Operasional & Persediaan',
         'jenis': 'TAB',
         'target': 'produk:tab:0',
@@ -210,7 +223,8 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
       {
         'id': 'sc_stok_opname',
         'judul': 'Stok Opname (SO Grand & By Scan per Rak)',
-        'ket': 'Input stok opname per Rak, auto-save centang hijau, ekspor & impor Excel SO',
+        'ket':
+            'Input stok opname per Rak, auto-save centang hijau, ekspor & impor Excel SO',
         'grup': 'Operasional & Persediaan',
         'jenis': 'MENU',
         'target': 'stokopname',
@@ -223,7 +237,8 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
       {
         'id': 'sc_rak_produk',
         'judul': 'Manajemen Rak Produk',
-        'ket': 'Kelola Rak Utama & rak display, AmbilDataBanyak, pindah rak, dan impor Excel rak',
+        'ket':
+            'Kelola Rak Utama & rak display, AmbilDataBanyak, pindah rak, dan impor Excel rak',
         'grup': 'Operasional & Persediaan',
         'jenis': 'MENU',
         'target': 'rak_produk',
@@ -236,7 +251,8 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
       {
         'id': 'sc_kulakan',
         'judul': 'Kulakan / Pembelian Barang',
-        'ket': 'Catat barang masuk dari pemasok/supplier dan pembaruan HPP persediaan',
+        'ket':
+            'Catat barang masuk dari pemasok/supplier dan pembaruan HPP persediaan',
         'grup': 'Operasional & Persediaan',
         'jenis': 'MENU',
         'target': 'kulakan',
@@ -249,7 +265,8 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
       {
         'id': 'sc_riwayat_penjualan',
         'judul': 'Riwayat Penjualan & Detail Nota',
-        'ket': 'Cek struk penjualan, ubah rak pengambilan barang, atau batalkan transaksi',
+        'ket':
+            'Cek struk penjualan, ubah rak pengambilan barang, atau batalkan transaksi',
         'grup': 'Operasional & Persediaan',
         'jenis': 'MENU',
         'target': 'riwayatpenjualan',
@@ -266,7 +283,8 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
       {
         'id': 'sc_laporan_trx_kasir',
         'judul': 'Laporan Transaksi Per Kasir',
-        'ket': 'Rekap sesi kasir, rincian nota + nama pelanggan, penjualan & penerimaan per kasir',
+        'ket':
+            'Rekap sesi kasir, rincian nota + nama pelanggan, penjualan & penerimaan per kasir',
         'grup': 'Pelanggan & Keuangan',
         'jenis': 'TAB',
         'target': 'laporantransaksi:tab:2',
@@ -279,7 +297,8 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
       {
         'id': 'sc_penerimaan_per_kasir',
         'judul': 'Penerimaan Per Kasir & Metode Bayar',
-        'ket': 'Rincian penerimaan uang per kasir dan per metode pembayaran (Tunai/QRIS/Transfer)',
+        'ket':
+            'Rincian penerimaan uang per kasir dan per metode pembayaran (Tunai/QRIS/Transfer)',
         'grup': 'Pelanggan & Keuangan',
         'jenis': 'TAB',
         'target': 'laporantransaksi:tab:5',
@@ -292,7 +311,8 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
       {
         'id': 'sc_topup_member',
         'judul': 'Topup Saldo & Voucher Pelanggan',
-        'ket': 'Input topup saldo/voucher member, unduh template Excel per Unit/Satuan Kerja',
+        'ket':
+            'Input topup saldo/voucher member, unduh template Excel per Unit/Satuan Kerja',
         'grup': 'Pelanggan & Keuangan',
         'jenis': 'TAB',
         'target': 'anggota:tab:4',
@@ -305,7 +325,8 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
       {
         'id': 'sc_data_pelanggan',
         'judul': 'Data Pelanggan / Member',
-        'ket': 'Kelola data member, cek saldo voucher, limit piutang, dan unit sivitas',
+        'ket':
+            'Kelola data member, cek saldo voucher, limit piutang, dan unit sivitas',
         'grup': 'Pelanggan & Keuangan',
         'jenis': 'TAB',
         'target': 'anggota:tab:0',
@@ -318,7 +339,8 @@ List<Map<String, dynamic>> buatDaftarShortcutDefaultLokal() =>
       {
         'id': 'sc_katalog_semua_laporan',
         'judul': 'Katalog Lengkap Laporan-Laporan',
-        'ket': 'Buka seluruh katalog ~150 laporan penjualan, persediaan, kasir, dan akuntansi',
+        'ket':
+            'Buka seluruh katalog ~150 laporan penjualan, persediaan, kasir, dan akuntansi',
         'grup': 'Pelanggan & Keuangan',
         'jenis': 'MENU',
         'target': 'laporan',
@@ -350,7 +372,8 @@ Map<String, dynamic> metadataLaporanShortcut(
     'pnj_per_barang': {
       'id': 'pnj_per_barang',
       'judul': 'Penjualan per Barang (Kuantitas & Nilai)',
-      'ket': 'Qty terjual, diskon, penjualan kotor/bersih, HPP & laba per barang.',
+      'ket':
+          'Qty terjual, diskon, penjualan kotor/bersih, HPP & laba per barang.',
       'produk': true,
       'pelanggan': false,
       'perToko': true,
@@ -358,7 +381,8 @@ Map<String, dynamic> metadataLaporanShortcut(
     'gud_mutasi_item': {
       'id': 'gud_mutasi_item',
       'judul': 'Mutasi Stok per Item (Ringkasan)',
-      'ket': 'Ringkasan mutasi masuk, retur masuk, keluar/terjual, dan opname per barang.',
+      'ket':
+          'Ringkasan mutasi masuk, retur masuk, keluar/terjual, dan opname per barang.',
       'produk': true,
       'pelanggan': false,
       'perToko': true,
@@ -366,7 +390,8 @@ Map<String, dynamic> metadataLaporanShortcut(
     'mutasi_barang_per_tanggal': {
       'id': 'mutasi_barang_per_tanggal',
       'judul': 'Mutasi Barang per Tanggal',
-      'ket': 'Rincian mutasi masuk, retur, keluar/terjual, dan opname barang dikelompokkan per tanggal.',
+      'ket':
+          'Rincian mutasi masuk, retur, keluar/terjual, dan opname barang dikelompokkan per tanggal.',
       'produk': true,
       'pelanggan': false,
       'perToko': true,
@@ -374,7 +399,8 @@ Map<String, dynamic> metadataLaporanShortcut(
     'stok_per_tanggal': {
       'id': 'stok_per_tanggal',
       'judul': 'Stok Barang per Tanggal',
-      'ket': 'Posisi stok dan nilai persediaan pada tanggal acuan (Sampai Tanggal).',
+      'ket':
+          'Posisi stok dan nilai persediaan pada tanggal acuan (Sampai Tanggal).',
       'produk': true,
       'pelanggan': false,
       'perToko': true,
@@ -390,7 +416,8 @@ Map<String, dynamic> metadataLaporanShortcut(
     'pos_per_akun_bank': {
       'id': 'pos_per_akun_bank',
       'judul': 'Penjualan per Akun Kas & Bank',
-      'ket': 'Penerimaan penjualan POS dikelompokkan per akun kas/bank penampung.',
+      'ket':
+          'Penerimaan penjualan POS dikelompokkan per akun kas/bank penampung.',
       'produk': false,
       'pelanggan': false,
       'perToko': true,
@@ -398,7 +425,8 @@ Map<String, dynamic> metadataLaporanShortcut(
     'laporan_harian_outlet': {
       'id': 'laporan_harian_outlet',
       'judul': 'Laporan Harian Outlet',
-      'ket': 'Rekapitulasi penjualan harian per outlet: nota, omzet kotor, diskon, pajak, tunai & non-tunai.',
+      'ket':
+          'Rekapitulasi penjualan harian per outlet: nota, omzet kotor, diskon, pajak, tunai & non-tunai.',
       'produk': false,
       'pelanggan': false,
       'perToko': true,
@@ -440,10 +468,9 @@ bool bolehAksesItemShortcut(Map<String, dynamic> item) {
   final target = '${item['target'] ?? ''}'.trim();
 
   if (kunciMenu.isNotEmpty) {
-    final kunciNormal =
-        kunciMenu == 'rak_produk' || kunciMenu == 'jenis_produk'
-            ? 'produk'
-            : kunciMenu;
+    final kunciNormal = kunciMenu == 'rak_produk' || kunciMenu == 'jenis_produk'
+        ? 'produk'
+        : kunciMenu;
     if (!Sesi.instance.bolehMenu(kunciNormal)) {
       return false;
     }
@@ -708,6 +735,62 @@ Widget? _bangunLayarMenuTarget(String target) {
 }
 
 const String _kunciCacheShortcut = 'master:shortcut_menu_utama_v1';
+const String _kunciCacheShortcutAdmin = 'master:shortcut_menu_admin_v1';
+const String kPesanShortcutBelumTersimpan =
+    'Perubahan belum tersimpan. Pastikan koneksi tersedia, lalu coba simpan kembali.';
+
+/// Menyamakan nama isian layanan AIS dengan nama yang dipakai layar Pintasan.
+/// Layanan mengirim `deskripsi`/`aksesKunci`, sedangkan layar memakai `ket`/
+/// `kunciMenu`; normalisasi ini mencegah informasi hilang saat dibuka ulang.
+Map<String, dynamic> normalisasiShortcutDariLayanan(Map<String, dynamic> raw) =>
+    <String, dynamic>{
+      ...raw,
+      'ket': raw['ket'] ?? raw['deskripsi'] ?? '',
+      'kunciMenu': raw['kunciMenu'] ?? raw['aksesKunci'] ?? '',
+    };
+
+/// Menyusun nama properti yang diterima endpoint penyimpanan shortcut.
+List<Map<String, dynamic>> siapkanShortcutUntukDisimpan(
+  List<Map<String, dynamic>> daftar,
+) =>
+    daftar.map((item) {
+      final hasil = Map<String, dynamic>.from(item);
+      hasil['deskripsi'] = item['ket'] ?? item['deskripsi'] ?? '';
+      hasil['aksesKunci'] = item['kunciMenu'] ?? item['aksesKunci'] ?? '';
+      hasil.remove('ket');
+      hasil.remove('kunciMenu');
+      return hasil;
+    }).toList();
+
+List<Map<String, dynamic>> _daftarShortcutDariRespons(dynamic raw) =>
+    (raw is List ? raw : const <dynamic>[])
+        .whereType<Map>()
+        .map(
+            (e) => normalisasiShortcutDariLayanan(Map<String, dynamic>.from(e)))
+        .toList();
+
+/// Menjalankan pengaturan bersama hanya setelah server mengakui perubahan.
+/// Konfigurasi global tidak masuk antrean offline: pengiriman ulang salinan
+/// usang berisiko menimpa perubahan administrator lain. Callback cache hanya
+/// dipanggil sesudah server memberi status sukses dan daftar kanonis.
+Future<Map<String, dynamic>> jalankanAksiShortcutOnlineOnly({
+  required Future<Map<String, dynamic>> Function(String, Map<String, dynamic>?)
+      kirim,
+  required String aksi,
+  required Map<String, dynamic> payload,
+  required Future<void> Function(Map<String, dynamic>) setelahDikonfirmasi,
+}) async {
+  final respons = await kirim(aksi, payload);
+  final status = respons['status'];
+  if (status != '00' && status != 'success') {
+    throw StateError('Server belum mengonfirmasi perubahan shortcut.');
+  }
+  if (_daftarShortcutDariRespons(respons['semuaShortcut']).isEmpty) {
+    throw StateError('Server belum mengembalikan daftar shortcut terbaru.');
+  }
+  await setelahDikonfirmasi(respons);
+  return respons;
+}
 
 /// Tab pertama pada `RingkasanScreen` ("Menu Utama Shortcut") yang menampilkan
 /// pintasan cepat ke menu, sub-tab, dan laporan paling vital sesuai hak akses
@@ -773,7 +856,8 @@ class _RingkasanTabShortcutState extends State<RingkasanTabShortcut>
   }
 
   void _terapkanDaftar(List<Map<String, dynamic>> sumber) {
-    final tersaring = sumber.where(bolehAksesItemShortcut).toList()
+    final dinormalisasi = sumber.map(normalisasiShortcutDariLayanan).toList();
+    final tersaring = dinormalisasi.where(bolehAksesItemShortcut).toList()
       ..sort((a, b) => ((a['urutan'] as num?)?.toInt() ?? 999)
           .compareTo((b['urutan'] as num?)?.toInt() ?? 999));
     if (!mounted) return;
@@ -787,14 +871,12 @@ class _RingkasanTabShortcutState extends State<RingkasanTabShortcut>
     setStateIfMounted(() => _memuat = true);
     try {
       final res = await ApiClient.instance.aksi('shortcut_menu_list');
-      final dataServer = ((res['data'] as List?) ?? [])
-          .whereType<Map>()
-          .map((e) => Map<String, dynamic>.from(e))
-          .toList();
-      if (res.containsKey('bolehKelola')) {
-        Sesi.instance.bolehKelolaShortcut = res['bolehKelola'] == true ||
-            Sesi.instance.isAdmin ||
-            Sesi.instance.supervisorPedagang;
+      final dataServer = _daftarShortcutDariRespons(res['data']);
+      if (res.containsKey('bolehKelolaShortcut')) {
+        Sesi.instance.bolehKelolaShortcut =
+            res['bolehKelolaShortcut'] == true ||
+                Sesi.instance.isAdmin ||
+                Sesi.instance.supervisorPedagang;
       }
       if (dataServer.isNotEmpty) {
         Sesi.instance.shortcutMenu = dataServer;
@@ -935,27 +1017,22 @@ class _RingkasanTabShortcutState extends State<RingkasanTabShortcut>
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    OutlinedButton.icon(
-                      onPressed: _memuat ? null : _muatDariServer,
-                      icon: _memuat
-                          ? const SizedBox(
-                              width: 15,
-                              height: 15,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.refresh, size: 17),
-                      label: const Text('Muat Ulang'),
-                    ),
-                    if (bolehKelola)
-                      FilledButton.icon(
-                        onPressed: _bukaKelolaShortcut,
-                        icon: const Icon(Icons.tune_outlined, size: 17),
-                        label: const Text('Kelola Shortcut'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
+                    AksiBarisMenu(
+                      tooltip: 'Aksi Menu Utama Shortcut',
+                      aksi: [
+                        AksiBaris(
+                          ikon: Icons.refresh,
+                          label: 'Muat Ulang',
+                          onTap: _memuat ? null : _muatDariServer,
                         ),
-                      ),
+                        if (bolehKelola)
+                          AksiBaris(
+                            ikon: Icons.tune_outlined,
+                            label: 'Kelola Shortcut',
+                            onTap: _bukaKelolaShortcut,
+                          ),
+                      ],
+                    ),
                   ],
                 ),
               ],
@@ -999,7 +1076,9 @@ class _RingkasanTabShortcutState extends State<RingkasanTabShortcut>
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: ChoiceChip(
-                      label: Text(g == 'SEMUA' ? 'Semua Kategori (${_daftar.length})' : g),
+                      label: Text(g == 'SEMUA'
+                          ? 'Semua Kategori (${_daftar.length})'
+                          : g),
                       selected: _grupTerpilih == g,
                       onSelected: (_) => setState(() => _grupTerpilih = g),
                     ),
@@ -1084,8 +1163,7 @@ class _RingkasanTabShortcutState extends State<RingkasanTabShortcut>
                           ? 2
                           : 1;
                   const spasi = 12.0;
-                  final lebarKartu =
-                      (lebar - (spasi * (kolom - 1))) / kolom;
+                  final lebarKartu = (lebar - (spasi * (kolom - 1))) / kolom;
                   return Wrap(
                     spacing: spasi,
                     runSpacing: spasi,
@@ -1279,7 +1357,8 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
       'warna': '#EA580C',
     },
     {
-      'label': 'Laporan: Mutasi Barang per Tanggal Cetak/Excel (mutasi_barang_per_tanggal)',
+      'label':
+          'Laporan: Mutasi Barang per Tanggal Cetak/Excel (mutasi_barang_per_tanggal)',
       'jenis': 'LAPORAN',
       'target': 'mutasi_barang_per_tanggal',
       'kunciMenu': 'laporan',
@@ -1297,7 +1376,8 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
       'warna': '#0284C7',
     },
     {
-      'label': 'Laporan: Penerimaan Kas per Bank Harian (fin_penerimaan_per_metode)',
+      'label':
+          'Laporan: Penerimaan Kas per Bank Harian (fin_penerimaan_per_metode)',
       'jenis': 'LAPORAN',
       'target': 'fin_penerimaan_per_metode',
       'kunciMenu': 'laporan',
@@ -1435,26 +1515,10 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
       _memuat = true;
       _pesanError = null;
     });
-    try {
-      final res = await ApiClient.instance.aksi('shortcut_menu_list');
-      final sumber = ((res['semua'] as List?) ?? (res['data'] as List?) ?? [])
-          .whereType<Map>()
-          .map((e) => Map<String, dynamic>.from(e))
-          .toList();
-      if (sumber.isNotEmpty) {
-        sumber.sort((a, b) => ((a['urutan'] as num?)?.toInt() ?? 999)
-            .compareTo((b['urutan'] as num?)?.toInt() ?? 999));
-        setStateIfMounted(() => _daftar = sumber);
-        await CoreDb.instance
-            .simpanCacheReferensi(_kunciCacheShortcut, jsonEncode(sumber));
-        return;
-      }
-    } catch (_) {}
-
-    // Fallback lokal bila server belum di-update / offline
+    // Cache admin dipisahkan dari daftar pengguna yang sudah disaring haknya.
     try {
       final rawLokal =
-          await CoreDb.instance.ambilCacheReferensi(_kunciCacheShortcut);
+          await CoreDb.instance.ambilCacheReferensi(_kunciCacheShortcutAdmin);
       if (rawLokal != null && rawLokal.isNotEmpty) {
         final decoded = jsonDecode(rawLokal);
         if (decoded is List && decoded.isNotEmpty) {
@@ -1464,16 +1528,30 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
                 .map((e) => Map<String, dynamic>.from(e))
                 .toList();
           });
-          return;
         }
       }
     } catch (_) {}
 
-    setStateIfMounted(() {
-      _daftar = buatDaftarShortcutDefaultLokal();
-    });
-    if (mounted) {
-      setStateIfMounted(() => _memuat = false);
+    try {
+      final res = await ApiClient.instance.aksi('shortcut_menu_list');
+      final sumber = _daftarShortcutDariRespons(res['semuaShortcut']);
+      if (sumber.isNotEmpty) {
+        sumber.sort((a, b) => ((a['urutan'] as num?)?.toInt() ?? 999)
+            .compareTo((b['urutan'] as num?)?.toInt() ?? 999));
+        setStateIfMounted(() => _daftar = sumber);
+        await CoreDb.instance
+            .simpanCacheReferensi(_kunciCacheShortcutAdmin, jsonEncode(sumber));
+      } else if (_daftar.isEmpty) {
+        setStateIfMounted(() => _daftar = buatDaftarShortcutDefaultLokal());
+      }
+    } catch (_) {
+      if (_daftar.isEmpty) {
+        setStateIfMounted(() => _daftar = buatDaftarShortcutDefaultLokal());
+      }
+      setStateIfMounted(() => _pesanError =
+          'Data terakhir ditampilkan. Hubungkan perangkat ke jaringan untuk memuat pengaturan terbaru.');
+    } finally {
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 
@@ -1490,25 +1568,25 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
       _pesanError = null;
     });
     try {
-      await CoreDb.instance
-          .simpanCacheReferensi(_kunciCacheShortcut, jsonEncode(_daftar));
-      Sesi.instance.shortcutMenu =
-          _daftar.map((e) => Map<String, dynamic>.from(e)).toList();
-
-      final res = await ApiClient.instance.aksi('shortcut_menu_simpan', {
-        'daftar': _daftar,
-      });
-      final dariServer =
-          ((res['semua'] as List?) ?? (res['data'] as List?) ?? [])
-              .whereType<Map>()
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList();
-      if (dariServer.isNotEmpty) {
-        setStateIfMounted(() => _daftar = dariServer);
-        Sesi.instance.shortcutMenu = dariServer;
-        await CoreDb.instance
-            .simpanCacheReferensi(_kunciCacheShortcut, jsonEncode(dariServer));
-      }
+      // Pengaturan ini dibagi antar admin; jangan antrekan daftar lama saat
+      // offline karena replay dapat menimpa perubahan admin lain.
+      final res = await jalankanAksiShortcutOnlineOnly(
+        aksi: 'shortcut_menu_simpan',
+        payload: {'items': siapkanShortcutUntukDisimpan(_daftar)},
+        kirim: ApiClient.instance.aksi,
+        setelahDikonfirmasi: (konfirmasi) async {
+          final admin = _daftarShortcutDariRespons(konfirmasi['semuaShortcut']);
+          final daftarAktif = _daftarShortcutDariRespons(konfirmasi['data']);
+          setStateIfMounted(() => _daftar = admin);
+          Sesi.instance.shortcutMenu = daftarAktif;
+          await CoreDb.instance.simpanCacheReferensi(
+              _kunciCacheShortcutAdmin, jsonEncode(admin));
+          await CoreDb.instance.simpanCacheReferensi(
+              _kunciCacheShortcut, jsonEncode(daftarAktif));
+        },
+      );
+      final dariServer = _daftarShortcutDariRespons(res['semuaShortcut']);
+      setStateIfMounted(() => _daftar = dariServer);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1521,7 +1599,7 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Tersimpan di perangkat lokal (server belum terjangkau / menunggu sinkron): $e',
+              '$kPesanShortcutBelumTersimpan ($e)',
             ),
           ),
         );
@@ -1545,14 +1623,16 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
           'Daftar shortcut akan dikembalikan ke 21 pintasan vital bawaan sistem (termasuk 5 laporan utama). Lanjutkan?',
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Ya, Reset ke Default'),
-          ),
+          AksiBarisMenu(aksi: [
+            AksiBaris(
+                ikon: Icons.close,
+                label: 'Batal',
+                onTap: () => Navigator.of(ctx).pop(false)),
+            AksiBaris(
+                ikon: Icons.restore,
+                label: 'Ya, Reset ke Default',
+                onTap: () => Navigator.of(ctx).pop(true)),
+          ]),
         ],
       ),
     );
@@ -1560,16 +1640,28 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
 
     setStateIfMounted(() => _menyimpan = true);
     try {
-      final defaultLokal = buatDaftarShortcutDefaultLokal();
-      setStateIfMounted(() => _daftar = defaultLokal);
-      Sesi.instance.shortcutMenu = defaultLokal;
-      await CoreDb.instance.simpanCacheReferensi(
-          _kunciCacheShortcut, jsonEncode(defaultLokal));
-      await ApiClient.instance.aksi('shortcut_menu_reset');
+      final res = await jalankanAksiShortcutOnlineOnly(
+        aksi: 'shortcut_menu_reset',
+        payload: const {},
+        kirim: ApiClient.instance.aksi,
+        setelahDikonfirmasi: (konfirmasi) async {
+          final semua = _daftarShortcutDariRespons(konfirmasi['semuaShortcut']);
+          final aktif = _daftarShortcutDariRespons(konfirmasi['data']);
+          setStateIfMounted(() => _daftar = semua);
+          Sesi.instance.shortcutMenu = aktif;
+          await CoreDb.instance.simpanCacheReferensi(
+              _kunciCacheShortcutAdmin, jsonEncode(semua));
+          await CoreDb.instance
+              .simpanCacheReferensi(_kunciCacheShortcut, jsonEncode(aktif));
+        },
+      );
+      final semua = _daftarShortcutDariRespons(res['semuaShortcut']);
+      setStateIfMounted(() => _daftar = semua);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Shortcut berhasil dikembalikan ke pengaturan default.'),
+            content:
+                Text('Shortcut berhasil dikembalikan ke pengaturan default.'),
           ),
         );
       }
@@ -1577,7 +1669,8 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Shortcut telah direset ke daftar default bawaan.'),
+            content:
+                Text('Reset belum berhasil. Periksa koneksi, lalu coba lagi.'),
           ),
         );
       }
@@ -1658,7 +1751,8 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
                         warna = p['warna']!;
                         if (ctrlJudul.text.trim().isEmpty) {
                           ctrlJudul.text = p['label']!
-                              .replaceFirst(RegExp(r'^(Laporan|Tab|Menu):\s*'), '')
+                              .replaceFirst(
+                                  RegExp(r'^(Laporan|Tab|Menu):\s*'), '')
                               .replaceFirst(RegExp(r'\s*\([^)]*\)$'), '');
                         }
                       });
@@ -1688,9 +1782,10 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<String>(
-                          value: const ['LAPORAN', 'TAB', 'MENU'].contains(jenis)
-                              ? jenis
-                              : 'MENU',
+                          value:
+                              const ['LAPORAN', 'TAB', 'MENU'].contains(jenis)
+                                  ? jenis
+                                  : 'MENU',
                           decoration: const InputDecoration(
                             labelText: 'Jenis Target',
                             border: OutlineInputBorder(),
@@ -1698,7 +1793,8 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
                           ),
                           items: const [
                             DropdownMenuItem(
-                                value: 'LAPORAN', child: Text('Laporan Katalog')),
+                                value: 'LAPORAN',
+                                child: Text('Laporan Katalog')),
                             DropdownMenuItem(
                                 value: 'TAB', child: Text('Sub-Tab Layar')),
                             DropdownMenuItem(
@@ -1741,7 +1837,8 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
                         child: TextField(
                           controller: ctrlKunciMenu,
                           decoration: const InputDecoration(
-                            labelText: 'Kunci Hak Akses (mis. laporan / produk)',
+                            labelText:
+                                'Kunci Hak Akses (mis. laporan / produk)',
                             border: OutlineInputBorder(),
                             isDense: true,
                           ),
@@ -1761,20 +1858,22 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogCtx).pop(false),
-              child: const Text('Batal'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (ctrlJudul.text.trim().isEmpty ||
-                    ctrlTarget.text.trim().isEmpty) {
-                  return;
-                }
-                Navigator.of(dialogCtx).pop(true);
-              },
-              child: const Text('Terapkan'),
-            ),
+            AksiBarisMenu(aksi: [
+              AksiBaris(
+                  ikon: Icons.close,
+                  label: 'Batal',
+                  onTap: () => Navigator.of(dialogCtx).pop(false)),
+              AksiBaris(
+                  ikon: Icons.check,
+                  label: 'Terapkan',
+                  onTap: () {
+                    if (ctrlJudul.text.trim().isEmpty ||
+                        ctrlTarget.text.trim().isEmpty) {
+                      return;
+                    }
+                    Navigator.of(dialogCtx).pop(true);
+                  }),
+            ]),
           ],
         ),
       ),
@@ -1813,39 +1912,47 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
       judul: 'Kelola Shortcut Menu Utama',
       subjudul:
           'Atur pintasan menu, sub-tab, dan laporan paling vital yang tampil di Menu Utama Shortcut',
-      aksiHeader: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          OutlinedButton.icon(
-            onPressed: _menyimpan ? null : _resetKeDefault,
-            icon: const Icon(Icons.restore_rounded, size: 18),
-            label: const Text('Reset Default'),
-          ),
-          OutlinedButton.icon(
-            onPressed: _menyimpan ? null : () => _tampilkanDialogForm(),
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('Tambah Shortcut'),
-          ),
-          FilledButton.icon(
-            onPressed: _menyimpan ? null : _simpanKeServer,
-            icon: _menyimpan
-                ? const SizedBox(
-                    width: 15,
-                    height: 15,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.save_outlined, size: 18),
-            label: const Text('Simpan Perubahan'),
-          ),
+      aksiHeader: AksiBarisMenu(
+        tooltip: 'Aksi Kelola Shortcut',
+        aksi: [
+          AksiBaris(
+              ikon: Icons.add_rounded,
+              label: 'Tambah Shortcut',
+              onTap: _menyimpan ? null : () => _tampilkanDialogForm()),
+          AksiBaris(
+              ikon: Icons.save_outlined,
+              label: 'Simpan Perubahan',
+              onTap: _menyimpan ? null : _simpanKeServer),
+          AksiBaris(
+              ikon: Icons.restore_rounded,
+              label: 'Reset Default',
+              onTap: _menyimpan ? null : _resetKeDefault,
+              merusak: true),
         ],
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute<void>(
+                      builder: (_) => const RingkasanScreen()),
+                ),
+                child: const Text('Dashboard'),
+              ),
+              const Icon(Icons.chevron_right, size: 16),
+              TextButton(
+                onPressed: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute<void>(
+                      builder: (_) => const KelolaShortcutScreen()),
+                ),
+                child: const Text('Kelola Shortcut'),
+              ),
+            ],
+          ),
           if (_pesanError != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -1906,12 +2013,16 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
                         ),
                         title: Row(
                           children: [
-                            Text(
-                              '${idx + 1}. ${item['judul'] ?? ''}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                decoration:
-                                    aktif ? null : TextDecoration.lineThrough,
+                            Flexible(
+                              child: Text(
+                                '${idx + 1}. ${item['judul'] ?? ''}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  decoration:
+                                      aktif ? null : TextDecoration.lineThrough,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -1922,12 +2033,18 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
                                 color: AppColors.latarLembut(warna),
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              child: Text(
-                                '${item['grup'] ?? ''}',
-                                style: TextStyle(
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: warna),
+                              child: ConstrainedBox(
+                                constraints:
+                                    const BoxConstraints(maxWidth: 150),
+                                child: Text(
+                                  '${item['grup'] ?? ''}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: warna),
+                                ),
                               ),
                             ),
                           ],
@@ -1936,57 +2053,51 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
                           '${item['ket'] ?? ''}  •  [${item['jenis']}: ${item['target']} | Akses: ${item['kunciMenu']}]',
                           style: const TextStyle(fontSize: 12),
                         ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Switch(
-                              value: aktif,
-                              onChanged: (v) {
-                                setState(() => item['aktif'] = v);
-                              },
+                        trailing: AksiBarisMenu(
+                          aksi: [
+                            AksiBaris(
+                              ikon: aktif
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              label: aktif ? 'Nonaktifkan' : 'Aktifkan',
+                              onTap: () =>
+                                  setState(() => item['aktif'] = !aktif),
                             ),
-                            IconButton(
-                              tooltip: 'Geser Naik',
-                              icon: const Icon(Icons.arrow_upward, size: 18),
-                              onPressed: idx == 0
+                            AksiBaris(
+                              ikon: Icons.arrow_upward,
+                              label: 'Geser Naik',
+                              onTap: idx == 0
                                   ? null
-                                  : () {
-                                      setState(() {
+                                  : () => setState(() {
                                         final tmp = _daftar.removeAt(idx);
                                         _daftar.insert(idx - 1, tmp);
                                         _urutkanUlangNomor();
-                                      });
-                                    },
+                                      }),
                             ),
-                            IconButton(
-                              tooltip: 'Geser Turun',
-                              icon: const Icon(Icons.arrow_downward, size: 18),
-                              onPressed: idx >= _daftar.length - 1
+                            AksiBaris(
+                              ikon: Icons.arrow_downward,
+                              label: 'Geser Turun',
+                              onTap: idx >= _daftar.length - 1
                                   ? null
-                                  : () {
-                                      setState(() {
+                                  : () => setState(() {
                                         final tmp = _daftar.removeAt(idx);
                                         _daftar.insert(idx + 1, tmp);
                                         _urutkanUlangNomor();
-                                      });
-                                    },
+                                      }),
                             ),
-                            IconButton(
-                              tooltip: 'Ubah',
-                              icon: const Icon(Icons.edit_outlined, size: 18),
-                              onPressed: () =>
-                                  _tampilkanDialogForm(indexEdit: idx),
+                            AksiBaris(
+                              ikon: Icons.edit_outlined,
+                              label: 'Ubah',
+                              onTap: () => _tampilkanDialogForm(indexEdit: idx),
                             ),
-                            IconButton(
-                              tooltip: 'Hapus',
-                              icon: const Icon(Icons.delete_outline,
-                                  size: 18, color: AppColors.danger),
-                              onPressed: () {
-                                setState(() {
-                                  _daftar.removeAt(idx);
-                                  _urutkanUlangNomor();
-                                });
-                              },
+                            AksiBaris(
+                              ikon: Icons.delete_outline,
+                              label: 'Hapus',
+                              merusak: true,
+                              onTap: () => setState(() {
+                                _daftar.removeAt(idx);
+                                _urutkanUlangNomor();
+                              }),
                             ),
                           ],
                         ),
