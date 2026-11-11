@@ -83,17 +83,13 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
       if (!mounted) return;
       setStateIfMounted(() {
         _daftarRakToko = list;
-        if (_rakTerpilihId == null && list.isNotEmpty) {
-          final utama = list.firstWhere(
-            (r) =>
-                r['utama'] == true ||
-                '${r['kode'] ?? ''}'.toUpperCase() == 'RAK-UTAMA' ||
-                '${r['nama'] ?? ''}'.toLowerCase().contains('rak utama'),
-            orElse: () => list.first,
-          );
-          _rakTerpilihId = (utama['id'] as num?)?.toInt();
-          _rakTerpilihNama = '${utama['nama'] ?? 'RAK Utama'}';
-        }
+        /*
+         * Catatan Arsitektur Filter Rak Stok Opname:
+         * Biarkan _rakTerpilihId tetap null ("Semua Rak / Default RAK Utama") saat awal halaman dibuka
+         * agar tab SO Grand dan tab lainnya menampilkan seluruh rak toko (bukan mengunci tampilan
+         * hanya pada RAK Utama). Saat petugas menginput stok opname tanpa memilih rak spesifik,
+         * server otomatis mencatat ke RAK Utama produk masing-masing.
+         */
       });
     } catch (_) {}
   }
@@ -525,6 +521,23 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
                       _daftarRakToko = daftarRak;
                     });
                   }
+                },
+                onFilterRakBerubah: (rakId) {
+                  if (!mounted || _rakTerpilihId == rakId) return;
+                  setStateIfMounted(() {
+                    _rakTerpilihId = rakId;
+                    if (rakId == -1) {
+                      _rakTerpilihNama = 'Rak Belum Ditentukan';
+                    } else if (rakId != null) {
+                      final m = _daftarRakToko.firstWhere(
+                        (r) => (r['id'] as num?)?.toInt() == rakId,
+                        orElse: () => const {},
+                      );
+                      _rakTerpilihNama = '${m['nama'] ?? 'RAK Utama'}';
+                    } else {
+                      _rakTerpilihNama = '';
+                    }
+                  });
                 },
               ),
               const TabPkmKuantitasMaksimum(),

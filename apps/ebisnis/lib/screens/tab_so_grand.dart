@@ -37,12 +37,14 @@ class TabSoGrand extends StatefulWidget {
   final String filterRakNama;
   final void Function(List<Map<String, dynamic>> daftarRak)?
       onDaftarRakDiperbarui;
+  final void Function(int? rakId)? onFilterRakBerubah;
 
   const TabSoGrand({
     super.key,
     this.filterRakId,
     this.filterRakNama = '',
     this.onDaftarRakDiperbarui,
+    this.onFilterRakBerubah,
   });
 
   @override
@@ -164,12 +166,11 @@ class _TabSoGrandState extends State<TabSoGrand> {
       if (tokoId != null && tokoId > 0) {
         payload['toko_id'] = tokoId;
       }
-      if (_rakFilterTerpilih.isNotEmpty && _rakFilterTerpilih != '0') {
-        final rId = int.tryParse(_rakFilterTerpilih);
-        if (rId != null && rId > 0) {
-          payload['rak_id'] = rId;
-        }
-      }
+      /*
+       * Jangan mengirim payload['rak_id'] saat memuat daftar awal SO Grand,
+       * supaya _semuaProduk di memori selalu memuat seluruh baris produk-rak aktif toko
+       * dan pergantian pilihan dropdown rak dapat menyaring secara instan via _terapkanFilter().
+       */
 
       try {
         final resRak = await ApiClient.instance.aksi('rak_list', payload);
@@ -207,10 +208,6 @@ class _TabSoGrandState extends State<TabSoGrand> {
                 (m['id'] as num?)?.toInt() ??
                 0;
             if (pId <= 0) continue;
-            final stok = (m['stokRak'] as num?)?.toDouble() ??
-                (m['stokSistem'] as num?)?.toDouble() ??
-                (m['stok'] as num?)?.toDouble() ??
-                0;
             final hb = (m['hargaBeli'] as num?)?.toDouble() ??
                 (m['harga_beli'] as num?)?.toDouble() ??
                 (m['harga'] as num?)?.toDouble() ??
@@ -219,30 +216,75 @@ class _TabSoGrandState extends State<TabSoGrand> {
                 (m['harga_jual'] as num?)?.toDouble() ??
                 (m['harga'] as num?)?.toDouble() ??
                 0;
-            final nilai = stok * hb;
-            totalStok += stok;
-            totalAset += nilai;
-            list.add({
-              'produkId': pId,
-              'kode': '${m['kode'] ?? '-'}',
-              'barcode': '${m['barcode'] ?? ''}',
-              'nama': '${m['nama'] ?? '-'}',
-              'kategori': '${m['kategori'] ?? m['jenis'] ?? 'Umum'}',
-              'satuan': '${m['satuan'] ?? 'PCS'}',
-              'rakId': (m['rakId'] as num?)?.toInt() ??
-                  (m['rakUtamaId'] as num?)?.toInt(),
-              'rakKode': '${m['rakKode'] ?? ''}',
-              'rakNama':
-                  '${m['rakNama'] ?? m['rakUtamaNama'] ?? 'Rak Belum Ditentukan'}',
-              'stokRak': stok,
-              'stokSistem': stok,
-              'stokTotalProduk': (m['stokTotalProduk'] as num?)?.toDouble() ??
+            final stokTotalProd = (m['stokTotalProduk'] as num?)?.toDouble() ??
+                (m['stok'] as num?)?.toDouble() ??
+                (m['stokRak'] as num?)?.toDouble() ??
+                (m['stokSistem'] as num?)?.toDouble() ??
+                0;
+            final daftarRakItem = (m['daftarRak'] as List?)
+                    ?.whereType<Map>()
+                    .map((r) => Map<String, dynamic>.from(r))
+                    .toList() ??
+                const [];
+            if (daftarRakItem.isNotEmpty) {
+              for (final r in daftarRakItem) {
+                final rId = (r['rakId'] as num?)?.toInt() ??
+                    (r['id'] as num?)?.toInt();
+                final rKode = '${r['rakKode'] ?? r['kode'] ?? ''}';
+                final rNama =
+                    '${r['rakNama'] ?? r['nama'] ?? m['rakUtamaNama'] ?? 'Rak Belum Ditentukan'}';
+                final stokRak = (r['stok'] as num?)?.toDouble() ??
+                    (r['stokRak'] as num?)?.toDouble() ??
+                    0;
+                final nilai = stokRak * hb;
+                totalStok += stokRak;
+                totalAset += nilai;
+                list.add({
+                  'produkId': pId,
+                  'kode': '${m['kode'] ?? '-'}',
+                  'barcode': '${m['barcode'] ?? ''}',
+                  'nama': '${m['nama'] ?? '-'}',
+                  'kategori': '${m['kategori'] ?? m['jenis'] ?? 'Umum'}',
+                  'satuan': '${m['satuan'] ?? 'PCS'}',
+                  'rakId': rId,
+                  'rakKode': rKode,
+                  'rakNama': rNama,
+                  'stokRak': stokRak,
+                  'stokSistem': stokRak,
+                  'stokTotalProduk': stokTotalProd,
+                  'hargaBeli': hb,
+                  'hargaJual': hj,
+                  'nilaiAset': nilai,
+                });
+              }
+            } else {
+              final stok = (m['stokRak'] as num?)?.toDouble() ??
+                  (m['stokSistem'] as num?)?.toDouble() ??
                   (m['stok'] as num?)?.toDouble() ??
-                  stok,
-              'hargaBeli': hb,
-              'hargaJual': hj,
-              'nilaiAset': nilai,
-            });
+                  0;
+              final nilai = stok * hb;
+              totalStok += stok;
+              totalAset += nilai;
+              list.add({
+                'produkId': pId,
+                'kode': '${m['kode'] ?? '-'}',
+                'barcode': '${m['barcode'] ?? ''}',
+                'nama': '${m['nama'] ?? '-'}',
+                'kategori': '${m['kategori'] ?? m['jenis'] ?? 'Umum'}',
+                'satuan': '${m['satuan'] ?? 'PCS'}',
+                'rakId': (m['rakId'] as num?)?.toInt() ??
+                    (m['rakUtamaId'] as num?)?.toInt(),
+                'rakKode': '${m['rakKode'] ?? ''}',
+                'rakNama':
+                    '${m['rakNama'] ?? m['rakUtamaNama'] ?? 'Rak Belum Ditentukan'}',
+                'stokRak': stok,
+                'stokSistem': stok,
+                'stokTotalProduk': stokTotalProd,
+                'hargaBeli': hb,
+                'hargaJual': hj,
+                'nilaiAset': nilai,
+              });
+            }
           }
         } catch (_) {
           final cacheProduk =
@@ -998,8 +1040,16 @@ class _TabSoGrandState extends State<TabSoGrand> {
                           )),
                     ],
                     onChanged: (val) {
-                      setStateIfMounted(() => _rakFilterTerpilih = val ?? '');
+                      final v = val ?? '';
+                      setStateIfMounted(() => _rakFilterTerpilih = v);
                       _terapkanFilter();
+                      if (v.isEmpty) {
+                        widget.onFilterRakBerubah?.call(null);
+                      } else if (v == '0' || v == '-1') {
+                        widget.onFilterRakBerubah?.call(-1);
+                      } else {
+                        widget.onFilterRakBerubah?.call(int.tryParse(v));
+                      }
                     },
                   ),
                   if (_daftarKategori.isNotEmpty)
