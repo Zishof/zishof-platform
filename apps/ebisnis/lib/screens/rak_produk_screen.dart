@@ -1166,6 +1166,65 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
     }
   }
 
+  Future<void> _muatDataRakStandarToko() async {
+    final konfirmasi = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Muat Data Rak & Produk Standar Toko'),
+        content: const Text(
+          'Apakah Anda ingin memuat master rak beserta pemetaan produk standar toko (RAK DEPAN A03, RAK SAMPING KIRI/KANAN/BELAKANG A03, FLOOR C01, RAK SINGLE B01-B03, RAK COOLER B04, SHOWCASE CASHIER D01)?\n\n'
+          'Proses ini aman (idempoten): hanya menambahkan rak/produk yang belum terdaftar dan menjaga RAK Utama setiap produk.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.playlist_add_check, size: 18),
+            label: const Text('Muat Sekarang'),
+          ),
+        ],
+      ),
+    );
+    if (konfirmasi != true) return;
+
+    try {
+      Map<String, dynamic>? res;
+      await _jalankanDenganProgress(
+        judul: 'Memuat Data Rak & Produk Standar Toko',
+        tugas: (update) async {
+          update(0.30, 'Memproses pemetaan 10 rak standar & produk di server...');
+          res = await ApiClient.instance.aksi('rak_seed_standar', {
+            if (_tokoIdAktif != null && _tokoIdAktif! > 0)
+              'toko_id': _tokoIdAktif,
+            'paksa_impor': true,
+          });
+          update(0.85, 'Memuat ulang daftar rak & produk...');
+          await _muatDaftarRak();
+        },
+      );
+      if (!mounted || res == null) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${res!['description'] ?? 'Data rak standar berhasil dimuat.'}',
+          ),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal memuat data rak standar: $e'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+    }
+  }
+
   void _bukaStokOpname() {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const StokOpnameScreen()),
@@ -1214,6 +1273,11 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
             onPressed: _unggahExcelRak,
             icon: const Icon(Icons.upload_file_outlined, size: 17),
             label: const Text('Upload Excel Rak'),
+          ),
+          OutlinedButton.icon(
+            onPressed: _muatDataRakStandarToko,
+            icon: const Icon(Icons.playlist_add_check, size: 17),
+            label: const Text('Muat Data Rak Standar'),
           ),
           FilledButton.icon(
             onPressed: () => _bukaDialogFormRak(),

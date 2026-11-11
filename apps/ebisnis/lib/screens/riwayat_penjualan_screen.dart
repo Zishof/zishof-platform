@@ -2614,138 +2614,95 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
             ),
           ),
           actions: [
-            PopupMenuButton<String>(
-              tooltip: 'Pilih tindakan transaksi',
-              icon: const Icon(Icons.more_vert),
-              onSelected: (aksi) async {
-                switch (aksi) {
-                  case 'edit_member':
+            if (payloadLokal is Map && row['idTransaksi'] == null)
+              OutlinedButton.icon(
+                onPressed: () async {
                   Navigator.of(context).pop();
-                    await _koreksiMemberPembeliLokal(
+                  await _koreksiMemberPembeliLokal(
                     row,
-                      Map<String, dynamic>.from(payloadLokal as Map),
+                    Map<String, dynamic>.from(payloadLokal),
                   );
-                    break;
-                  case 'ubah_pembayaran':
-                  Navigator.of(context).pop();
-                    await _koreksiMetodePembayaranLokal(
-                    row,
-                      Map<String, dynamic>.from(payloadLokal as Map),
-                  );
-                    break;
-                  case 'kirim_ulang':
-                    Navigator.of(context).pop();
-                    await _forceKirimAtauCekServer(row);
-                    break;
-                  case 'edit_transaksi':
-                    Navigator.of(context).pop();
-                    await _editTransaksi(row, hasil, items);
-                    break;
-                  case 'aktifkan_koreksi':
-                    Navigator.of(context).pop();
-                    final aktif = await _aktifkanKoreksiTransaksiToko(
-                        hasil['tokoIdTransaksi']);
-                    if (aktif && mounted) await _lihatDetail(row);
-                    break;
-                  case 'batalkan':
-                    Navigator.of(context).pop();
-                    await _batalkanTransaksi(row);
-                    break;
-                  case 'cetak':
-                    Navigator.of(context).pop();
-                    await _cetakUlang(row, hasil, items);
-                    break;
-                  case 'tutup':
-                    Navigator.of(context).pop();
-                    break;
-                }
                 },
-              itemBuilder: (context) => [
-                if (payloadLokal is Map && row['idTransaksi'] == null)
-                  const PopupMenuItem<String>(
-                    value: 'edit_member',
-                    child: Row(children: [
-                      Icon(Icons.person_search_outlined),
-                      SizedBox(width: 12),
-                      Text('Edit Member/Pembeli'),
-                    ]),
+                icon: const Icon(Icons.person_search_outlined, size: 16),
+                label: const Text('Edit Member'),
               ),
             if (payloadLokal is Map && row['idTransaksi'] == null)
-                  const PopupMenuItem<String>(
-                    value: 'ubah_pembayaran',
-                    child: Row(children: [
-                      Icon(Icons.payments_outlined),
-                      SizedBox(width: 12),
-                      Text('Ubah Metode Pembayaran'),
-                    ]),
-                ),
-                if (payloadLokal is Map && row['idTransaksi'] == null)
-                  const PopupMenuItem<String>(
-                    value: 'kirim_ulang',
-                    child: Row(children: [
-                      Icon(Icons.sync),
-                      SizedBox(width: 12),
-                      Text('Kirim Ulang / Cek Server'),
-                    ]),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  Navigator.of(context).pop();
+                  await _koreksiMetodePembayaranLokal(
+                    row,
+                    Map<String, dynamic>.from(payloadLokal),
+                  );
+                },
+                icon: const Icon(Icons.payments_outlined, size: 16),
+                label: const Text('Ubah Pembayaran'),
+              ),
+            if (payloadLokal is Map && row['idTransaksi'] == null)
+              OutlinedButton.icon(
+                onPressed: () async {
+                  Navigator.of(context).pop();
+                  await _forceKirimAtauCekServer(row);
+                },
+                icon: const Icon(Icons.sync, size: 16),
+                label: const Text('Kirim Ulang'),
               ),
             if (hasil['bolehEditTransaksi'] == true ||
                 hasil['bisaEditDenganSupervisor'] == true ||
                 row['idTransaksi'] != null)
-                  PopupMenuItem<String>(
-                    value: 'edit_transaksi',
-                    child: Row(children: [
-                      const Icon(Icons.edit_note_outlined),
-                      const SizedBox(width: 12),
-                      Text(Sesi.instance.bolehKelola
+              OutlinedButton.icon(
+                onPressed: () async {
+                  Navigator.of(context).pop();
+                  await _editTransaksi(row, hasil, items);
+                },
+                icon: const Icon(Icons.edit_note_outlined, size: 18),
+                label: Text(Sesi.instance.bolehKelola
                     ? 'Edit Transaksi'
                     : 'Edit Transaksi (Supervisor)'),
-                    ]),
               ),
             if (hasil['bolehEditTransaksi'] != true &&
                 hasil['bolehAktifkanKebijakanEditTransaksi'] == true &&
                 hasil['kebijakanEditGlobalAktif'] != true &&
                 hasil['kebijakanEditTokoAktif'] != true &&
                 hasil['tokoIdTransaksi'] != null)
-                  const PopupMenuItem<String>(
-                    value: 'aktifkan_koreksi',
-                    child: Row(children: [
-                      Icon(Icons.admin_panel_settings_outlined),
-                      SizedBox(width: 12),
-                      Text('Aktifkan Koreksi Toko'),
-                    ]),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  Navigator.of(context).pop();
+                  final aktif = await _aktifkanKoreksiTransaksiToko(
+                      hasil['tokoIdTransaksi']);
+                  if (aktif && mounted) await _lihatDetail(row);
+                },
+                icon:
+                    const Icon(Icons.admin_panel_settings_outlined, size: 18),
+                label: const Text('Aktifkan Koreksi Toko'),
               ),
             if (row['idTransaksi'] != null)
-                  PopupMenuItem<String>(
-                    value: 'batalkan',
-                    child: Row(children: [
-                      const Icon(Icons.cancel_outlined, color: Colors.red),
-                      const SizedBox(width: 12),
-                      Text(
-                        Sesi.instance.bolehKelola
-                    ? 'Batalkan Transaksi'
-                            : 'Batalkan Transaksi (Supervisor)',
-                        style: const TextStyle(color: Colors.red),
+              TextButton.icon(
+                onPressed: () async {
+                  Navigator.of(context).pop();
+                  await _batalkanTransaksi(row);
+                },
+                icon: const Icon(Icons.cancel_outlined,
+                    size: 18, color: Colors.red),
+                label: Text(
+                  Sesi.instance.bolehKelola
+                      ? 'Batalkan Transaksi'
+                      : 'Batalkan Transaksi (Supervisor)',
+                  style: const TextStyle(
+                      color: Colors.red, fontWeight: FontWeight.w600),
+                ),
               ),
-                    ]),
-                  ),
-                const PopupMenuItem<String>(
-                  value: 'cetak',
-                  child: Row(children: [
-                    Icon(Icons.print_outlined),
-                    SizedBox(width: 12),
-                    Text('Cetak Struk'),
-                  ]),
-                ),
-                const PopupMenuDivider(),
-                const PopupMenuItem<String>(
-                  value: 'tutup',
-                  child: Row(children: [
-                    Icon(Icons.close),
-                    SizedBox(width: 12),
-                    Text('Tutup'),
-                  ]),
-                ),
-              ],
+            OutlinedButton.icon(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _cetakUlang(row, hasil, items);
+              },
+              icon: const Icon(Icons.print_outlined, size: 18),
+              label: const Text('Cetak Struk'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Tutup'),
             ),
           ],
         ),

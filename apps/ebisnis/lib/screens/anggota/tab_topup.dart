@@ -261,48 +261,134 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
   Future<void> _downloadTemplateExcel() async {
     setStateIfMounted(() => _memprosesBerkas = true);
     try {
-      final tipeHasil = await ApiClient.instance.aksi('tipe_anggota_list', {});
-      final tipe = ((tipeHasil['data'] as List?) ?? [])
+      final hasilFutures = await Future.wait([
+        ApiClient.instance.aksi('satuan_kerja_list', {
+          'tampilkan_nonaktif': false,
+          'sertakan_unit_member': true,
+        }),
+        ApiClient.instance.aksi('tipe_anggota_list', {}),
+      ]);
+      final satuanKerjaRaw = ((hasilFutures[0]['data'] as List?) ?? [])
           .whereType<Map<String, dynamic>>()
           .toList();
-      if (tipe.isEmpty) {
-        _info('Daftar Tipe Member belum tersedia dari server.');
-        return;
-      }
+      final tipeRaw = ((hasilFutures[1]['data'] as List?) ?? [])
+          .whereType<Map<String, dynamic>>()
+          .toList();
+
+      // Susun daftar pilihan Satuan Kerja / Unit (dengan opsi "Semua Satuan Kerja / Unit" di urutan pertama)
+      final opsiSatuanKerja = <Map<String, dynamic>>[
+        {
+          'id': null,
+          'kode': 'SEMUA',
+          'nama': 'Semua Satuan Kerja / Unit',
+          'semua': true,
+        },
+        ...satuanKerjaRaw,
+      ];
+      final opsiTipe = <Map<String, dynamic>>[
+        {
+          'id': null,
+          'nama': 'Semua Tipe Member',
+          'semua': true,
+        },
+        ...tipeRaw,
+      ];
+
       if (!mounted) return;
-      final dipilih = await showDialog<Map<String, dynamic>>(
+      final konfirmasi = await showDialog<Map<String, dynamic>>(
         context: context,
         builder: (dialogContext) {
-          Map<String, dynamic>? nilai;
+          Map<String, dynamic>? skDipilih =
+              satuanKerjaRaw.isNotEmpty ? satuanKerjaRaw.first : opsiSatuanKerja.first;
+          Map<String, dynamic> tipeDipilih = opsiTipe.first;
           return StatefulBuilder(builder: (context, setDialogState) {
             return AlertDialog(
               title: const Text('Template Topup Voucher'),
-              content: DropdownButtonFormField<Map<String, dynamic>>(
-                value: nilai,
-                decoration: const InputDecoration(labelText: 'Tipe Member'),
-                items: tipe
-                    .map((e) => DropdownMenuItem(
+              content: SizedBox(
+                width: 440,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Pilih Satuan Kerja / Unit untuk mengunduh daftar member aktif ke dalam template Excel Topup Voucher.',
+                      style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<Map<String, dynamic>>(
+                      value: skDipilih,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Satuan Kerja / Unit *',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: opsiSatuanKerja.map((e) {
+                        final nama = '${e['nama'] ?? '-'}';
+                        final jml = (e['jumlahMember'] as num?)?.toInt();
+                        final label = e['semua'] == true
+                            ? nama
+                            : (jml != null && jml > 0 ? '$nama ($jml member)' : nama);
+                        return DropdownMenuItem(
                           value: e,
-                          child: Text('${e['nama'] ?? e['tipeNama'] ?? '-'}'),
-                        ))
-                    .toList(),
-                onChanged: (v) => setDialogState(() => nilai = v),
+                          child: Text(label, overflow: TextOverflow.ellipsis),
+                        );
+                      }).toList(),
+                      onChanged: (v) => setDialogState(() => skDipilih = v),
+                    ),
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<Map<String, dynamic>>(
+                      value: tipeDipilih,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Filter Tipe Member (Opsional)',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: opsiTipe
+                          .map((e) => DropdownMenuItem(
+                                value: e,
+                                child: Text(
+                                  '${e['nama'] ?? e['tipeNama'] ?? '-'}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ))
+                          .toList(),
+                      onChanged: (v) {
+                        if (v != null) setDialogState(() => tipeDipilih = v);
+                      },
+                    ),
+                  ],
+                ),
               ),
               actions: [
                 TextButton(
                     onPressed: () => Navigator.pop(dialogContext),
                     child: const Text('Batal')),
-                FilledButton(
-                    onPressed: nilai == null
+                FilledButton.icon(
+                    onPressed: skDipilih == null
                         ? null
-                        : () => Navigator.pop(dialogContext, nilai),
-                    child: const Text('Unduh')),
+                        : () => Navigator.pop(dialogContext, {
+                              'satuanKerja': skDipilih,
+                              'tipe': tipeDipilih,
+                            }),
+                    icon: const Icon(Icons.download_outlined, size: 18),
+                    label: const Text('Unduh Template')),
               ],
             );
           });
         },
       );
-      if (dipilih == null) return;
+      if (konfirmasi == null) return;
+
+      final skPilihan =
+          (konfirmasi['satuanKerja'] as Map?)?.cast<String, dynamic>() ?? {};
+      final tipePilihan =
+          (konfirmasi['tipe'] as Map?)?.cast<String, dynamic>() ?? {};
+      final semuaSk = skPilihan['semua'] == true;
+      final idSk = (skPilihan['id'] as num?)?.toInt();
+      final namaSk = '${skPilihan['nama'] ?? ''}'.trim();
+      final semuaTipe = tipePilihan['semua'] == true;
+      final idTipe = (tipePilihan['id'] as num?)?.toInt();
+      final namaTipe = '${tipePilihan['nama'] ?? tipePilihan['tipeNama'] ?? ''}'.trim();
 
       final semua = <Map<String, dynamic>>[];
       var halaman = 1;
@@ -319,16 +405,37 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
         if (data.isEmpty || semua.length >= total) break;
         halaman++;
       }
-      final idTipe = (dipilih['id'] as num?)?.toInt();
+
       final anggota = semua.where((m) {
-        final idAnggotaTipe = (m['tipeAnggotaKoperasiId'] as num?)?.toInt();
-        return idTipe != null && idAnggotaTipe == idTipe && m['aktif'] != false;
+        if (m['aktif'] == false) return false;
+        if (!semuaSk) {
+          final mSkId = (m['satuanKerjaId'] as num?)?.toInt();
+          final mSkNama = '${m['satuanKerjaNama'] ?? ''}'.trim().toLowerCase();
+          final mUnit = '${m['unit'] ?? ''}'.trim().toLowerCase();
+          final targetNama = namaSk.toLowerCase();
+          final cocokId = idSk != null && idSk > 0 && mSkId == idSk;
+          final cocokNama = targetNama.isNotEmpty &&
+              (mSkNama == targetNama ||
+                  mUnit == targetNama ||
+                  mSkNama.contains(targetNama) ||
+                  mUnit.contains(targetNama));
+          if (!cocokId && !cocokNama) return false;
+        }
+        if (!semuaTipe && idTipe != null) {
+          final idAnggotaTipe = (m['tipeAnggotaKoperasiId'] as num?)?.toInt();
+          if (idAnggotaTipe != idTipe) return false;
+        }
+        return true;
       }).toList();
+
       if (anggota.isEmpty) {
-        _info('Tidak ada member aktif pada tipe yang dipilih.');
+        _info(
+            'Tidak ada member aktif pada Satuan Kerja / Unit "${namaSk.isEmpty ? 'Semua' : namaSk}"${!semuaTipe && namaTipe.isNotEmpty ? ' (Tipe: $namaTipe)' : ''}.');
         return;
       }
-      final namaTipe = '${dipilih['nama'] ?? dipilih['tipeNama'] ?? 'Member'}';
+      final labelFilter = !semuaSk && namaSk.isNotEmpty
+          ? namaSk
+          : (!semuaTipe && namaTipe.isNotEmpty ? namaTipe : 'Semua_Unit');
       final bytes = buildSimpleXlsx(
         sheetName: 'Template Topup',
         headers: const [
@@ -341,6 +448,7 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
           'NUPTK',
           'NIDN',
           'NAMA_MEMBER',
+          'SATUAN_KERJA',
           'UNIT',
           'NOMINAL',
           'WAKTU',
@@ -359,7 +467,8 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
                   m['nuptk'] ?? '',
                   m['nidn'] ?? '',
                   m['nama'] ?? '',
-                  m['unit'] ?? '',
+                  m['satuanKerjaNama'] ?? m['unit'] ?? '',
+                  m['unit'] ?? m['satuanKerjaNama'] ?? '',
                   '',
                   '',
                   '',
@@ -371,7 +480,7 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
       final lokasi = await FilePicker.platform.saveFile(
         dialogTitle: 'Simpan Template Topup Voucher',
         fileName:
-            'Template_Topup_${namaTipe.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_')}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx',
+            'Template_Topup_${labelFilter.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_')}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx',
         type: FileType.custom,
         allowedExtensions: const ['xlsx'],
         bytes: bytes,
@@ -379,7 +488,7 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
       if (lokasi != null) {
         await File(lokasi).writeAsBytes(bytes);
         _info(
-            '${anggota.length} member tipe $namaTipe dimasukkan ke template.');
+            '${anggota.length} member ($labelFilter) berhasil dimasukkan ke template Excel.');
       }
     } catch (e) {
       _info(

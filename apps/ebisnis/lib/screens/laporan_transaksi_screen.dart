@@ -2007,6 +2007,7 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir>
     'Jenis',
     'Referensi',
     'Kasir',
+    'Pelanggan',
     'Metode',
     'Trx',
     'Qty',
@@ -2025,11 +2026,20 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir>
     final barisRekonsiliasi = jenis.startsWith('SESI KAS') || jenis == 'TOTAL';
     final closingDikonfirmasi =
         row['closingDikonfirmasi'] == true || jenis.contains('TUTUP');
+    final pelangganRaw =
+        '${row['pelanggan'] ?? row['pembeli'] ?? row['namaMember'] ?? row['member'] ?? ''}'
+            .trim();
+    final pelangganTampil = pelangganRaw.isNotEmpty
+        ? pelangganRaw
+        : (jenis == 'TOTAL'
+            ? ''
+            : (barisRekonsiliasi ? '-' : 'Umum'));
     return [
       _formatWaktu(row['waktu']),
       '${row['jenis'] ?? '-'}',
       '${row['referensi'] ?? '-'}',
       '${row['kasir'] ?? '-'}',
+      pelangganTampil,
       '${row['metode'] ?? '-'}',
       '${row['jumlahTransaksi'] ?? 0}',
       '${row['qty'] ?? 0}',
@@ -2058,6 +2068,7 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir>
         'jenis': 'TOTAL',
         'referensi': '${total['jumlahSesi'] ?? 0} sesi',
         'kasir': '',
+        'pelanggan': '',
         'metode': '',
         'jumlahTransaksi': total['jumlahTransaksi'] ?? 0,
         'qty': 0,
@@ -2208,13 +2219,14 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir>
                   Expanded(
                     child: SingleChildScrollView(
                       child: AppDataTable(
-                        minWidth: 1740,
+                        minWidth: 1885,
                         emptyText: 'Tidak ada data penyusun angka ini.',
                         columns: const [
                           AppTableColumn('Waktu', width: 125),
                           AppTableColumn('Jenis', width: 100),
                           AppTableColumn('Referensi', width: 135),
                           AppTableColumn('Kasir', width: 105),
+                          AppTableColumn('Pelanggan', width: 145),
                           AppTableColumn('Metode', width: 105),
                           AppTableColumn('Trx',
                               width: 55, align: TextAlign.right),
@@ -2248,6 +2260,7 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir>
                             100,
                             135,
                             105,
+                            145,
                             105,
                             55,
                             55,
@@ -2265,7 +2278,7 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir>
                                 (i) => AppTableCell.text(
                                       values[i],
                                       width: widths[i],
-                                      align: i >= 5
+                                      align: i >= 6
                                           ? TextAlign.right
                                           : TextAlign.left,
                                       style: style,
