@@ -107,7 +107,14 @@ PanduanResolusiGalat panduanResolusiGalat(String pesan,
     );
   }
 
-  if (lower.contains('stok') || lower.contains('kadaluarsa')) {
+  final isDbOrLockException = lower.contains('could not lock') ||
+      lower.contains('current transaction is aborted') ||
+      lower.contains('genericjdbcexception') ||
+      lower.contains('psqlexception') ||
+      lower.contains('permission denied');
+
+  if (!isDbOrLockException &&
+      (lower.contains('stok') || lower.contains('kadaluarsa'))) {
     final kedaluwarsa = lower.contains('kadaluarsa');
     return PanduanResolusiGalat(
       judul: kedaluwarsa ? 'Produk tidak boleh dijual' : 'Stok belum mencukupi',

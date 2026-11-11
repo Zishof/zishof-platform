@@ -230,7 +230,20 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
             .toList();
         final ringkasan = (res['ringkasan'] is Map)
             ? (res['ringkasan'] as Map).map((k, v) => MapEntry('$k', v))
-            : <String, dynamic>{};
+            : <String, dynamic>{
+                'totalRak': res['totalRak'] ?? list.length,
+                'totalProdukTerpetakan':
+                    res['totalProdukTerpetakan'] ?? res['totalItemRak'] ?? 0,
+                'totalProdukBelumBerRak':
+                    res['totalProdukBelumBerRak'] ?? res['produkBelumAdaRak'] ?? 0,
+                'totalStokBelumBerRak':
+                    res['totalStokBelumBerRak'] ?? res['stokBelumAdaRak'] ?? 0,
+                'totalStokSemuaRak':
+                    res['totalStokSemuaRak'] ?? res['totalStokTerpetakan'] ?? 0,
+                'totalStokProdukToko':
+                    res['totalStokProdukToko'] ?? res['totalStokToko'] ?? 0,
+                'sinkron': res['sinkron'] ?? true,
+              };
 
         if (!mounted) return;
         setStateIfMounted(() {
@@ -817,7 +830,7 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
   Future<void> _hapusProdukDariRak(Map<String, dynamic> item) async {
     final rakId = (item['rakId'] as num?)?.toInt() ?? _rakTerpilihId;
     final produkId = (item['produkId'] as num?)?.toInt();
-    final namaProduk = '${item['produkNama'] ?? '-'}';
+    final namaProduk = '${item['produkNama'] ?? item['nama'] ?? '-'}';
     if (rakId == null || rakId <= 0 || produkId == null) return;
 
     final yakin = await showDialog<bool>(
@@ -1236,13 +1249,31 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
     final totalRak = (_ringkasan['totalRak'] as num?)?.toInt() ??
         _daftarRak.where((r) => ((r['id'] as num?)?.toInt() ?? 0) > 0).length;
     final produkTerpetakan =
-        (_ringkasan['totalProdukTerpetakan'] as num?)?.toInt() ?? 0;
+        (_ringkasan['totalProdukTerpetakan'] as num?)?.toInt() ??
+            (_ringkasan['totalItemRak'] as num?)?.toInt() ??
+            _daftarRak
+                .where((r) => ((r['id'] as num?)?.toInt() ?? 0) > 0)
+                .fold<int>(
+                    0,
+                    (sum, r) =>
+                        sum + ((r['jumlahProduk'] as num?)?.toInt() ?? 0));
     final produkBelumBerRak =
-        (_ringkasan['totalProdukBelumBerRak'] as num?)?.toInt() ?? 0;
+        (_ringkasan['totalProdukBelumBerRak'] as num?)?.toInt() ??
+            (_ringkasan['produkBelumAdaRak'] as num?)?.toInt() ??
+            0;
     final stokSemuaRak =
-        (_ringkasan['totalStokSemuaRak'] as num?)?.toDouble() ?? 0;
+        (_ringkasan['totalStokSemuaRak'] as num?)?.toDouble() ??
+            (_ringkasan['totalStokTerpetakan'] as num?)?.toDouble() ??
+            _daftarRak
+                .where((r) => ((r['id'] as num?)?.toInt() ?? 0) > 0)
+                .fold<double>(
+                    0,
+                    (sum, r) =>
+                        sum + ((r['totalStok'] as num?)?.toDouble() ?? 0));
     final stokTotalProduk =
-        (_ringkasan['totalStokProdukToko'] as num?)?.toDouble() ?? stokSemuaRak;
+        (_ringkasan['totalStokProdukToko'] as num?)?.toDouble() ??
+            (_ringkasan['totalStokToko'] as num?)?.toDouble() ??
+            stokSemuaRak;
     final sinkron = (stokSemuaRak - stokTotalProduk).abs() < 0.009;
 
     return AppShell(

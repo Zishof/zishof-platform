@@ -35,11 +35,14 @@ import '../widgets/safe_state.dart';
 class TabSoGrand extends StatefulWidget {
   final int? filterRakId;
   final String filterRakNama;
+  final void Function(List<Map<String, dynamic>> daftarRak)?
+      onDaftarRakDiperbarui;
 
   const TabSoGrand({
     super.key,
     this.filterRakId,
     this.filterRakNama = '',
+    this.onDaftarRakDiperbarui,
   });
 
   @override
@@ -280,9 +283,42 @@ class _TabSoGrandState extends State<TabSoGrand> {
           teks: 'Menyiapkan ${list.length} baris produk & rak (80%)...');
 
       final kategoriSet = <String>{};
+      final rakById = <int, Map<String, dynamic>>{};
+      for (final r in _daftarRak) {
+        final rid = (r['id'] as num?)?.toInt();
+        if (rid != null && rid > 0) {
+          rakById[rid] = Map<String, dynamic>.from(r);
+        }
+      }
       for (final item in list) {
         final kat = (item['kategori'] as String?)?.trim() ?? '';
         if (kat.isNotEmpty) kategoriSet.add(kat);
+
+        final rid = (item['rakId'] as num?)?.toInt();
+        final rNamaRaw = (item['rakNama'] as String?)?.trim() ?? '';
+        final rKodeRaw = (item['rakKode'] as String?)?.trim() ?? '';
+        if (rid != null &&
+            rid > 0 &&
+            rNamaRaw.isNotEmpty &&
+            !rNamaRaw.toLowerCase().contains('belum ditentukan') &&
+            !rakById.containsKey(rid)) {
+          String kode = rKodeRaw;
+          String nama = rNamaRaw;
+          if (kode.isEmpty && rNamaRaw.contains(' - ')) {
+            final parts = rNamaRaw.split(' - ');
+            kode = parts.first.trim();
+            nama = parts.sublist(1).join(' - ').trim();
+          }
+          rakById[rid] = {
+            'id': rid,
+            'kode': kode,
+            'nama': nama.isEmpty ? rNamaRaw : nama,
+            'label': rNamaRaw,
+            'utama': rNamaRaw.toUpperCase().contains('RAK UTAMA') ||
+                kode.toUpperCase() == 'RAK-UTAMA',
+            'aktif': true,
+          };
+        }
 
         final kBaris = _kunciBaris(item);
         if (!_controllersFisik.containsKey(kBaris)) {
@@ -291,6 +327,18 @@ class _TabSoGrandState extends State<TabSoGrand> {
         if (!_controllersKet.containsKey(kBaris)) {
           _controllersKet[kBaris] = TextEditingController();
         }
+      }
+      if (rakById.isNotEmpty) {
+        final mergedRak = rakById.values.toList()
+          ..sort((a, b) {
+            final ua = a['utama'] == true ? 0 : 1;
+            final ub = b['utama'] == true ? 0 : 1;
+            if (ua != ub) return ua.compareTo(ub);
+            return '${a['kode'] ?? a['nama'] ?? ''}'
+                .compareTo('${b['kode'] ?? b['nama'] ?? ''}');
+          });
+        _daftarRak = mergedRak;
+        widget.onDaftarRakDiperbarui?.call(mergedRak);
       }
 
       _aturProgres(true, nilai: 1.0, teks: 'Selesai memuat data (100%).');
@@ -338,7 +386,7 @@ class _TabSoGrandState extends State<TabSoGrand> {
             _kategoriTerpilih.isEmpty || kat == _kategoriTerpilih;
 
         bool cocokRak = true;
-        if (_rakFilterTerpilih == '0') {
+        if (_rakFilterTerpilih == '0' || _rakFilterTerpilih == '-1') {
           cocokRak = rakId == null ||
               rakId <= 0 ||
               rakNama.toLowerCase().contains('belum ditentukan');
@@ -932,8 +980,11 @@ class _TabSoGrandState extends State<TabSoGrand> {
                     ),
                   ),
                   DropdownButton<String>(
-                    value:
-                        _rakFilterTerpilih.isEmpty ? null : _rakFilterTerpilih,
+                    value: _rakFilterTerpilih.isEmpty
+                        ? null
+                        : (_rakFilterTerpilih == '-1'
+                            ? '0'
+                            : _rakFilterTerpilih),
                     hint: const Text('Semua Rak'),
                     items: [
                       const DropdownMenuItem(

@@ -462,6 +462,10 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
                         value: null,
                         child: Text('Semua Rak / Default RAK Utama'),
                       ),
+                      const DropdownMenuItem<int?>(
+                        value: -1,
+                        child: Text('Rak Belum Ditentukan'),
+                      ),
                       ..._daftarRakToko.map((r) {
                         final id = (r['id'] as num?)?.toInt();
                         final nama = '${r['nama'] ?? 'Rak'}';
@@ -481,7 +485,9 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
                     onChanged: (val) {
                       setStateIfMounted(() {
                         _rakTerpilihId = val;
-                        if (val != null) {
+                        if (val == -1) {
+                          _rakTerpilihNama = 'Rak Belum Ditentukan';
+                        } else if (val != null) {
                           final m = _daftarRakToko.firstWhere(
                             (r) => (r['id'] as num?)?.toInt() == val,
                             orElse: () => const {},
@@ -512,6 +518,14 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
               TabSoGrand(
                 filterRakId: _rakTerpilihId,
                 filterRakNama: _rakTerpilihNama,
+                onDaftarRakDiperbarui: (daftarRak) {
+                  if (!mounted || daftarRak.isEmpty) return;
+                  if (_daftarRakToko.length < daftarRak.length) {
+                    setStateIfMounted(() {
+                      _daftarRakToko = daftarRak;
+                    });
+                  }
+                },
               ),
               const TabPkmKuantitasMaksimum(),
               _TabInputOpname(
