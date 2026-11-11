@@ -41,12 +41,17 @@ class LaporanDetailScreen extends StatefulWidget {
   /// Hasil laporan awal untuk mode offline / mock / testing
   final Map<String, dynamic>? hasilAwal;
 
+  /// Jika true, laporan otomatis langsung dijalankan saat layar dibuka (mis.
+  /// ketika dibuka dari kartu Menu Utama Shortcut).
+  final bool autoTampilkan;
+
   const LaporanDetailScreen({
     super.key,
     required this.item,
     this.satuanKerja = const [],
     this.satuanKerjaDefault = 0,
     this.hasilAwal,
+    this.autoTampilkan = false,
   });
 
   @override
@@ -123,6 +128,12 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
     _satkerId = adaBawaan ? widget.satuanKerjaDefault : 0;
     if (widget.hasilAwal != null) {
       _hasil = Map<String, dynamic>.from(widget.hasilAwal!);
+    } else if (widget.autoTampilkan) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _tampilkan();
+        }
+      });
     }
   }
 

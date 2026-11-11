@@ -106,7 +106,12 @@ bool _bolehProduk(String aksi) =>
     _hakProduk.isEmpty || _hakProduk[aksi] != false;
 
 class ProdukScreen extends StatefulWidget {
-  const ProdukScreen({super.key});
+  /// Indeks sub-tab yang dibuka saat layar pertama kali tampil:
+  /// 0 = Data Produk, 1 = Mutasi Barang, 2 = Mutasi Barang per Tanggal,
+  /// 3 = Rekonsiliasi Stok, 4 = Kebijakan Retur, 5 = Riwayat Perubahan.
+  final int tabAwal;
+
+  const ProdukScreen({super.key, this.tabAwal = 0});
 
   @override
   State<ProdukScreen> createState() => _ProdukScreenState();
@@ -158,6 +163,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
   @override
   void initState() {
     super.initState();
+    _tabAktif = widget.tabAwal.clamp(0, 5);
     MasterOffline.revisiBaris.addListener(_saatCacheBerubah);
     SinkronStokOpname.mulai();
     _muatSemua();

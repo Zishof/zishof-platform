@@ -29,6 +29,7 @@ import '../screens/pengadaan_pr_screen.dart';
 import '../screens/pengadaan_tagihan_screen.dart';
 import '../screens/supplier_screen.dart';
 import '../screens/konfigurasi_screen.dart';
+import '../screens/ringkasan/tab_shortcut.dart';
 import '../screens/log_error_screen.dart';
 import '../screens/retur_penjualan_screen.dart';
 import '../screens/riwayat_penjualan_screen.dart';
@@ -1386,6 +1387,19 @@ class AppDrawer extends StatelessWidget {
                             context,
                             label: 'Konfigurasi',
                             builder: (_) => const KonfigurasiScreen(),
+                          ),
+                        ),
+                      if (Sesi.instance.isAdmin ||
+                          Sesi.instance.bolehKelola ||
+                          Sesi.instance.bolehKelolaShortcut)
+                        _ItemMenu(
+                          icon: Icons.tune_outlined,
+                          label: 'Kelola Shortcut',
+                          aktif: menuAktif == 'Kelola Shortcut',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Kelola Shortcut',
+                            builder: (_) => const KelolaShortcutScreen(),
                           ),
                         ),
                       _ItemMenu(

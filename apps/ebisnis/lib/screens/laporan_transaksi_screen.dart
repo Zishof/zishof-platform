@@ -281,7 +281,10 @@ Widget _angkaLaporan(
 /// bisa dilihat saat OFFLINE; tab lain tetap online-first (dasbor KPI +
 /// ekspor dinamis memang butuh data lengkap terkini dari server).
 class LaporanTransaksiScreen extends StatefulWidget {
-  const LaporanTransaksiScreen({super.key});
+  /// Indeks sub-tab laporan transaksi yang langsung dibuka saat layar tampil.
+  final int tabAwal;
+
+  const LaporanTransaksiScreen({super.key, this.tabAwal = 0});
 
   @override
   State<LaporanTransaksiScreen> createState() => _LaporanTransaksiScreenState();
@@ -305,8 +308,12 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
   @override
   void initState() {
     super.initState();
+    final jumlahTab = NavigasiLaporanTransaksi.jenisLaporan.length;
     _tab = TabController(
-        length: NavigasiLaporanTransaksi.jenisLaporan.length, vsync: this);
+      length: jumlahTab,
+      vsync: this,
+      initialIndex: widget.tabAwal.clamp(0, math.max(0, jumlahTab - 1)),
+    );
     _tab.addListener(() {
       if (!_tab.indexIsChanging && mounted) setStateIfMounted(() {});
     });

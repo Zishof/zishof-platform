@@ -158,6 +158,13 @@ class Sesi {
   bool get bolehKelola => isAdmin || supervisorPedagang;
   bool get bolehDataSample => isAdmin && tokoDemo && dataSampleEbisnis;
 
+  /// Daftar shortcut menu utama & laporan vital yang telah difilter sesuai hak
+  /// akses pengguna dari aksi `konfigurasi` / `shortcut_menu_list`.
+  List<Map<String, dynamic>> shortcutMenu = [];
+
+  /// Hak mengelola daftar shortcut menu utama (Admin / Supervisor).
+  bool bolehKelolaShortcut = false;
+
   /// Terapkan balasan aksi `konfigurasi` ke sesi ini -- SATU titik pemetaan
   /// (dulu inline di `KasirScreen._terapkanKonfig`; dipindah ke sini saat
   /// varian Inventory & Sales butuh memuat konfigurasi dari landing sendiri
@@ -208,6 +215,12 @@ class Sesi {
     multiToko = konfig['multiToko'] == true;
     daftarToko =
         ((konfig['daftarToko'] as List?) ?? []).cast<Map<String, dynamic>>();
+    shortcutMenu = ((konfig['shortcutMenu'] as List?) ?? [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+    bolehKelolaShortcut =
+        konfig['bolehKelolaShortcut'] == true || isAdmin || supervisorPedagang;
     _terapkanAktor(konfig['aktorInventorySales']);
   }
 
@@ -270,6 +283,8 @@ class Sesi {
     crudPos = {};
     multiToko = false;
     daftarToko = [];
+    shortcutMenu = [];
+    bolehKelolaShortcut = false;
     actorType = '';
     activeRoleId = '';
     roleIds = [];

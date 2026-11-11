@@ -53,6 +53,7 @@ import '../screens/riwayat_penjualan_screen.dart';
 import '../screens/riwayat_sinkronisasi_screen.dart';
 import '../screens/log_error_screen.dart';
 import '../screens/konfigurasi_screen.dart';
+import '../screens/ringkasan/tab_shortcut.dart';
 import '../screens/layar_pelanggan_screen.dart';
 import '../screens/laporan_screen.dart';
 import '../screens/self_order_screen.dart';
@@ -232,6 +233,7 @@ enum MenuEBisnis {
   shiftOtomatis,
   hakAkses,
   tokoKelola,
+  kelolaShortcut,
   berandaInventorySales,
   masterSupplier,
   masterCustomer,
@@ -462,6 +464,11 @@ bool bolehTampilMenu(MenuEBisnis kunci) {
   if (kunci == MenuEBisnis.riwayatAudit) return Sesi.instance.isAdmin;
   // Kelola Toko: admin-only, padanan gate isAdmin JSP / TokoApiHelper server.
   if (kunci == MenuEBisnis.tokoKelola) return Sesi.instance.isAdmin;
+  if (kunci == MenuEBisnis.kelolaShortcut) {
+    return Sesi.instance.isAdmin ||
+        Sesi.instance.bolehKelola ||
+        Sesi.instance.bolehKelolaShortcut;
+  }
   // Menu khusus varian "eBisnis Inventory & Sales" -- gerbang level VARIAN
   // (bukan role): tidak pernah dirakit ke sidebar varian POS lama.
   if (kunci == MenuEBisnis.berandaInventorySales) {
@@ -1015,6 +1022,9 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(
       MenuEBisnis.tokoKelola, Icons.storefront_outlined, 'Kelola Toko',
       builder: _bangunTokoKelola),
+  _ItemMenuShell(
+      MenuEBisnis.kelolaShortcut, Icons.tune_outlined, 'Kelola Shortcut',
+      builder: _bangunKelolaShortcut),
 ];
 
 /// Ringkasan grup sidebar utk pengujian: label, apakah dapat dilipat, apakah
@@ -1199,6 +1209,7 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.logError,
     MenuEBisnis.riwayatAudit,
     MenuEBisnis.konfigurasi,
+    MenuEBisnis.kelolaShortcut,
     MenuEBisnis.hakAkses,
     MenuEBisnis.tokoKelola,
   ]),
@@ -1411,6 +1422,7 @@ Widget _bangunSelfOrder(BuildContext c) => const SelfOrderScreen();
 Widget _bangunShiftOtomatis(BuildContext c) => const ShiftOtomatisScreen();
 Widget _bangunHakAkses(BuildContext c) => const HakAksesScreen();
 Widget _bangunTokoKelola(BuildContext c) => const TokoKelolaScreen();
+Widget _bangunKelolaShortcut(BuildContext c) => const KelolaShortcutScreen();
 Widget _bangunBerandaIS(BuildContext c) => const BerandaInventorySalesScreen();
 Widget _bangunMasterSupplier(BuildContext c) => const MasterSupplierScreen();
 Widget _bangunMasterCustomer(BuildContext c) => const MasterCustomerScreen();
@@ -1887,6 +1899,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Hak Akses';
     case MenuEBisnis.tokoKelola:
       return 'Kelola Toko';
+    case MenuEBisnis.kelolaShortcut:
+      return 'Kelola Shortcut';
     case MenuEBisnis.berandaInventorySales:
       return 'Beranda Inventory & Sales';
     case MenuEBisnis.masterSupplier:
@@ -2094,6 +2108,8 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.hakAkses;
     case 'Kelola Toko':
       return MenuEBisnis.tokoKelola;
+    case 'Kelola Shortcut':
+      return MenuEBisnis.kelolaShortcut;
     case 'Beranda Inventory & Sales':
       return MenuEBisnis.berandaInventorySales;
     case 'Master Supplier':

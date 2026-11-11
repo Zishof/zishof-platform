@@ -28,7 +28,10 @@ import 'riwayat_audit_screen.dart';
 /// tombol kirim-notifikasi per-baris/massal dari tab Data Member (fitur
 /// terpisah, JSP-only utk saat ini).
 class AnggotaScreen extends StatefulWidget {
-  const AnggotaScreen({super.key});
+  /// Indeks sub-tab awal yang dibuka (0 = Data Member, 4 = Topup, dst.).
+  final int tabAwal;
+
+  const AnggotaScreen({super.key, this.tabAwal = 0});
 
   @override
   State<AnggotaScreen> createState() => _AnggotaScreenState();
@@ -45,7 +48,11 @@ class _AnggotaScreenState extends State<AnggotaScreen>
     // WAJIB sama dgn jumlah Tab di TabBar dan widget di TabBarView; kalau
     // berbeda, layar ini gagal dibuka. Sebelumnya tertinggal di 9 padahal
     // tabnya sudah bertambah.
-    _tab = TabController(length: 13, vsync: this);
+    _tab = TabController(
+      length: 13,
+      vsync: this,
+      initialIndex: widget.tabAwal.clamp(0, 12),
+    );
   }
 
   @override

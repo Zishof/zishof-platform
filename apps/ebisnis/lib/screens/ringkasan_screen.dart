@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
+import 'ringkasan/tab_shortcut.dart';
 import 'ringkasan/tab_umum.dart';
 import 'ringkasan/tab_keuangan.dart';
 import 'ringkasan/tab_produk.dart';
@@ -13,13 +14,17 @@ import 'ringkasan/tab_kepatuhan.dart';
 import 'ringkasan/tab_sesi_kas.dart';
 
 /// Layar Ringkasan (padanan ringkasan.html/ringkasan-renderer.js Electron) --
-/// 9 sub-tab dasbor lintas-modul. Setiap tab adalah StatefulWidget terpisah
-/// (lihat folder ringkasan/) yg memuat datanya sendiri di initState -- karena
-/// TabBarView (PageView di baliknya) hanya membangun tab yg benar-benar
-/// terlihat/berdekatan, ini otomatis meniru perilaku "lazy-load saat tab
-/// pertama dibuka" versi Electron tanpa perlu koordinasi eksplisit.
+/// 11 sub-tab dasbor lintas-modul (diawali oleh tab "Menu Utama Shortcut").
+/// Setiap tab adalah StatefulWidget terpisah (lihat folder ringkasan/) yg
+/// memuat datanya sendiri di initState -- karena TabBarView (PageView di
+/// baliknya) hanya membangun tab yg benar-benar terlihat/berdekatan, ini
+/// otomatis meniru perilaku "lazy-load saat tab pertama dibuka" versi Electron
+/// tanpa perlu koordinasi eksplisit.
 class RingkasanScreen extends StatefulWidget {
-  const RingkasanScreen({super.key});
+  /// Indeks tab awal yang dibuka (0 = Menu Utama Shortcut, 1 = Ringkasan Umum, dst.).
+  final int tabAwal;
+
+  const RingkasanScreen({super.key, this.tabAwal = 0});
 
   @override
   State<RingkasanScreen> createState() => _RingkasanScreenState();
@@ -32,7 +37,11 @@ class _RingkasanScreenState extends State<RingkasanScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 10, vsync: this);
+    _tab = TabController(
+      length: 11,
+      vsync: this,
+      initialIndex: widget.tabAwal.clamp(0, 10),
+    );
   }
 
   @override
@@ -59,6 +68,7 @@ class _RingkasanScreenState extends State<RingkasanScreen>
             indicatorColor: AppColors.primary,
             tabAlignment: TabAlignment.start,
             tabs: const [
+              Tab(text: 'Menu Utama Shortcut'),
               Tab(text: 'Ringkasan Umum'),
               Tab(text: 'Keuangan & Kinerja'),
               Tab(text: 'Produk & Inventaris'),
@@ -73,6 +83,7 @@ class _RingkasanScreenState extends State<RingkasanScreen>
           ),
           Expanded(
             child: TabBarView(controller: _tab, children: const [
+              RingkasanTabShortcut(),
               RingkasanTabUmum(),
               RingkasanTabKeuangan(),
               RingkasanTabProduk(),
