@@ -1727,7 +1727,7 @@ class _DialogDetailPergerakanStokState
                   _analisisProduk != null) ...[
                 const SizedBox(height: 12),
                 Container(
-                  constraints: const BoxConstraints(maxHeight: 270),
+                  constraints: const BoxConstraints(minHeight: 165, maxHeight: 235),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: Colors.indigo.withValues(alpha: 0.05),
@@ -1802,7 +1802,6 @@ class _DialogDetailPergerakanStokState
                                 ...((_analisisProduk?['kronologiPoin']
                                             as List?) ??
                                         const [])
-                                    .take(6)
                                     .map((k) => Padding(
                                           padding:
                                               const EdgeInsets.only(bottom: 3),
@@ -2148,7 +2147,7 @@ class _DialogAnalisisCerdasStokState extends State<DialogAnalisisCerdasStok> {
                                         fontSize: 13),
                                   ),
                                   const SizedBox(height: 6),
-                                  ..._kronologi.take(8).map((k) => Padding(
+                                  ..._kronologi.map((k) => Padding(
                                         padding:
                                             const EdgeInsets.only(bottom: 4),
                                         child: Row(
@@ -2279,8 +2278,8 @@ class StokAnalisisCerdasLokal {
   static String _angka(num v) => _formatAngka.format(v);
   static String _rupiah(num v) => _fmtRp.format(v.round());
 
-  /// Menyusun diagnosis, kronologi, rekomendasi langkah penyelesaian, dan naskah WhatsApp
-  /// dari ringkasan & daftar mutasi 1 produk yang sudah dimuat.
+  /// menyusun diagnosis, kronologi lengkap (menampilkan prioritas kejadian penting
+  /// di awal + seluruh daftar kronologis), langkah solusi, dan naskah WhatsApp.
   static Map<String, dynamic> susunAnalisisProdukDariData({
     required String namaProduk,
     required String kodeProduk,
@@ -2327,6 +2326,7 @@ class StokAnalisisCerdasLokal {
         'judulDiagnosis': judul,
         'penjelasanUtama': penjelasan,
         'kronologiPoin': const <String>[],
+        'kronologiPenting': const <String>[],
         'langkahSolusi': solusi,
         'teksAnalisisWa': wa.toString().trim(),
       };
@@ -2358,9 +2358,20 @@ class StokAnalisisCerdasLokal {
     String waktuPulihSo = '';
     double qtyPulihSo = 0;
 
+    bool pernahSoTambahSetelahHabis = false;
+    String waktuSoTambahTerakhir = '';
+    String petugasSoTambahTerakhir = '';
+    String ketSoTambahTerakhir = '';
+    double stokSebelumSoTambahTerakhir = 0;
+    double stokSesudahSoTambahTerakhir = 0;
+    double selisihSoTambahTerakhir = 0;
+    // ignore: unused_local_variable
+    int jmlPenjualanSetelahSoTerakhir = 0;
+
     int jmlTransaksiPos = 0;
     int jmlOpname = 0;
-    final kronologiPoin = <String>[];
+    final kronologiSemua = <String>[];
+    final kronologiPenting = <String>[];
 
     for (final m in mutasi) {
       final tgl = '${m['tanggal'] ?? m['waktu'] ?? '-'}';
@@ -2375,48 +2386,101 @@ class StokAnalisisCerdasLokal {
 
       if (tipe.contains('Penjualan')) {
         jmlTransaksiPos++;
-        kronologiPoin.add(
-            '$tgl WIB: Terjual di Kasir (Nota: $ref) sebanyak ${_angka(mKeluar)} Pcs -> Stok berubah dari ${_angka(mAwal)} menjadi ${_angka(mSisa)} Pcs.');
+        if (waktuSoTambahTerakhir.isNotEmpty) {
+          jmlPenjualanSetelahSoTerakhir++;
+        }
+        final poin =
+            '$tgl WIB: Terjual di Kasir (Nota: $ref) sebanyak ${_angka(mKeluar)} Pcs -> Stok berubah dari ${_angka(mAwal)} menjadi ${_angka(mSisa)} Pcs.';
+        kronologiSemua.add(poin);
+        if (mSisa <= 0 || jmlTransaksiPos == 1) {
+          kronologiPenting.add(poin);
+        }
       } else if (tipe.contains('Pengadaan') || tipe.contains('Kulakan')) {
-        kronologiPoin.add(
-            '$tgl WIB: Barang masuk dari Pengadaan ($ref${pihak.isNotEmpty ? " - $pihak" : ""}) sebanyak +${_angka(mMasuk)} Pcs -> Stok berubah dari ${_angka(mAwal)} menjadi ${_angka(mSisa)} Pcs.');
+        final poin =
+            '$tgl WIB: Barang masuk dari Pengadaan ($ref${pihak.isNotEmpty && pihak != tipe ? " - $pihak" : ""}) sebanyak +${_angka(mMasuk)} Pcs -> Stok berubah dari ${_angka(mAwal)} menjadi ${_angka(mSisa)} Pcs.';
+        kronologiSemua.add(poin);
+        kronologiPenting.add('⭐ [PENGADAAN] $poin');
       } else if (tipe.contains('Opname') || tipe.contains('Penyesuaian')) {
         jmlOpname++;
-        final pelaku =
-            oleh.isNotEmpty ? oleh : (pihak.isNotEmpty ? pihak : 'Petugas');
+        final pelaku = (oleh.isNotEmpty && !oleh.startsWith('Stok Opname'))
+            ? oleh
+            : ((pihak.isNotEmpty && !pihak.startsWith('Stok Opname'))
+                ? pihak
+                : 'Petugas Toko');
+        final ketBersih =
+            (ref.isNotEmpty && ref != 'Stok Opname' && ref != 'OPNAME')
+                ? ref
+                : 'Tanpa Keterangan';
         if (tipe.contains('Dinolkan') ||
             (mAwal > 0 && mSisa == 0 && mKeluar > 0)) {
           pernahDinolkanSo = true;
           waktuDinolkanSo = tgl;
           petugasDinolkanSo = pelaku;
-          ketDinolkanSo = ref;
+          ketDinolkanSo = ketBersih;
           stokSebelumDinolkan = mAwal;
-          kronologiPoin.add(
-              '$tgl WIB: Stok Opname oleh $pelaku (Keterangan: "$ref") mengubah stok dari ${_angka(mAwal)} Pcs (senilai ${_rupiah(mAwal * hargaBeli)}) menjadi 0 Pcs (berkurang -${_angka(mKeluar)} Pcs).');
+          final poin =
+              '$tgl WIB: Stok Opname oleh $pelaku (Ket: "$ketBersih") mengubah stok dari ${_angka(mAwal)} Pcs (senilai ${_rupiah(mAwal * hargaBeli)}) menjadi 0 Pcs (berkurang -${_angka(mKeluar)} Pcs).';
+          kronologiSemua.add(poin);
+          kronologiPenting.add('⚠️ [STOK OPNAME -> 0] $poin');
         } else if (mMasuk > 0) {
           if (pernahDinolkanSo) {
             pernahPulihSo = true;
             waktuPulihSo = tgl;
             qtyPulihSo = mMasuk;
           }
-          kronologiPoin.add(
-              '$tgl WIB: Penyesuaian Stok Opname (+) oleh $pelaku ("$ref") menambah stok +${_angka(mMasuk)} Pcs -> Stok berubah dari ${_angka(mAwal)} menjadi ${_angka(mSisa)} Pcs.');
+          pernahSoTambahSetelahHabis = true;
+          waktuSoTambahTerakhir = tgl;
+          petugasSoTambahTerakhir = pelaku;
+          ketSoTambahTerakhir = ketBersih;
+          stokSebelumSoTambahTerakhir = mAwal;
+          stokSesudahSoTambahTerakhir = mSisa;
+          selisihSoTambahTerakhir = mMasuk;
+          jmlPenjualanSetelahSoTerakhir = 0;
+          final poin =
+              '$tgl WIB: Penyesuaian Stok Opname (+) oleh $pelaku (Ket: "$ketBersih") mengubah stok dari ${_angka(mAwal)} Pcs menjadi ${_angka(mSisa)} Pcs (bertambah +${_angka(mMasuk)} Pcs).';
+          kronologiSemua.add(poin);
+          kronologiPenting.add('📌 [STOK OPNAME (+)] $poin');
         } else if (mKeluar > 0) {
-          kronologiPoin.add(
-              '$tgl WIB: Penyesuaian Stok Opname (-) oleh $pelaku ("$ref") mengurangi stok -${_angka(mKeluar)} Pcs -> Stok berubah dari ${_angka(mAwal)} menjadi ${_angka(mSisa)} Pcs.');
+          final poin =
+              '$tgl WIB: Penyesuaian Stok Opname (-) oleh $pelaku (Ket: "$ketBersih") mengubah stok dari ${_angka(mAwal)} Pcs menjadi ${_angka(mSisa)} Pcs (berkurang -${_angka(mKeluar)} Pcs).';
+          kronologiSemua.add(poin);
+          kronologiPenting.add('📌 [STOK OPNAME (-)] $poin');
         } else {
-          kronologiPoin.add(
-              '$tgl WIB: Pencatatan Stok Opname oleh $pelaku ("$ref") tanpa perubahan jumlah (tetap ${_angka(mSisa)} Pcs).');
+          final poin =
+              '$tgl WIB: Pencatatan Stok Opname oleh $pelaku (Ket: "$ketBersih") tanpa perubahan jumlah (tetap ${_angka(mSisa)} Pcs).';
+          kronologiSemua.add(poin);
+          kronologiPenting.add('ℹ️ [STOK OPNAME (=)] $poin');
         }
       } else {
-        kronologiPoin.add(
-            '$tgl WIB: $tipe ($ref) ${mMasuk > 0 ? "+${_angka(mMasuk)}" : "-${_angka(mKeluar)}"} Pcs -> Stok berubah dari ${_angka(mAwal)} menjadi ${_angka(mSisa)} Pcs.');
+        final poin =
+            '$tgl WIB: $tipe ($ref) ${mMasuk > 0 ? "+${_angka(mMasuk)}" : "-${_angka(mKeluar)}"} Pcs -> Stok berubah dari ${_angka(mAwal)} menjadi ${_angka(mSisa)} Pcs.';
+        kronologiSemua.add(poin);
+        kronologiPenting.add(poin);
       }
     }
+
+    // Susun daftar kronologi terpadu: dahulukan ringkasan Tonggak Kejadian Penting (Pengadaan, Stok Opname,
+    // Transaksi yang menghabiskan stok) agar pengguna langsung melihat mengapa saldo berubah tanpa terpotong
+    // puluhan baris penjualan kasir, lalu diikuti Rincian Urutan Kronologis Lengkap seluruh transaksi.
+    final kronologiPoin = <String>[];
+    if (kronologiPenting.isNotEmpty && kronologiSemua.length > 6) {
+      kronologiPoin.add(
+          '=== RINGKASAN KEJADIAN PENTING (PENGADAAN, STOK OPNAME & TITIK PERUBAHAN STOK) ===');
+      kronologiPoin.addAll(kronologiPenting);
+      if (jmlTransaksiPos > 0) {
+        kronologiPoin.add(
+            '🛒 Total Penjualan di Kasir selama periode ini: -${_angka(penjualan)} Pcs dalam $jmlTransaksiPos nota transaksi.');
+      }
+      kronologiPoin.add(
+          '=== RINCIAN URUTAN KRONOLOGIS LENGKAP (${kronologiSemua.length} KEJADIAN) ===');
+    }
+    kronologiPoin.addAll(kronologiSemua);
 
     String judulDiagnosis;
     String penjelasanUtama;
     final langkahSolusi = <String>[];
+
+    final double saldoTanpaOpname = awal + masuk + retur - penjualan - keluar;
 
     if (pernahDinolkanSo && sisa < 0) {
       judulDiagnosis =
@@ -2466,13 +2530,30 @@ class StokAnalisisCerdasLokal {
           'Periksa apakah ada faktur pengadaan/kulakan barang masuk untuk $namaProduk yang belum diinput.');
       langkahSolusi.add(
           'Jika pengadaan sudah lengkap, lakukan Stok Opname sesuai jumlah fisik yang ada di rak saat ini.');
+    } else if (pernahSoTambahSetelahHabis &&
+        saldoTanpaOpname <= 0 &&
+        sisa > 0) {
+      judulDiagnosis =
+          'Barang Sebenarnya Sudah Habis Terjual (${_angka(penjualan)} dari ${_angka(awal + masuk)} Pcs = ${_angka(saldoTanpaOpname)} Pcs), Namun Tertambah +${_angka(opnameMasuk)} Pcs dari Input Stok Opname';
+      penjelasanUtama =
+          'Secara riwayat transaksi keluar-masuk murni, barang ini memiliki Saldo Awal ${_angka(awal)} Pcs + Pengadaan Masuk ${_angka(masuk)} Pcs - Terjual di Kasir ${_angka(penjualan)} Pcs ($jmlTransaksiPos transaksi) = ${_angka(saldoTanpaOpname)} Pcs (habis terjual). '
+          'Alasan mengapa Saldo Akhir saat ini masih tertulis ${_angka(sisa)} Pcs adalah karena adanya pencatatan Stok Opname sebanyak $jmlOpname kali yang menambah stok sebesar +${_angka(opnameMasuk)} Pcs '
+          '(terakhir pada $waktuSoTambahTerakhir WIB oleh $petugasSoTambahTerakhir, Ket: "$ketSoTambahTerakhir", yang mengubah stok dari ${_angka(stokSebelumSoTambahTerakhir)} menjadi ${_angka(stokSesudahSoTambahTerakhir)} Pcs / +${_angka(selisihSoTambahTerakhir)} Pcs, dan setelah itu belum ada transaksi penjualan lagi).';
+      langkahSolusi.add(
+          'Apabila aktual fisik $namaProduk di rak toko saat ini benar-benar sudah 0 (habis), penyebab angka ${_angka(sisa)} Pcs di aplikasi adalah input Stok Opname pada $waktuSoTambahTerakhir WIB oleh $petugasSoTambahTerakhir yang mengisi Stok Fisik = ${_angka(stokSesudahSoTambahTerakhir)} Pcs.');
+      langkahSolusi.add(
+          'Untuk menyamakan saldo aplikasi dengan fisik di rak yang sudah kosong (0 Pcs), silakan buka menu Stok Opname, pilih produk "$kd - $namaProduk", isi Stok Fisik = 0, lalu Simpan.');
+      langkahSolusi.add(
+          'Pastikan saat mengunggah/menginput Stok Opname berikutnya, angka Stok Fisik yang dimasukkan adalah sisa fisik nyata pada hari itu (bukan angka stok awal sebelum barang terjual).');
     } else if (opnameMasuk > 0 || opnameKeluar > 0) {
       judulDiagnosis =
           'Terdapat Penyesuaian Stok Opname (+${_angka(opnameMasuk)} / -${_angka(opnameKeluar)} Pcs)';
       penjelasanUtama =
-          'Perubahan stok pada barang ini dipengaruhi oleh penyesuaian Stok Opname${jmlOpname > 0 ? " sebanyak $jmlOpname kali" : ""} pada periode ini (bertambah +${_angka(opnameMasuk)} Pcs, berkurang -${_angka(opnameKeluar)} Pcs), sehingga sisa stok akhir menjadi ${_angka(sisa)} Pcs.';
+          'Perubahan stok pada barang ini dipengaruhi oleh penyesuaian Stok Opname${jmlOpname > 0 ? " sebanyak $jmlOpname kali" : ""} pada periode ini (bertambah +${_angka(opnameMasuk)} Pcs, berkurang -${_angka(opnameKeluar)} Pcs; saldo murni tanpa Opname adalah ${_angka(saldoTanpaOpname)} Pcs), sehingga sisa stok akhir menjadi ${_angka(sisa)} Pcs.';
       langkahSolusi.add(
-          'Periksa rincian jam dan nama petugas Stok Opname pada daftar kronologi di atas untuk memastikan koreksi fisik sudah sesuai.');
+          'Periksa rincian jam dan nama petugas Stok Opname pada daftar kronologi di atas untuk memastikan koreksi fisik sudah sesuai dengan kondisi rak saat ini.');
+      langkahSolusi.add(
+          'Jika jumlah aktual fisik di toko berbeda dengan Saldo Akhir (${_angka(sisa)} Pcs), silakan lakukan input Stok Opname sesuai jumlah fisik terbaru di rak.');
     } else {
       judulDiagnosis = 'Pergerakan Stok Normal & Sesuai Riwayat Transaksi';
       penjelasanUtama =
@@ -2494,28 +2575,26 @@ class StokAnalisisCerdasLokal {
           '• Saldo Awal Periode: *${_angka(awal)} Pcs* (${_rupiah(awal * hargaBeli)})')
       ..writeln('• Barang Masuk (Pengadaan/Transfer): *+${_angka(masuk)} Pcs*')
       ..writeln('• Pengembalian / Retur Pelanggan: *+${_angka(retur)} Pcs*')
-      ..writeln('• Terjual di Kasir: *-${_angka(penjualan)} Pcs*')
+      ..writeln(
+          '• Terjual di Kasir: *-${_angka(penjualan)} Pcs* ($jmlTransaksiPos transaksi)')
       ..writeln(
           '• Keluar Lainnya (Retur Beli/Transfer/Bahan): *-${_angka(keluar)} Pcs*')
+      ..writeln(
+          '• Saldo Murni (Tanpa Stok Opname): *${_angka(saldoTanpaOpname)} Pcs*')
       ..writeln(
           '• Koreksi Stok Opname Bertambah (+): *+${_angka(opnameMasuk)} Pcs*')
       ..writeln(
           '• Koreksi Stok Opname Berkurang (-): *-${_angka(opnameKeluar)} Pcs*')
       ..writeln(
-          '• *Sisa Stok Akhir: ${_angka(sisa)} Pcs* (Nilai Modal: ${_rupiah(sisa * hargaBeli)})\n')
+          '• *Sisa Stok Akhir Tercatat: ${_angka(sisa)} Pcs* (Nilai Modal: ${_rupiah(sisa * hargaBeli)})\n')
       ..writeln('🕒 *3. KRONOLOGI LENGKAP KELUAR-MASUK & STOK OPNAME:*');
 
-    if (kronologiPoin.isEmpty) {
+    if (kronologiSemua.isEmpty) {
       wa.writeln(
           '• Tidak ada perubahan/transaksi pada periode tanggal ini (Stok tetap ${_angka(sisa)} Pcs).');
     } else {
-      final maxLog = kronologiPoin.length > 25 ? 25 : kronologiPoin.length;
-      for (var i = 0; i < maxLog; i++) {
-        wa.writeln('${i + 1}. ${kronologiPoin[i]}');
-      }
-      if (kronologiPoin.length > maxLog) {
-        wa.writeln(
-            '... (dan ${kronologiPoin.length - maxLog} catatan transaksi lainnya).');
+      for (var i = 0; i < kronologiSemua.length; i++) {
+        wa.writeln('${i + 1}. ${kronologiSemua[i]}');
       }
     }
 
@@ -2529,6 +2608,7 @@ class StokAnalisisCerdasLokal {
       'judulDiagnosis': judulDiagnosis,
       'penjelasanUtama': penjelasanUtama,
       'kronologiPoin': kronologiPoin,
+      'kronologiPenting': kronologiPenting,
       'langkahSolusi': langkahSolusi,
       'teksAnalisisWa': wa.toString().trim(),
     };
@@ -2621,6 +2701,14 @@ class StokAnalisisCerdasLokal {
           .toList()
           .reversed
           .toList();
+      // Hitung secara akurat dari baris buku besar agar masuk, penjualan, opnameMasuk, dan opnameKeluar
+      // tidak tercampur dengan nilai bersih dari produk_mutasi_ringkasan.
+      double calcMasuk = 0;
+      double calcRetur = 0;
+      double calcPenjualan = 0;
+      double calcKeluar = 0;
+      double calcOpnameMasuk = 0;
+      double calcOpnameKeluar = 0;
       double running = awal;
       for (final r in rows) {
         final qty = (r['qty'] as num?)?.toDouble() ?? 0;
@@ -2632,29 +2720,58 @@ class StokAnalisisCerdasLokal {
         final mKeluar = qty < 0 ? qty.abs() : 0.0;
         running += qty;
         String kodeMutasi = '100';
-        if (jenis.contains('Pengadaan')) {
+        String tipeTampil = jenis;
+        if (jenis.contains('Pengadaan') || jenis.contains('Kulakan')) {
           kodeMutasi = '101';
+          calcMasuk += mMasuk;
         } else if (jenis.contains('Retur Penjualan')) {
           kodeMutasi = '103';
+          calcRetur += mMasuk;
         } else if (jenis.contains('Opname')) {
           kodeMutasi = '104';
+          if (mMasuk > 0) {
+            calcOpnameMasuk += mMasuk;
+            tipeTampil = 'Stok Opname (+)';
+          } else if (mKeluar > 0) {
+            calcOpnameKeluar += mKeluar;
+            tipeTampil =
+                (mAwal > 0 && running == 0) ? 'Stok Opname (Dinolkan)' : 'Stok Opname (-)';
+          } else {
+            tipeTampil = 'Stok Opname (=)';
+          }
         } else if (jenis.contains('Penjualan')) {
           kodeMutasi = '200';
+          calcPenjualan += mKeluar;
+        } else if (jenis.contains('Mutasi Masuk')) {
+          kodeMutasi = '102';
+          calcMasuk += mMasuk;
+        } else {
+          if (mMasuk > 0) calcMasuk += mMasuk;
+          if (mKeluar > 0) calcKeluar += mKeluar;
         }
         mutasi.add({
           'tanggal': waktu,
-          'tipe': jenis,
+          'tipe': tipeTampil,
           'kodeMutasi': kodeMutasi,
-          'referensi': ket.isNotEmpty ? ket : jenis,
+          'referensi': ket.isNotEmpty ? ket : tipeTampil,
           'idPelanggan': '-',
-          'namaPelanggan': jenis,
+          'namaPelanggan': tipeTampil,
           'oleh': '',
           'awal': mAwal,
           'masuk': mMasuk,
           'keluar': mKeluar,
           'sisa': running,
-          'keterangan': ket.isNotEmpty ? ket : jenis,
+          'keterangan': ket.isNotEmpty ? ket : tipeTampil,
         });
+      }
+      if (rows.isNotEmpty) {
+        masuk = calcMasuk;
+        retur = calcRetur;
+        penjualan = calcPenjualan;
+        keluar = calcKeluar;
+        opnameMasuk = calcOpnameMasuk;
+        opnameKeluar = calcOpnameKeluar;
+        sisa = running;
       }
     } catch (_) {}
 
