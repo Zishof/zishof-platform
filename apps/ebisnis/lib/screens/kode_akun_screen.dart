@@ -1367,46 +1367,53 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
               onSubmitted: (_) => _muat(),
             ),
           ),
-          FilledButton.icon(
-              onPressed: _memuat ? null : _muat,
-              icon: const Icon(Icons.filter_alt_outlined, size: 18),
-              label: const Text('Terapkan')),
-          if (_bolehTambahTabIni)
-            FilledButton.icon(
-                onPressed: _sibuk ? null : _tambahTabIni,
-                icon: const Icon(Icons.add, size: 18),
-                label: Text('Tambah $_defJudulTab')),
-          OutlinedButton.icon(
-              onPressed: _sibuk ? null : _bukaTerhapus,
-              icon: const Icon(Icons.restore_from_trash_outlined, size: 18),
-              label: const Text('Data Terhapus')),
-          OutlinedButton.icon(
-              onPressed: _sibuk ? null : _unduhAkun,
-              icon: const Icon(Icons.download, size: 18),
-              label: Text('Download $_defJudul')),
-          Tooltip(
-            message: _bolehImporTabIni
-                ? 'Unggah berkas Excel $_defJudul'
-                : 'Hak akses Anda tidak mengizinkan mengimpor $_defJudul',
-            child: OutlinedButton.icon(
-                onPressed: _sibuk || !_bolehImporTabIni ? null : _unggahAkun,
-                icon: const Icon(Icons.upload_file, size: 18),
-                label: Text('Upload $_defJudul')),
+          AksiToolbarMenu(
+            tooltip: 'Aksi kode akun',
+            aksi: [
+              AksiBaris(
+                ikon: Icons.filter_alt_outlined,
+                label: 'Terapkan',
+                utama: true,
+                onTap: _memuat ? null : _muat,
+              ),
+              if (_bolehTambahTabIni)
+                AksiBaris(
+                  ikon: Icons.add,
+                  label: 'Tambah $_defJudulTab',
+                  utama: true,
+                  onTap: _sibuk ? null : _tambahTabIni,
+                ),
+              AksiBaris(
+                ikon: Icons.download,
+                label: 'Download $_defJudul',
+                onTap: _sibuk ? null : _unduhAkun,
+              ),
+              if (_bolehImporTabIni)
+                AksiBaris(
+                  ikon: Icons.upload_file,
+                  label: 'Upload $_defJudul',
+                  onTap: _sibuk ? null : _unggahAkun,
+                ),
+              AksiBaris(
+                ikon: Icons.restore_from_trash_outlined,
+                label: 'Data Terhapus',
+                onTap: _sibuk ? null : _bukaTerhapus,
+              ),
+              if (_tab.index < 2)
+                AksiBaris(
+                  ikon: Icons.account_tree_outlined,
+                  label: 'Petakan Akun',
+                  onTap: _sibuk ? null : _petakanAkun,
+                ),
+              if (_tab.index < 2 && Sesi.instance.isAdmin)
+                AksiBaris(
+                  ikon: Icons.cleaning_services_outlined,
+                  label: 'Bersihkan Akun',
+                  merusak: true,
+                  onTap: _sibuk ? null : _bersihkanAkun,
+                ),
+            ],
           ),
-          if (_tab.index < 2)
-            OutlinedButton.icon(
-                onPressed: _sibuk ? null : _petakanAkun,
-                icon: const Icon(Icons.account_tree_outlined, size: 18),
-                label: const Text('Petakan Akun')),
-          // Menyapu akun sisa percobaan unggah bukan pekerjaan harian, jadi
-          // tombolnya hanya untuk administrator (Sesi.isAdmin berasal dari
-          // Common.getApakahAdminLain di server). Gerbang sesungguhnya tetap di
-          // server -- ini hanya menyembunyikan tombolnya.
-          if (_tab.index < 2 && Sesi.instance.isAdmin)
-            OutlinedButton.icon(
-                onPressed: _sibuk ? null : _bersihkanAkun,
-                icon: const Icon(Icons.cleaning_services_outlined, size: 18),
-                label: const Text('Bersihkan Akun')),
           if (_sibuk)
             const SizedBox(
                 width: 20,

@@ -20,6 +20,7 @@ import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import 'tab_mutasi_tabungan.dart' show PilihAnggotaSheet;
 import '../../widgets/jejak_galat.dart';
+import '../../widgets/aksi_baris_menu.dart';
 
 final _formatRpMutasiHutang =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -829,37 +830,37 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
                     align: TextAlign.right),
                 AppTableCell(
                   flex: 2,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextButton.icon(
-                        onPressed: () => _bukaDetailPiutang(r),
-                        icon: const Icon(Icons.visibility_outlined, size: 17),
-                        label: const Text('Lihat Detail'),
+                  align: TextAlign.center,
+                  child: AksiBarisMenu(
+                    aksi: [
+                      AksiBaris(
+                        ikon: Icons.visibility_outlined,
+                        label: 'Lihat Detail',
+                        onTap: () => _bukaDetailPiutang(r),
                       ),
                       // Tombol Lunasi hanya pada baris yang MENAMBAH piutang; baris
                       // pembayaran tidak punya sisa untuk dilunasi.
                       if (((r['bertambah'] as num?) ?? 0) > 0 &&
                           Sesi.instance.bolehEntryPelunasanPiutang)
-                        TextButton.icon(
-                          onPressed: () => _bukaFormBayarHutang(
+                        AksiBaris(
+                          ikon: Icons.price_check_outlined,
+                          label: 'Lunasi Piutang',
+                          onTap: () => _bukaFormBayarHutang(
                               idAnggotaAwal: (r['idAnggota'] as num?)?.toInt(),
                               namaAnggotaAwal: '${r['namaAnggota'] ?? ''}',
-                              nominalAwal: ((r['bertambah'] as num?) ?? 0).toDouble(),
+                              nominalAwal:
+                                  ((r['bertambah'] as num?) ?? 0).toDouble(),
                               keteranganAwal: 'Pelunasan '
                                   '${r['jenisMutasi'] ?? 'piutang'}'
                                   '${waktu == null ? '' : ' ${DateFormat('dd/MM/yyyy').format(waktu)}'}'),
-                          icon: const Icon(Icons.price_check_outlined, size: 17),
-                          label: const Text('Lunasi'),
                         ),
                       if ('${r['barisId'] ?? ''}'.startsWith('C') &&
                           Sesi.instance.bolehEntryPelunasanPiutang)
-                        IconButton(
-                          tooltip: 'Hapus pembayaran',
-                          visualDensity: VisualDensity.compact,
-                          icon: const Icon(Icons.delete_outline, size: 18),
-                          onPressed: () => _hapusPembayaran(r),
+                        AksiBaris(
+                          ikon: Icons.delete_outline,
+                          label: 'Hapus pembayaran',
+                          merusak: true,
+                          onTap: () => _hapusPembayaran(r),
                         ),
                     ],
                   ),

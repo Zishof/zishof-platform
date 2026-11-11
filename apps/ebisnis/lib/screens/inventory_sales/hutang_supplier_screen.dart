@@ -631,48 +631,42 @@ class _TabPembayaranState extends State<_TabPembayaran> with JejakGalat {
                         AppTableCell(
                           flex: 1,
                           align: TextAlign.center,
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            IconButton(
-                              icon: const Icon(Icons.receipt_long_outlined,
-                                  size: 18),
-                              tooltip: 'Cetak Voucher (PDF)',
-                              onPressed: () => _cetakVoucher(b),
-                            ),
-                            // Sama seperti Piutang: membalik voucher yang sudah
-                            // posting adalah wewenang terpisah dari membayarnya.
-                            if (!Sesi.instance.isSalesKeliling &&
-                                '${b['statusDok']}' == 'AKTIF' &&
-                                (Sesi.instance.crudInventorySales.isEmpty ||
-                                    Sesi.instance.bolehAksiIs('hutang', 'delete')))
-                              PopupMenuButton<String>(
-                                tooltip: 'Aksi dokumen',
-                                onSelected: (aksi) {
-                                  if (aksi == 'reversal') _reversal(b);
-                                  if (aksi == 'cair') {
-                                    _ubahStatusBg(b, 'CAIR');
-                                  }
-                                  if (aksi == 'tolak') {
-                                    _ubahStatusBg(b, 'TOLAK');
-                                  }
-                                },
-                                itemBuilder: (_) => [
-                                  const PopupMenuItem(
-                                      value: 'reversal',
-                                      child: Text('Reversal (batalkan)')),
-                                  if ('${b['metode']}' == 'GIRO' &&
-                                      ('${b['statusBg']}'.isEmpty ||
-                                          '${b['statusBg']}' ==
-                                              'DITERIMA')) ...[
-                                    const PopupMenuItem(
-                                        value: 'cair', child: Text('BG Cair')),
-                                    const PopupMenuItem(
-                                        value: 'tolak',
-                                        child:
-                                            Text('BG Tolak (auto-reversal)')),
-                                  ],
-                                ],
+                          child: AksiBarisMenu(
+                            aksi: [
+                              AksiBaris(
+                                ikon: Icons.receipt_long_outlined,
+                                label: 'Cetak Voucher (PDF)',
+                                onTap: () => _cetakVoucher(b),
                               ),
-                          ]),
+                              if (!Sesi.instance.isSalesKeliling &&
+                                  '${b['statusDok']}' == 'AKTIF' &&
+                                  (Sesi.instance.crudInventorySales.isEmpty ||
+                                      Sesi.instance
+                                          .bolehAksiIs('hutang', 'delete'))) ...[
+                                AksiBaris(
+                                  ikon: Icons.undo,
+                                  label: 'Reversal (batalkan)',
+                                  merusak: true,
+                                  onTap: () => _reversal(b),
+                                ),
+                                if ('${b['metode']}' == 'GIRO' &&
+                                    ('${b['statusBg']}'.isEmpty ||
+                                        '${b['statusBg']}' == 'DITERIMA')) ...[
+                                  AksiBaris(
+                                    ikon: Icons.check_circle_outline,
+                                    label: 'BG Cair',
+                                    onTap: () => _ubahStatusBg(b, 'CAIR'),
+                                  ),
+                                  AksiBaris(
+                                    ikon: Icons.cancel_outlined,
+                                    label: 'BG Tolak (auto-reversal)',
+                                    merusak: true,
+                                    onTap: () => _ubahStatusBg(b, 'TOLAK'),
+                                  ),
+                                ],
+                              ],
+                            ],
+                          ),
                         ),
                       ]))
                   .toList(),

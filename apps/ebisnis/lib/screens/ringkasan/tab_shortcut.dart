@@ -1043,7 +1043,7 @@ class _RingkasanTabShortcutState extends State<RingkasanTabShortcut>
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    AksiBarisMenu(
+                    AksiToolbarMenu(
                       tooltip: 'Aksi Menu Utama Shortcut',
                       aksi: [
                         AksiBaris(
@@ -1938,7 +1938,7 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
       judul: 'Kelola Shortcut Menu Utama',
       subjudul:
           'Atur pintasan menu, sub-tab, dan laporan paling vital yang tampil di Menu Utama Shortcut',
-      aksiHeader: AksiBarisMenu(
+      aksiHeader: AksiToolbarMenu(
         tooltip: 'Aksi Kelola Shortcut',
         aksi: [
           AksiBaris(

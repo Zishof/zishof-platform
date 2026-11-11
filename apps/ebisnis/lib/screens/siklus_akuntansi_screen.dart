@@ -807,19 +807,24 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
                   flex: 2),
               AppTableCell(
                 flex: 2,
+                align: TextAlign.center,
                 child: sudah
                     ? const SizedBox.shrink()
-                    : Row(mainAxisSize: MainAxisSize.min, children: [
-                        IconButton(
-                            tooltip: 'Ubah',
-                            icon: const Icon(Icons.edit, size: 18),
-                            onPressed: _sibuk ? null : () => _formSaldoAwal(s)),
-                        IconButton(
-                            tooltip: 'Hapus',
-                            icon: const Icon(Icons.delete_outline, size: 18),
-                            onPressed:
-                                _sibuk ? null : () => _hapusSaldoAwal(s)),
-                      ]),
+                    : AksiBarisMenu(
+                        aksi: [
+                          AksiBaris(
+                            ikon: Icons.edit,
+                            label: 'Ubah saldo awal',
+                            onTap: _sibuk ? null : () => _formSaldoAwal(s),
+                          ),
+                          AksiBaris(
+                            ikon: Icons.delete_outline,
+                            label: 'Hapus saldo awal',
+                            merusak: true,
+                            onTap: _sibuk ? null : () => _hapusSaldoAwal(s),
+                          ),
+                        ],
+                      ),
               ),
             ]);
           }).toList(),

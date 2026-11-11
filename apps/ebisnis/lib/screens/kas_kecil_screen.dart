@@ -10,6 +10,7 @@ import '../widgets/pemilih_akun.dart';
 import '../widgets/pemilih_anggaran.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/aksi_baris_menu.dart';
 import 'keuangan_cetak_util.dart';
 import 'pengadaan_dasbor_tab.dart';
 
@@ -684,85 +685,82 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
     final status = '${b['statusDokumen'] ?? ''}';
     final terkunci = b['sudahDijurnal'] == true;
     return AppTableCell(
-      width: 200,
+      width: 80,
       align: TextAlign.center,
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          tooltip: 'Cetak / pratinjau',
-          icon: const Icon(Icons.print_outlined, size: 18),
-          onPressed: _sibuk || _tampilkanTerhapus
-              ? null
-              : () => cetakDokumenKeuangan(context,
-                  modul: 'kas_kecil',
-                  id: (b['id'] as num).toInt(),
-                  kode: '${b['kode'] ?? ''}'),
-        ),
-        if (_tampilkanTerhapus && _boleh('delete'))
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip: 'Batalkan penghapusan (selama belum terkirim)',
-            icon: const Icon(Icons.restore_from_trash_outlined, size: 18),
-            onPressed: _sibuk ? null : () => _pulihkanBaris(b),
-          ),
-        if (!_tampilkanTerhapus && _boleh('update') && !terkunci)
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip: 'Ubah dokumen',
-            icon: const Icon(Icons.edit_outlined, size: 18),
-            onPressed: _sibuk ? null : () => _form(b),
-          ),
-        if (!_tampilkanTerhapus &&
-            _boleh('approve') &&
-            !terkunci &&
-            status != 'Disetujui')
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip: 'Setujui',
-            icon: const Icon(Icons.check_circle_outline,
-                size: 18, color: AppColors.success),
-            onPressed: _sibuk
+      child: AksiBarisMenu(
+        aksi: [
+          AksiBaris(
+            ikon: Icons.print_outlined,
+            label: 'Cetak / pratinjau',
+            onTap: _sibuk || _tampilkanTerhapus
                 ? null
-                : () async {
-                    if (await _konfirmasi(
-                        'Setujui pengeluaran?',
-                        '${b['kode']} — ${b['nama']}\nNilai ${_uang.format((b['nilai'] as num?) ?? 0)}',
-                        'Setujui')) {
-                      await _kirimLokalDulu(
-                          'kas_kecil_setujui', {'id': b['id']},
-                          kunci: 'kas_kecil:${b['id']}',
-                          rowLokal: {...b, 'statusDokumen': 'Disetujui'});
-                    }
-                  },
+                : () => cetakDokumenKeuangan(context,
+                    modul: 'kas_kecil',
+                    id: (b['id'] as num).toInt(),
+                    kode: '${b['kode'] ?? ''}'),
           ),
-        if (!_tampilkanTerhapus &&
-            _boleh('reject') &&
-            !terkunci &&
-            status != 'Ditolak')
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip: 'Tolak',
-            icon: const Icon(Icons.cancel_outlined, size: 18),
-            onPressed: _sibuk
-                ? null
-                : () async {
-                    if (await _konfirmasi('Tolak pengeluaran?',
-                        '${b['kode']} — ${b['nama']}', 'Tolak')) {
-                      await _kirimLokalDulu('kas_kecil_tolak', {'id': b['id']},
-                          kunci: 'kas_kecil:${b['id']}',
-                          rowLokal: {...b, 'statusDokumen': 'Ditolak'});
-                    }
-                  },
-          ),
-        if (!_tampilkanTerhapus && _boleh('delete') && !terkunci)
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip: 'Hapus dokumen',
-            icon: const Icon(Icons.delete_outline,
-                size: 18, color: AppColors.danger),
-            onPressed: _sibuk ? null : () => _hapusBaris(b),
-          ),
-      ]),
+          if (_tampilkanTerhapus && _boleh('delete'))
+            AksiBaris(
+              ikon: Icons.restore_from_trash_outlined,
+              label: 'Batalkan penghapusan (selama belum terkirim)',
+              onTap: _sibuk ? null : () => _pulihkanBaris(b),
+            ),
+          if (!_tampilkanTerhapus && _boleh('update') && !terkunci)
+            AksiBaris(
+              ikon: Icons.edit_outlined,
+              label: 'Ubah dokumen',
+              onTap: _sibuk ? null : () => _form(b),
+            ),
+          if (!_tampilkanTerhapus &&
+              _boleh('approve') &&
+              !terkunci &&
+              status != 'Disetujui')
+            AksiBaris(
+              ikon: Icons.check_circle_outline,
+              label: 'Setujui',
+              onTap: _sibuk
+                  ? null
+                  : () async {
+                      if (await _konfirmasi(
+                          'Setujui pengeluaran?',
+                          '${b['kode']} — ${b['nama']}\nNilai ${_uang.format((b['nilai'] as num?) ?? 0)}',
+                          'Setujui')) {
+                        await _kirimLokalDulu(
+                            'kas_kecil_setujui', {'id': b['id']},
+                            kunci: 'kas_kecil:${b['id']}',
+                            rowLokal: {...b, 'statusDokumen': 'Disetujui'});
+                      }
+                    },
+            ),
+          if (!_tampilkanTerhapus &&
+              _boleh('reject') &&
+              !terkunci &&
+              status != 'Ditolak')
+            AksiBaris(
+              ikon: Icons.cancel_outlined,
+              label: 'Tolak',
+              merusak: true,
+              onTap: _sibuk
+                  ? null
+                  : () async {
+                      if (await _konfirmasi('Tolak pengeluaran?',
+                          '${b['kode']} — ${b['nama']}', 'Tolak')) {
+                        await _kirimLokalDulu(
+                            'kas_kecil_tolak', {'id': b['id']},
+                            kunci: 'kas_kecil:${b['id']}',
+                            rowLokal: {...b, 'statusDokumen': 'Ditolak'});
+                      }
+                    },
+            ),
+          if (!_tampilkanTerhapus && _boleh('delete') && !terkunci)
+            AksiBaris(
+              ikon: Icons.delete_outline,
+              label: 'Hapus dokumen',
+              merusak: true,
+              onTap: _sibuk ? null : () => _hapusBaris(b),
+            ),
+        ],
+      ),
     );
   }
 

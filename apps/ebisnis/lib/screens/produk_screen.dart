@@ -1056,7 +1056,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
             ),
           ),
         const SizedBox(width: 4),
-        AksiBarisMenu(
+        AksiToolbarMenu(
           tooltip: 'Aksi laporan persediaan',
           aksi: [
             AksiBaris(
@@ -1562,7 +1562,14 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                             k.keterangan.isEmpty ? '-' : k.keterangan,
                             flex: 3),
                         AppTableCell(
-                            width: 64,
+                            width: 110,
+                            align: TextAlign.center,
+                            child: StatusPill(
+                              label: k.bawaan ? 'Bawaan' : 'Kustom',
+                              warna: k.bawaan ? AppColors.primary : AppColors.info,
+                            )),
+                        AppTableCell(
+                            width: 80,
                             align: TextAlign.center,
                             child: AksiBarisMenu(aksi: [
                               AksiBaris(
@@ -1571,30 +1578,12 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                   onTap: Sesi.instance.bolehKelola
                                       ? () => _bukaFormKebijakan(kebijakan: k)
                                       : null),
-                              AksiBaris(
-                                  ikon: Icons.delete_outline,
-                                  label: 'Hapus kebijakan',
-                                  merusak: true,
-                                  onTap: Sesi.instance.bolehKelola && !k.bawaan
-                                      ? () => _hapusKebijakan(k)
-                                      : null),
-                            ])),
-                        AppTableCell(
-                            width: 100,
-                            align: TextAlign.center,
-                            child:
-                                Row(mainAxisSize: MainAxisSize.min, children: [
-                              IconButton(
-                                  icon:
-                                      const Icon(Icons.edit_outlined, size: 18),
-                                  onPressed: Sesi.instance.bolehKelola
-                                      ? () => _bukaFormKebijakan(kebijakan: k)
-                                      : null),
                               if (!k.bawaan)
-                                IconButton(
-                                    icon: const Icon(Icons.delete_outline,
-                                        size: 18, color: AppColors.danger),
-                                    onPressed: Sesi.instance.bolehKelola
+                                AksiBaris(
+                                    ikon: Icons.delete_outline,
+                                    label: 'Hapus kebijakan',
+                                    merusak: true,
+                                    onTap: Sesi.instance.bolehKelola
                                         ? () => _hapusKebijakan(k)
                                         : null),
                             ])),
@@ -1679,15 +1668,16 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
           menuAktif: MenuEBisnis.produk,
           judul: 'Manajemen Produk',
           subjudul: 'Kelola katalog produk toko Anda',
-          aksiHeader: AksiBarisMenu(
+          aksiHeader: AksiToolbarMenu(
             aksi: tombolAksi,
             tooltip: 'Aksi manajemen produk',
           ),
           actionsAppBar: [
             const IndikatorSinkronMaster(),
-            AksiBarisMenu(
+            AksiToolbarMenu(
               aksi: tombolAksi,
               tooltip: 'Aksi manajemen produk',
+              modeAppBarMobile: true,
             ),
           ],
           scrollable: false,
@@ -2399,7 +2389,7 @@ class _DialogDetailStatistikProdukState
                           ],
                         ),
                       ),
-                      AksiBarisMenu(
+                      AksiToolbarMenu(
                         tooltip: 'Aksi daftar produk',
                         aksi: [
                           AksiBaris(

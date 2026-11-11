@@ -16,6 +16,7 @@ import '../widgets/pencarian_produk_banbox.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
+import '../widgets/aksi_baris_menu.dart';
 import '../widgets/proses_simpan_master.dart';
 import 'pengadaan_cetak_util.dart';
 
@@ -965,18 +966,23 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
                           fontWeight: FontWeight.bold, fontSize: 12.5)),
                   AppTableCell(
                     flex: 1,
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      IconButton(
-                        tooltip: 'Pratinjau & cetak retur',
-                        icon: const Icon(Icons.print_outlined, size: 18),
-                        onPressed: () => _cetakRiwayat(r),
-                      ),
-                      if (Sesi.instance.bolehKelola)
-                        IconButton(
-                            icon: const Icon(Icons.delete_outline,
-                                size: 18, color: AppColors.danger),
-                            onPressed: () => _hapusBaris(r)),
-                    ]),
+                    align: TextAlign.center,
+                    child: AksiBarisMenu(
+                      aksi: [
+                        AksiBaris(
+                          ikon: Icons.print_outlined,
+                          label: 'Pratinjau & cetak retur',
+                          onTap: () => _cetakRiwayat(r),
+                        ),
+                        if (Sesi.instance.bolehKelola)
+                          AksiBaris(
+                            ikon: Icons.delete_outline,
+                            label: 'Hapus retur pembelian',
+                            merusak: true,
+                            onTap: () => _hapusBaris(r),
+                          ),
+                      ],
+                    ),
                   ),
                 ]);
               }).toList(),

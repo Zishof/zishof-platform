@@ -1045,66 +1045,59 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                 AppTableCell.text('${row['pesan_error'] ?? '-'}',
                     flex: 4, maxLines: 2),
                 AppTableCell(
-                  width: 140,
+                  width: 80,
                   align: TextAlign.center,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                        tooltip: 'Lihat rincian dan kendala',
-                        onPressed: () => _lihatDetailPending(row),
-                        icon: const Icon(Icons.visibility_outlined),
-                      ),
-                      if (status == 'GAGAL' &&
-                          '${row['pesan_error'] ?? ''}'.trim().isNotEmpty)
-                        IconButton(
-                          tooltip: 'Ganti ke pembayaran lokal (Tunai/QRIS)',
-                          onPressed: () => _gantiMetodePending(row),
-                          icon:
-                              Icon(Icons.swap_horiz, color: AppColors.primary),
-                        ),
-                      if (status != 'SYNCED' &&
-                          ('${row['pesan_error'] ?? ''}'
-                                  .toLowerCase()
-                                  .contains('sudah digunakan') ||
-                              '${row['pesan_error'] ?? ''}'
-                                  .toLowerCase()
-                                  .contains('nomor nota')))
-                        IconButton(
-                          tooltip: 'Perbarui nomor nota yang bentrok dan kirim',
-                          onPressed: () => _perbaruiNomorNotaDanKirim(row),
-                          icon: Icon(Icons.autorenew,
-                              color: Colors.amber.shade800),
-                        ),
-                      // Baris Sukses pun tetap dapat dikirim ulang: transaksi
-                      // bisa saja terhapus di server sementara perangkat ini
-                      // masih menyimpan jurnalnya. Kiriman ulang aman karena
-                      // server menolak duplikat berdasarkan kode uniknya.
-                      _sedangKirimBaris
-                              .contains('${row['kode_unik'] ?? ''}'.trim())
-                          ? const Padding(
-                              padding: EdgeInsets.all(12),
-                              child: SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2)),
-                            )
-                          : IconButton(
-                              tooltip: status == 'SYNCED'
+                  child: _sedangKirimBaris
+                          .contains('${row['kode_unik'] ?? ''}'.trim())
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2)),
+                        )
+                      : AksiBarisMenu(
+                          aksi: [
+                            AksiBaris(
+                              ikon: Icons.visibility_outlined,
+                              label: 'Lihat rincian dan kendala',
+                              onTap: () => _lihatDetailPending(row),
+                            ),
+                            if (status == 'GAGAL' &&
+                                '${row['pesan_error'] ?? ''}'.trim().isNotEmpty)
+                              AksiBaris(
+                                ikon: Icons.swap_horiz,
+                                label:
+                                    'Ganti ke pembayaran lokal (Tunai/QRIS)',
+                                onTap: () => _gantiMetodePending(row),
+                              ),
+                            if (status != 'SYNCED' &&
+                                ('${row['pesan_error'] ?? ''}'
+                                        .toLowerCase()
+                                        .contains('sudah digunakan') ||
+                                    '${row['pesan_error'] ?? ''}'
+                                        .toLowerCase()
+                                        .contains('nomor nota')))
+                              AksiBaris(
+                                ikon: Icons.autorenew,
+                                label:
+                                    'Perbarui nomor nota yang bentrok dan kirim',
+                                onTap: () => _perbaruiNomorNotaDanKirim(row),
+                              ),
+                            AksiBaris(
+                              ikon: status == 'SYNCED'
+                                  ? Icons.restore_outlined
+                                  : Icons.cloud_upload_outlined,
+                              label: status == 'SYNCED'
                                   ? 'Kirim ulang (bila datanya terhapus di server)'
                                   : status == 'GAGAL'
                                       ? 'Coba lagi hanya setelah kendala diperbaiki'
                                       : 'Coba kirim transaksi ini sekarang',
-                              onPressed: () => _kirimSatuPending(row,
+                              onTap: () => _kirimSatuPending(row,
                                   paksa: status == 'SYNCED'),
-                              icon: Icon(status == 'SYNCED'
-                                  ? Icons.restore_outlined
-                                  : Icons.cloud_upload_outlined),
                             ),
-                    ],
-                  ),
+                          ],
+                        ),
                 ),
               ],
             );

@@ -8,6 +8,7 @@ import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/aksi_baris_menu.dart';
 
 final _rupiahPengajuan =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -281,28 +282,25 @@ class _AnggotaTabPengajuanLimitState extends State<AnggotaTabPengajuanLimit> {
                                     '${r['tanggalPengajuan'] ?? '-'}\n${r['diajukanOleh'] ?? ''}')),
                                 DataCell(Text('${r['status'] ?? '-'}')),
                                 DataCell(menunggu
-                                    ? Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                            IconButton(
-                                              tooltip: 'Setujui',
-                                              onPressed: _memutuskan
-                                                  ? null
-                                                  : () => _putuskan(r, true),
-                                              icon: const Icon(
-                                                  Icons.check_circle_outline,
-                                                  color: Colors.green),
-                                            ),
-                                            IconButton(
-                                              tooltip: 'Tolak',
-                                              onPressed: _memutuskan
-                                                  ? null
-                                                  : () => _putuskan(r, false),
-                                              icon: const Icon(
-                                                  Icons.cancel_outlined,
-                                                  color: Colors.red),
-                                            ),
-                                          ])
+                                    ? AksiBarisMenu(
+                                        aksi: [
+                                          AksiBaris(
+                                            ikon: Icons.check_circle_outline,
+                                            label: 'Setujui Pengajuan Limit',
+                                            onTap: _memutuskan
+                                                ? null
+                                                : () => _putuskan(r, true),
+                                          ),
+                                          AksiBaris(
+                                            ikon: Icons.cancel_outlined,
+                                            label: 'Tolak Pengajuan Limit',
+                                            merusak: true,
+                                            onTap: _memutuskan
+                                                ? null
+                                                : () => _putuskan(r, false),
+                                          ),
+                                        ],
+                                      )
                                     : Text('${r['diputuskanOleh'] ?? '-'}')),
                               ]);
                             }).toList(),

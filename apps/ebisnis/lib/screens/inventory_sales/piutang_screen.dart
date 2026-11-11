@@ -17,6 +17,7 @@ import '../../widgets/app_shell.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
+import '../../widgets/aksi_baris_menu.dart';
 
 final _fmtRp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -904,42 +905,42 @@ class _TabRiwayatState extends State<_TabRiwayat> with JejakGalat {
                   AppTableCell(
                     flex: 1,
                     align: TextAlign.center,
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      IconButton(
-                        icon: const Icon(Icons.print_outlined, size: 20),
-                        tooltip: 'Cetak kwitansi (PDF)',
-                        onPressed: () => _cetakKwitansi(r),
-                      ),
-                      // Reversal = wewenang TERPISAH dari membuat penagihan:
-                      // membalik kwitansi yang sudah posting bukan pekerjaan
-                      // yang sama dengan menerbitkannya.
-                      if (!Sesi.instance.isSalesKeliling &&
-                          '${r['statusDok']}' == 'AKTIF' &&
-                          (Sesi.instance.crudInventorySales.isEmpty ||
-                              Sesi.instance.bolehAksiIs('piutang', 'delete')))
-                        PopupMenuButton<String>(
-                          tooltip: 'Aksi dokumen',
-                          onSelected: (v) {
-                            if (v == 'reversal') _reversal(r);
-                            if (v == 'cair') _bgStatus(r, 'CAIR');
-                            if (v == 'tolak') _bgStatus(r, 'TOLAK');
-                          },
-                          itemBuilder: (_) => [
-                            const PopupMenuItem(
-                                value: 'reversal',
-                                child: Text('Reversal (batalkan)')),
-                            if ('${r['metode']}' == 'GIRO' &&
-                                ('${r['statusBg']}'.isEmpty ||
-                                    '${r['statusBg']}' == 'DITERIMA')) ...[
-                              const PopupMenuItem(
-                                  value: 'cair', child: Text('BG Cair')),
-                              const PopupMenuItem(
-                                  value: 'tolak',
-                                  child: Text('BG Tolak (auto-reversal)')),
-                            ],
-                          ],
+                    child: AksiBarisMenu(
+                      aksi: [
+                        AksiBaris(
+                          ikon: Icons.print_outlined,
+                          label: 'Cetak kwitansi (PDF)',
+                          onTap: () => _cetakKwitansi(r),
                         ),
-                    ]),
+                        if (!Sesi.instance.isSalesKeliling &&
+                            '${r['statusDok']}' == 'AKTIF' &&
+                            (Sesi.instance.crudInventorySales.isEmpty ||
+                                Sesi.instance
+                                    .bolehAksiIs('piutang', 'delete'))) ...[
+                          AksiBaris(
+                            ikon: Icons.undo,
+                            label: 'Reversal (batalkan)',
+                            merusak: true,
+                            onTap: () => _reversal(r),
+                          ),
+                          if ('${r['metode']}' == 'GIRO' &&
+                              ('${r['statusBg']}'.isEmpty ||
+                                  '${r['statusBg']}' == 'DITERIMA')) ...[
+                            AksiBaris(
+                              ikon: Icons.check_circle_outline,
+                              label: 'BG Cair',
+                              onTap: () => _bgStatus(r, 'CAIR'),
+                            ),
+                            AksiBaris(
+                              ikon: Icons.cancel_outlined,
+                              label: 'BG Tolak (auto-reversal)',
+                              merusak: true,
+                              onTap: () => _bgStatus(r, 'TOLAK'),
+                            ),
+                          ],
+                        ],
+                      ],
+                    ),
                   ),
                 ]),
             ],

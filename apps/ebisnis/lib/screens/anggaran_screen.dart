@@ -1366,48 +1366,49 @@ class _AnggaranScreenState extends State<AnggaranScreen>
                   align: TextAlign.right),
               AppTableCell.text(p['aktif'] == true ? 'Ya' : 'Tidak', flex: 1),
               AppTableCell(
-                width: 96,
+                width: 64,
                 align: TextAlign.center,
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  if (manual && _boleh('update'))
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      tooltip: 'Ubah',
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      onPressed: _sibuk ? null : () => _formPenggunaan(data: p),
-                    ),
-                  if (manual && _boleh('delete'))
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      tooltip: 'Hapus',
-                      icon: const Icon(Icons.delete_outline,
-                          size: 18, color: AppColors.danger),
-                      onPressed: _sibuk
-                          ? null
-                          : () async {
-                              if (await _konfirmasi(
-                                  'Hapus penggunaan anggaran?',
-                                  '"${p['nama']}" akan dihapus permanen.')) {
-                                await _kirimMaster(
-                                  'anggaran_penggunaan_hapus',
-                                  {'id': p['id']},
-                                  kunci: 'anggaran_penggunaan:${p['id']}',
-                                  cacheKey: _cachePenggunaan,
-                                  rowLokal: {'id': p['id']},
-                                  hapusLokal: true,
-                                );
-                              }
-                            },
-                    ),
-                  // Baris dari dokumen lain sengaja tidak bisa disunting di sini supaya
-                  // angka realisasi tetap sinkron dengan dokumen asalnya.
-                  if (!manual)
-                    const Tooltip(
-                      message:
-                          'Berasal dari dokumen lain — ubah dari dokumen asalnya',
-                      child: Icon(Icons.lock_outline, size: 16),
-                    ),
-                ]),
+                child: !manual
+                    ? const Tooltip(
+                        message:
+                            'Berasal dari dokumen lain — ubah dari dokumen asalnya',
+                        child: Icon(Icons.lock_outline, size: 16),
+                      )
+                    : AksiBarisMenu(
+                        aksi: [
+                          if (_boleh('update'))
+                            AksiBaris(
+                              ikon: Icons.edit_outlined,
+                              label: 'Ubah penggunaan anggaran',
+                              onTap: _sibuk
+                                  ? null
+                                  : () => _formPenggunaan(data: p),
+                            ),
+                          if (_boleh('delete'))
+                            AksiBaris(
+                              ikon: Icons.delete_outline,
+                              label: 'Hapus penggunaan anggaran',
+                              merusak: true,
+                              onTap: _sibuk
+                                  ? null
+                                  : () async {
+                                      if (await _konfirmasi(
+                                          'Hapus penggunaan anggaran?',
+                                          '"${p['nama']}" akan dihapus permanen.')) {
+                                        await _kirimMaster(
+                                          'anggaran_penggunaan_hapus',
+                                          {'id': p['id']},
+                                          kunci:
+                                              'anggaran_penggunaan:${p['id']}',
+                                          cacheKey: _cachePenggunaan,
+                                          rowLokal: {'id': p['id']},
+                                          hapusLokal: true,
+                                        );
+                                      }
+                                    },
+                            ),
+                        ],
+                      ),
               ),
             ]);
           }).toList(),

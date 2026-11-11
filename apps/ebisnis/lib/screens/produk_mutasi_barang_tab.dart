@@ -953,7 +953,7 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
               onPressed: () => _pilihTanggal(false),
               icon: const Icon(Icons.event_outlined, size: 17),
               label: Text('Sampai ${_mutasiTanggal.format(_sampai)}')),
-          AksiBarisMenu(
+          AksiToolbarMenu(
             tooltip: 'Aksi pergerakan produk',
             aksi: [
               AksiBaris(

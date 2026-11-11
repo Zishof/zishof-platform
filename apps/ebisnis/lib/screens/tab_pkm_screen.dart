@@ -396,7 +396,7 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
                 ],
               ),
             ),
-            AksiBarisMenu(
+            AksiToolbarMenu(
               tooltip: 'Aksi PKM',
               aksi: [
                 AksiBaris(

@@ -641,7 +641,7 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
                   ),
                 ),
 
-                AksiBarisMenu(
+                AksiToolbarMenu(
                   tooltip: 'Aksi pergerakan stok',
                   aksi: [
                     AksiBaris(
@@ -1423,7 +1423,7 @@ class _DialogDetailPergerakanStokState
                       ],
                     ),
                   ),
-                  AksiBarisMenu(tooltip: 'Aksi rincian mutasi', aksi: [
+                  AksiToolbarMenu(tooltip: 'Aksi rincian mutasi', aksi: [
                     AksiBaris(
                       ikon: Icons.auto_awesome_outlined,
                       label: 'Analisis Cerdas Produk (Siap WA)',
@@ -1759,7 +1759,7 @@ class _DialogDetailPergerakanStokState
                             ),
                           ),
                           const SizedBox(width: 8),
-                          AksiBarisMenu(
+                          AksiToolbarMenu(
                             tooltip: 'Aksi hasil analisis',
                             aksi: [
                               AksiBaris(
@@ -2229,7 +2229,7 @@ class _DialogAnalisisCerdasStokState extends State<DialogAnalisisCerdasStok> {
               const SizedBox(height: 14),
               Align(
                 alignment: Alignment.centerRight,
-                child: AksiBarisMenu(
+                child: AksiToolbarMenu(
                   tooltip: 'Aksi analisis stok',
                   aksi: [
                     if (_error != null)

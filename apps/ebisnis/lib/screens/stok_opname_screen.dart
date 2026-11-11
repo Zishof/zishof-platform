@@ -392,10 +392,15 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
       subjudul: 'Kartu mutasi stok & input hasil hitung fisik',
       aksiHeader: aksiHeader.isEmpty
           ? null
-          : AksiBarisMenu(aksi: aksiHeader, tooltip: 'Aksi stok opname'),
+          : AksiToolbarMenu(aksi: aksiHeader, tooltip: 'Aksi stok opname'),
       actionsAppBar: aksiHeader.isEmpty
           ? null
-          : [AksiBarisMenu(aksi: aksiHeader, tooltip: 'Aksi stok opname')],
+          : [
+              AksiToolbarMenu(
+                  aksi: aksiHeader,
+                  tooltip: 'Aksi stok opname',
+                  modeAppBarMobile: true)
+            ],
       scrollable: false,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1760,7 +1765,7 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
                   ),
               ],
             ),
-            AksiBarisMenu(tooltip: 'Aksi SO Harian', aksi: [
+            AksiToolbarMenu(tooltip: 'Aksi SO Harian', aksi: [
               if (widget.onBukaSoGrand != null)
                 AksiBaris(
                     ikon: Icons.fact_check_outlined,

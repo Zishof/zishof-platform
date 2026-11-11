@@ -2489,18 +2489,30 @@ class _AppShellState extends State<AppShell> {
   }
 
   /// Tombol berlabel yang nyaman di desktop mudah memenuhi seluruh AppBar
-  /// ponsel lalu bertabrakan dengan judul/tombol drawer. Bila ada lebih dari
-  /// dua aksi, pindahkan [HeaderActionButton] ke satu menu overflow; widget
-  /// khusus (misalnya PopupMenuButton bertingkat) tetap dipertahankan.
+  /// ponsel lalu bertabrakan dengan judul/tombol drawer.
+  ///
+  /// Sesuai **ATURAN MUTLAK 14 & 16** (`/docs/AGENTS.md`):
+  /// - Di layar mobile/Android, tampilkan maksimal 2 tombol utama secara langsung
+  ///   (sebagai `IconButton` ber-tooltip agar hemat ruang), dan barulah sisanya
+  ///   dimasukkan ke satu menu kebab (`...`) di posisi paling kanan.
+  /// - Bila total aksi `<= 2`, tampilkan semuanya langsung tanpa kebab.
   List<Widget> _bangunAksiMobile(List<Widget>? actions) {
     if (actions == null || actions.isEmpty) return const [];
     if (actions.length <= 2) return actions;
 
     final tombolBiasa = actions.whereType<HeaderActionButton>().toList();
     if (tombolBiasa.isEmpty) return actions;
-    final khusus = actions.where((a) => a is! HeaderActionButton).take(1);
+    final khusus = actions.where((a) => a is! HeaderActionButton).take(1).toList();
+    final slotLangsung = (2 - khusus.length).clamp(1, 2);
+    final langsung = tombolBiasa.take(slotLangsung).toList();
     return [
       ...khusus,
+      for (final btn in langsung)
+        IconButton(
+          icon: Icon(btn.icon),
+          tooltip: btn.label,
+          onPressed: btn.onPressed,
+        ),
       PopupMenuButton<int>(
         key: const Key('menu-aksi-halaman-mobile'),
         icon: const Icon(Icons.more_vert),

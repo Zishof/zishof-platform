@@ -10,6 +10,7 @@ import '../widgets/proses_simpan_master.dart';
 import 'keuangan_cetak_util.dart';
 import 'pengadaan_dasbor_tab.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/aksi_baris_menu.dart';
 
 /// Layar **Pertanggungjawaban Uang Muka (LPJ)** -- padanan layar ZK
 /// `ais.action.master.akunting.PertangungjawabanKasBesarAction`.
@@ -730,117 +731,107 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
         b['sudahDijurnalPajak'] == true ||
         b['sudahDijurnalPengembalian'] == true;
     return AppTableCell(
-      width: 208,
+      width: 80,
       align: TextAlign.center,
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        // Cetak memakai templat yang sama dengan layar ZK -- lihat keuangan_cetak_util.
-        // Muara dokumen keuangan: DPC (Daftar Pengajuan Transfer). Hanya dokumen
-        // yang sudah disetujui yang boleh masuk, dan sekali masuk tidak diulang --
-        // server memperlakukan penautannya sebagai idempoten.
-        if (!_tampilkanTerhapus && _boleh('approve') && status == 'Disetujui')
-          b['dpcAda'] == true
-              ? IconButton(
-                  visualDensity: VisualDensity.compact,
-                  tooltip: 'Sudah di daftar transfer'
-                      '${(b['dpcKode'] ?? '').toString().isEmpty ? '' : ' (${b['dpcKode']})'}',
-                  icon: const Icon(Icons.local_atm,
-                      size: 18, color: AppColors.success),
-                  onPressed: null,
-                )
-              : IconButton(
-                  visualDensity: VisualDensity.compact,
-                  tooltip: 'Ajukan ke proses transfer',
-                  icon: const Icon(Icons.send_outlined, size: 18),
-                  onPressed: _sibuk
-                      ? null
-                      : () async {
-                          if (await _konfirmasi(
-                              'Ajukan ke proses transfer?',
-                              '${b['kode']} — ${b['nama']}\n'
-                                  'Dokumen masuk daftar pengajuan transfer bagian keuangan.',
-                              'Ajukan')) {
-                            await _kirimLokalDulu(
-                                'pj_kas_besar_ajukan_transfer', {'id': b['id']},
-                                kunci: 'pj_kas_besar-dpc:${b['id']}',
-                                rowLokal: {
-                                  ...b,
-                                  'dpcAda': true,
-                                  'dpcStatus': 'Menunggu transfer',
-                                });
-                          }
-                        },
-                ),
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          tooltip: 'Cetak / pratinjau',
-          icon: const Icon(Icons.print_outlined, size: 18),
-          onPressed: _sibuk || _tampilkanTerhapus
-              ? null
-              : () => cetakDokumenKeuangan(context,
-                  modul: 'pj_kas_besar',
-                  id: (b['id'] as num).toInt(),
-                  kode: '${b['kode'] ?? ''}'),
-        ),
-        if (_tampilkanTerhapus && _boleh('create'))
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip: 'Pulihkan sebagai dokumen baru',
-            icon: const Icon(Icons.restore_from_trash_outlined, size: 18),
-            onPressed: _sibuk ? null : () => _pulihkanBaris(b),
-          ),
-        if (!_tampilkanTerhapus && _boleh('update') && !terkunci)
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip: 'Ubah PJ',
-            icon: const Icon(Icons.edit_outlined, size: 18),
-            onPressed: _sibuk ? null : () => _form(b),
-          ),
-        if (_boleh('approve') && !terkunci && status != 'Disetujui')
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip: 'Setujui',
-            icon: const Icon(Icons.check_circle_outline,
-                size: 18, color: AppColors.success),
-            onPressed: _sibuk
+      child: AksiBarisMenu(
+        aksi: [
+          if (!_tampilkanTerhapus && _boleh('approve') && status == 'Disetujui')
+            b['dpcAda'] == true
+                ? AksiBaris(
+                    ikon: Icons.local_atm,
+                    label: 'Sudah di daftar transfer'
+                        '${(b['dpcKode'] ?? '').toString().isEmpty ? '' : ' (${b['dpcKode']})'}',
+                    onTap: null,
+                  )
+                : AksiBaris(
+                    ikon: Icons.send_outlined,
+                    label: 'Ajukan ke proses transfer',
+                    onTap: _sibuk
+                        ? null
+                        : () async {
+                            if (await _konfirmasi(
+                                'Ajukan ke proses transfer?',
+                                '${b['kode']} — ${b['nama']}\n'
+                                    'Dokumen masuk daftar pengajuan transfer bagian keuangan.',
+                                'Ajukan')) {
+                              await _kirimLokalDulu(
+                                  'pj_kas_besar_ajukan_transfer',
+                                  {'id': b['id']},
+                                  kunci: 'pj_kas_besar-dpc:${b['id']}',
+                                  rowLokal: {
+                                    ...b,
+                                    'dpcAda': true,
+                                    'dpcStatus': 'Menunggu transfer',
+                                  });
+                            }
+                          },
+                  ),
+          AksiBaris(
+            ikon: Icons.print_outlined,
+            label: 'Cetak / pratinjau',
+            onTap: _sibuk || _tampilkanTerhapus
                 ? null
-                : () async {
-                    if (await _konfirmasi(
-                        'Setujui PJ?',
-                        '${b['kode']} — ${b['nama']}\nNilai ${_uang.format((b['nilai'] as num?) ?? 0)}',
-                        'Setujui')) {
-                      await _kirimLokalDulu(
-                          'pj_kas_besar_setujui', {'id': b['id']},
-                          kunci: 'pj_kas_besar:${b['id']}',
-                          rowLokal: {...b, 'statusDokumen': 'Disetujui'});
-                    }
-                  },
+                : () => cetakDokumenKeuangan(context,
+                    modul: 'pj_kas_besar',
+                    id: (b['id'] as num).toInt(),
+                    kode: '${b['kode'] ?? ''}'),
           ),
-        if (_boleh('reject') && !terkunci && status != 'Ditolak')
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip: 'Tolak',
-            icon: const Icon(Icons.cancel_outlined, size: 18),
-            onPressed: _sibuk
-                ? null
-                : () async {
-                    if (await _konfirmasi(
-                        'Tolak PJ?', '${b['kode']} — ${b['nama']}', 'Tolak')) {
-                      await _kirimLokalDulu(
-                          'pj_kas_besar_tolak', {'id': b['id']},
-                          kunci: 'pj_kas_besar:${b['id']}',
-                          rowLokal: {...b, 'statusDokumen': 'Ditolak'});
-                    }
-                  },
-          ),
-        if (_boleh('delete') && !terkunci)
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip: 'Hapus PJ',
-            icon: const Icon(Icons.delete_outline,
-                size: 18, color: AppColors.danger),
-            onPressed: _sibuk ? null : () => _hapusBaris(b),
-          ),
-      ]),
+          if (_tampilkanTerhapus && _boleh('create'))
+            AksiBaris(
+              ikon: Icons.restore_from_trash_outlined,
+              label: 'Pulihkan sebagai dokumen baru',
+              onTap: _sibuk ? null : () => _pulihkanBaris(b),
+            ),
+          if (!_tampilkanTerhapus && _boleh('update') && !terkunci)
+            AksiBaris(
+              ikon: Icons.edit_outlined,
+              label: 'Ubah PJ',
+              onTap: _sibuk ? null : () => _form(b),
+            ),
+          if (_boleh('approve') && !terkunci && status != 'Disetujui')
+            AksiBaris(
+              ikon: Icons.check_circle_outline,
+              label: 'Setujui',
+              onTap: _sibuk
+                  ? null
+                  : () async {
+                      if (await _konfirmasi(
+                          'Setujui PJ?',
+                          '${b['kode']} — ${b['nama']}\nNilai ${_uang.format((b['nilai'] as num?) ?? 0)}',
+                          'Setujui')) {
+                        await _kirimLokalDulu(
+                            'pj_kas_besar_setujui', {'id': b['id']},
+                            kunci: 'pj_kas_besar:${b['id']}',
+                            rowLokal: {...b, 'statusDokumen': 'Disetujui'});
+                      }
+                    },
+            ),
+          if (_boleh('reject') && !terkunci && status != 'Ditolak')
+            AksiBaris(
+              ikon: Icons.cancel_outlined,
+              label: 'Tolak',
+              merusak: true,
+              onTap: _sibuk
+                  ? null
+                  : () async {
+                      if (await _konfirmasi(
+                          'Tolak PJ?', '${b['kode']} — ${b['nama']}', 'Tolak')) {
+                        await _kirimLokalDulu(
+                            'pj_kas_besar_tolak', {'id': b['id']},
+                            kunci: 'pj_kas_besar:${b['id']}',
+                            rowLokal: {...b, 'statusDokumen': 'Ditolak'});
+                      }
+                    },
+            ),
+          if (_boleh('delete') && !terkunci)
+            AksiBaris(
+              ikon: Icons.delete_outline,
+              label: 'Hapus PJ',
+              merusak: true,
+              onTap: _sibuk ? null : () => _hapusBaris(b),
+            ),
+        ],
+      ),
     );
   }
 

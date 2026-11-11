@@ -2030,57 +2030,37 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
                             style: const TextStyle(fontWeight: FontWeight.w600),
                           )),
                           DataCell(
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Tooltip(
-                                  message:
+                            AksiBarisMenu(
+                              aksi: [
+                                AksiBaris(
+                                  ikon: Icons.fact_check_outlined,
+                                  label:
                                       'Ubah jumlah stok di rak melalui Stok Opname',
-                                  child: IconButton(
-                                    icon: Icon(Icons.fact_check_outlined,
-                                        size: 18, color: AppColors.primary),
-                                    onPressed: _bukaStokOpname,
-                                  ),
+                                  onTap: _bukaStokOpname,
                                 ),
                                 if (!isUnassigned && !isRakUtama)
-                                  Tooltip(
-                                    message:
+                                  AksiBaris(
+                                    ikon: Icons.star_outline_rounded,
+                                    label:
                                         'Jadikan Rak Ini sebagai RAK Utama Produk',
-                                    child: IconButton(
-                                      icon: const Icon(
-                                          Icons.star_outline_rounded,
-                                          size: 19,
-                                          color: Colors.amber),
-                                      onPressed: () =>
-                                          _jadikanRakUtamaProduk(p),
-                                    ),
+                                    onTap: () => _jadikanRakUtamaProduk(p),
                                   ),
                                 if (produkId > 0)
-                                  Tooltip(
-                                    message:
+                                  AksiBaris(
+                                    ikon: Icons.drive_file_move_outlined,
+                                    label:
                                         'Pindahkan produk ke rak lain (otomatis sesuaikan RAK Utama)',
-                                    child: IconButton(
-                                      icon: const Icon(
-                                          Icons.drive_file_move_outlined,
-                                          size: 18,
-                                          color: Colors.indigo),
-                                      onPressed: () =>
-                                          _bukaDialogPindahkanKeRakLain(
-                                        daftarProdukId: [produkId],
-                                        labelProduk: '$kode — $nama',
-                                      ),
+                                    onTap: () => _bukaDialogPindahkanKeRakLain(
+                                      daftarProdukId: [produkId],
+                                      labelProduk: '$kode — $nama',
                                     ),
                                   ),
                                 if (!isUnassigned)
-                                  Tooltip(
-                                    message: 'Keluarkan produk dari rak ini',
-                                    child: IconButton(
-                                      icon: const Icon(
-                                          Icons.remove_circle_outline,
-                                          size: 18,
-                                          color: AppColors.danger),
-                                      onPressed: () => _hapusProdukDariRak(p),
-                                    ),
+                                  AksiBaris(
+                                    ikon: Icons.remove_circle_outline,
+                                    label: 'Keluarkan produk dari rak ini',
+                                    merusak: true,
+                                    onTap: () => _hapusProdukDariRak(p),
                                   ),
                               ],
                             ),

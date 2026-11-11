@@ -5,6 +5,7 @@ import '../services/master_offline.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/aksi_baris_menu.dart';
 
 /// Setup Laporan untuk POS Desktop dan Android.
 ///
@@ -674,18 +675,20 @@ class _SetupLaporanScreenState extends State<SetupLaporanScreen> {
                   child: Text('${a['keterangan'] ?? ''}',
                       overflow: TextOverflow.ellipsis))),
               DataCell(Text('${a['nomorUrut'] ?? 0}')),
-              DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
+              DataCell(AksiBarisMenu(aksi: [
                 if (_boleh('update'))
-                  IconButton(
-                      tooltip: 'Ubah nomor urut',
-                      onPressed: _sibuk ? null : () => _ubahUrutan(a),
-                      icon: const Icon(Icons.edit_outlined, size: 18)),
+                  AksiBaris(
+                    ikon: Icons.edit_outlined,
+                    label: 'Ubah nomor urut',
+                    onTap: _sibuk ? null : () => _ubahUrutan(a),
+                  ),
                 if (_boleh('delete'))
-                  IconButton(
-                      tooltip: 'Lepas dari kelompok',
-                      onPressed: _sibuk ? null : () => _hapusAkun(a),
-                      icon: const Icon(Icons.link_off,
-                          size: 18, color: AppColors.danger)),
+                  AksiBaris(
+                    ikon: Icons.link_off,
+                    label: 'Lepas dari kelompok',
+                    merusak: true,
+                    onTap: _sibuk ? null : () => _hapusAkun(a),
+                  ),
               ])),
             ]),
         ],

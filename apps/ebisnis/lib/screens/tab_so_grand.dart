@@ -1072,7 +1072,7 @@ class _TabSoGrandState extends State<TabSoGrand> {
                 ],
               ),
             ),
-            AksiBarisMenu(
+            AksiToolbarMenu(
               tooltip: 'Aksi SO Grand',
               aksi: [
                 AksiBaris(
