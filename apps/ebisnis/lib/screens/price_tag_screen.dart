@@ -519,7 +519,10 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
   bool _memuat = true;
   String? _pesanError;
   int _halaman = 0;
-  final int _itemPerHalaman = 50;
+
+  /// Samakan jumlah baris per halaman dengan tabel POS lain agar layar harga
+  /// label tidak memuat atau menggambar lebih banyak data sekaligus.
+  final int _itemPerHalaman = kBarisPerHalamanTabel;
   int _totalProduk = 0;
   int _generasiMuat = 0;
   Timer? _debounceCari;

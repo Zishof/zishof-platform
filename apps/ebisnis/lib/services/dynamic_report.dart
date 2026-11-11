@@ -9,6 +9,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
+import '../widgets/app_components.dart';
 import 'simple_xlsx.dart';
 
 class DynamicReportColumn {
@@ -460,6 +461,9 @@ class _DynamicReportDialogState extends State<_DynamicReportDialog> {
     );
   }
 
+  /// Pratinjau layar memakai pembungkus tabel bersama agar satu halaman tidak
+  /// menggambar seluruh laporan. Berkas PDF/Excel tetap memakai semua baris
+  /// hasil saringan; navigasi halaman hanya mengatur pratinjau di layar.
   Widget _preview(
       List<DynamicReportColumn> columns, List<Map<String, dynamic>> rows) {
     final totals = DynamicReportDesigner.totals(widget.data, model, rows);
@@ -489,12 +493,16 @@ class _DynamicReportDialogState extends State<_DynamicReportDialog> {
                       scrollDirection: Axis.vertical,
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
-                        child: DataTable(
+                        child: AppPagedDataTable(
+                          // Dialog preview is horizontally scrollable. Give
+                          // its pager a finite width so the footer can lay out
+                          // correctly even when the scroll view is unbounded.
+                          tableWidth: 1200,
                           columns: columns
                               .map((c) => DataColumn(label: Text(c.label)))
                               .toList(),
                           rows: [
-                            ...rows.take(100).map((row) => DataRow(
+                            ...rows.map((row) => DataRow(
                                 cells: columns
                                     .map((c) => DataCell(Text(
                                         DynamicReportDesigner.formatValue(

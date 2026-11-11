@@ -1,5 +1,6 @@
 import 'package:ebisnis/widgets/app_components.dart';
 import 'package:ebisnis/widgets/rincian_intip_dialog.dart';
+import 'package:ebisnis/services/dynamic_report.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -110,6 +111,40 @@ void main() {
     expect(find.text('Rincian 30'), findsOneWidget);
     expect(find.text('Rincian 15'), findsNothing);
     expect(find.text('Halaman 2 / 3'), findsOneWidget);
+  });
+
+  testWidgets('pratinjau laporan juga menampilkan 15 baris per halaman',
+      (t) async {
+    t.view.physicalSize = const Size(1400, 2200);
+    t.view.devicePixelRatio = 1.0;
+    addTearDown(t.view.reset);
+    final data = DynamicReportData(
+      title: 'Laporan Uji',
+      subtitle: 'Uji paging pratinjau',
+      columns: const [DynamicReportColumn('nama', 'Nama')],
+      rows: List.generate(35, (i) => {'nama': 'Baris Laporan ${i + 1}'}),
+    );
+    await t.pumpWidget(MaterialApp(
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: TextButton(
+            onPressed: () => DynamicReportDesigner.show(context, data: data),
+            child: const Text('Buka pratinjau laporan'),
+          ),
+        ),
+      ),
+    ));
+    await t.tap(find.text('Buka pratinjau laporan'));
+    await t.pumpAndSettle();
+    expect(find.text('Baris Laporan 1'), findsOneWidget);
+    expect(find.text('Baris Laporan 15'), findsOneWidget);
+    expect(find.text('Baris Laporan 16'), findsNothing);
+    expect(find.text('Halaman 1 / 3'), findsOneWidget);
+    await t.tap(find.byIcon(Icons.chevron_right).last);
+    await t.pumpAndSettle();
+    expect(find.text('Baris Laporan 16'), findsOneWidget);
+    expect(find.text('Baris Laporan 30'), findsOneWidget);
+    expect(find.text('Baris Laporan 15'), findsNothing);
   });
 
   testWidgets('area tabel terbatas selalu menyediakan scrollbar desktop',

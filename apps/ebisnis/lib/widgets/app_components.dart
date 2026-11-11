@@ -1376,6 +1376,11 @@ class AppPagedDataTable extends StatefulWidget {
   final Clip clipBehavior;
   final String labelData;
 
+  /// Lebar tetap opsional untuk tabel yang berada di dalam gulir horizontal.
+  /// Tanpa batas lebar, footer pager yang memakai ruang lentur tidak dapat
+  /// dihitung oleh Flutter saat induknya memberi lebar tak terbatas.
+  final double? tableWidth;
+
   const AppPagedDataTable({
     super.key,
     required this.columns,
@@ -1400,6 +1405,7 @@ class AppPagedDataTable extends StatefulWidget {
     this.border,
     this.clipBehavior = Clip.none,
     this.labelData = 'data',
+    this.tableWidth,
   });
 
   @override
@@ -1433,9 +1439,9 @@ class _AppPagedDataTableState extends State<AppPagedDataTable> {
         ? const <DataRow>[]
         : widget.rows.sublist(mulai, akhir);
 
-    return Column(
+    final table = Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         DataTable(
           columns: widget.columns,
@@ -1476,6 +1482,9 @@ class _AppPagedDataTableState extends State<AppPagedDataTable> {
           ),
       ],
     );
+    return widget.tableWidth == null
+        ? table
+        : SizedBox(width: widget.tableWidth, child: table);
   }
 }
 
