@@ -1677,6 +1677,26 @@ Future<void> muatDaftarTokoFilter() async {
       // Chip tetap menampilkan nama toko aktif spt sebelumnya.
     }
   }
+  // Sinkronkan tokoFilter & tokoId awal: jika Admin/Supervisor baru masuk dan
+  // belum memilih toko di topbar, gunakan toko aktif atau toko pertama di
+  // daftar agar tidak langsung kosong ("Semua Toko") atau tertahan di toko lama.
+  if (Sesi.instance.tokoFilter == null) {
+    if (Sesi.instance.tokoId != null) {
+      Sesi.instance.tokoFilter = Sesi.instance.tokoId;
+    } else if (Sesi.instance.daftarTokoFilter.isNotEmpty) {
+      final pertama = Sesi.instance.daftarTokoFilter.first;
+      final idPertama = (pertama['id'] as num?)?.toInt();
+      if (idPertama != null && idPertama > 0) {
+        Sesi.instance.tokoFilter = idPertama;
+        Sesi.instance.tokoId = idPertama;
+        if (Sesi.instance.tokoNama.trim().isEmpty) {
+          Sesi.instance.tokoNama = '${pertama['nama'] ?? ''}'.trim();
+        }
+      }
+    }
+  } else if (Sesi.instance.tokoId != Sesi.instance.tokoFilter) {
+    Sesi.instance.tokoId = Sesi.instance.tokoFilter;
+  }
 }
 
 /// Pemilih toko global untuk semua halaman Desktop/Android. Otorisasi tetap
@@ -2430,96 +2450,211 @@ class _AppShellState extends State<AppShell> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const _AppTopbar(),
-                  if (widget.tampilkanJudul)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(widget.judul,
-                                    style: TextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.bold,
-                                        color:
-                                            AppColors.textPrimaryOf(context))),
-                                if (widget.subjudul != null)
-                                  Padding(
-                                      padding: const EdgeInsets.only(top: 2),
-                                      child: Text(widget.subjudul!,
-                                          style: TextStyle(
-                                              color: AppColors.textSecondaryOf(
-                                                  context)))),
-                                // Pemilih halaman segrup (mis. Akuntansi):
-                                // menggantikan deretan tab di dalam layar.
-                                _DropdownGrupMenu(menuAktif: widget.menuAktif),
-                              ],
-                            ),
-                          ),
-                          Flexible(
-                            child: Wrap(
-                              alignment: WrapAlignment.end,
-                              runAlignment: WrapAlignment.end,
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                if (widget.aksiHeader != null)
-                                  widget.aksiHeader!,
-                                if (widget.tampilkanBantuanHeader)
-                                  OutlinedButton.icon(
-                                    key: const Key('tombol-qa-halaman-desktop'),
-                                    onPressed: () => _bukaTanyaJawab(context),
-                                    icon: const Icon(
-                                        Icons.question_answer_outlined,
-                                        size: 18),
-                                    label: const Text('Tanya Jawab'),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    // Layar spt Kasir sembunyikan judul besar (langsung ke pencarian), TAPI
-                    // aksiHeader (mis. toolbar Akun Saya/Layar Pelanggan/Buka Laci/Ganti Toko)
-                    // tetap wajib tampil -- gap-closure: sebelumnya baris ini terlewat total
-                    // kalau tampilkanJudul false, jadi tombol2 toolbar itu ada di kode tapi tak
-                    // pernah ter-render sama sekali di desktop.
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: Wrap(
-                          alignment: WrapAlignment.end,
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            if (widget.aksiHeader != null) widget.aksiHeader!,
-                            if (widget.tampilkanBantuanHeader)
-                              OutlinedButton.icon(
-                                key: const Key('tombol-qa-halaman-desktop'),
-                                onPressed: () => _bukaTanyaJawab(context),
-                                icon: const Icon(Icons.question_answer_outlined,
-                                    size: 18),
-                                label: const Text('Tanya Jawab'),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
                   Expanded(
                     child: widget.scrollable
                         ? SingleChildScrollView(
-                            padding: const EdgeInsets.all(24),
-                            child: widget.body)
-                        : Padding(
-                            padding: EdgeInsets.fromLTRB(
-                                24, widget.tampilkanJudul ? 12 : 20, 24, 0),
-                            child: widget.body),
+                            padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (widget.tampilkanJudul)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 16),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(widget.judul,
+                                                  style: TextStyle(
+                                                      fontSize: 22,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: AppColors
+                                                          .textPrimaryOf(
+                                                              context))),
+                                              if (widget.subjudul != null)
+                                                Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            top: 2),
+                                                    child: Text(
+                                                        widget.subjudul!,
+                                                        style: TextStyle(
+                                                            color: AppColors
+                                                                .textSecondaryOf(
+                                                                    context)))),
+                                              _DropdownGrupMenu(
+                                                  menuAktif: widget.menuAktif),
+                                            ],
+                                          ),
+                                        ),
+                                        Flexible(
+                                          child: Wrap(
+                                            alignment: WrapAlignment.end,
+                                            runAlignment: WrapAlignment.end,
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children: [
+                                              if (widget.aksiHeader != null)
+                                                widget.aksiHeader!,
+                                              if (widget.tampilkanBantuanHeader)
+                                                OutlinedButton.icon(
+                                                  key: const Key(
+                                                      'tombol-qa-halaman-desktop'),
+                                                  onPressed: () =>
+                                                      _bukaTanyaJawab(context),
+                                                  icon: const Icon(
+                                                      Icons
+                                                          .question_answer_outlined,
+                                                      size: 18),
+                                                  label:
+                                                      const Text('Tanya Jawab'),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                else
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: Align(
+                                      alignment: Alignment.centerRight,
+                                      child: Wrap(
+                                        alignment: WrapAlignment.end,
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: [
+                                          if (widget.aksiHeader != null)
+                                            widget.aksiHeader!,
+                                          if (widget.tampilkanBantuanHeader)
+                                            OutlinedButton.icon(
+                                              key: const Key(
+                                                  'tombol-qa-halaman-desktop'),
+                                              onPressed: () =>
+                                                  _bukaTanyaJawab(context),
+                                              icon: const Icon(
+                                                  Icons
+                                                      .question_answer_outlined,
+                                                  size: 18),
+                                              label: const Text('Tanya Jawab'),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                widget.body,
+                              ],
+                            ),
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (widget.tampilkanJudul)
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(24, 20, 24, 0),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(widget.judul,
+                                                style: TextStyle(
+                                                    fontSize: 22,
+                                                    fontWeight: FontWeight.bold,
+                                                    color:
+                                                        AppColors.textPrimaryOf(
+                                                            context))),
+                                            if (widget.subjudul != null)
+                                              Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                          top: 2),
+                                                  child: Text(widget.subjudul!,
+                                                      style: TextStyle(
+                                                          color: AppColors
+                                                              .textSecondaryOf(
+                                                                  context)))),
+                                            _DropdownGrupMenu(
+                                                menuAktif: widget.menuAktif),
+                                          ],
+                                        ),
+                                      ),
+                                      Flexible(
+                                        child: Wrap(
+                                          alignment: WrapAlignment.end,
+                                          runAlignment: WrapAlignment.end,
+                                          spacing: 8,
+                                          runSpacing: 8,
+                                          children: [
+                                            if (widget.aksiHeader != null)
+                                              widget.aksiHeader!,
+                                            if (widget.tampilkanBantuanHeader)
+                                              OutlinedButton.icon(
+                                                key: const Key(
+                                                    'tombol-qa-halaman-desktop'),
+                                                onPressed: () =>
+                                                    _bukaTanyaJawab(context),
+                                                icon: const Icon(
+                                                    Icons
+                                                        .question_answer_outlined,
+                                                    size: 18),
+                                                label:
+                                                    const Text('Tanya Jawab'),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(24, 12, 24, 0),
+                                  child: Align(
+                                    alignment: Alignment.centerRight,
+                                    child: Wrap(
+                                      alignment: WrapAlignment.end,
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [
+                                        if (widget.aksiHeader != null)
+                                          widget.aksiHeader!,
+                                        if (widget.tampilkanBantuanHeader)
+                                          OutlinedButton.icon(
+                                            key: const Key(
+                                                'tombol-qa-halaman-desktop'),
+                                            onPressed: () =>
+                                                _bukaTanyaJawab(context),
+                                            icon: const Icon(
+                                                Icons.question_answer_outlined,
+                                                size: 18),
+                                            label: const Text('Tanya Jawab'),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              Expanded(
+                                child: Padding(
+                                    padding: EdgeInsets.fromLTRB(24,
+                                        widget.tampilkanJudul ? 12 : 20, 24, 0),
+                                    child: widget.body),
+                              ),
+                            ],
+                          ),
                   ),
                   if (widget.bottomBar != null) widget.bottomBar!,
                 ],

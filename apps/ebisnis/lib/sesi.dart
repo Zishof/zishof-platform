@@ -215,6 +215,19 @@ class Sesi {
     multiToko = konfig['multiToko'] == true;
     daftarToko =
         ((konfig['daftarToko'] as List?) ?? []).cast<Map<String, dynamic>>();
+    if (tokoId == null && daftarToko.isNotEmpty) {
+      final pertama = daftarToko.first;
+      final idPertama = (pertama['id'] as num?)?.toInt();
+      if (idPertama != null && idPertama > 0) {
+        tokoId = idPertama;
+        if (tokoNama.trim().isEmpty) {
+          tokoNama = '${pertama['nama'] ?? ''}'.trim();
+        }
+      }
+    }
+    if (tokoId != null) {
+      tokoFilter ??= tokoId;
+    }
     shortcutMenu = ((konfig['shortcutMenu'] as List?) ?? [])
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))

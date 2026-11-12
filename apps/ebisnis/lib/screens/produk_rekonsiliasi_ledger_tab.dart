@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/diff_daftar_lokal.dart';
 import '../services/master_offline.dart';
+import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/kilau_perubahan.dart';
@@ -56,15 +57,17 @@ class _ProdukRekonsiliasiLedgerTabState
       // Baca LOKAL DULU (MasterOffline.daftarCacheDulu): tabel audit tampil
       // seketika dari cache, hasil server menyusul + diff utk kilau baris.
       // Cache dipisah per mode saringan karena isi daftarnya memang berbeda.
+      final idToko = Sesi.instance.idTokoTerpilih;
       await MasterOffline.daftarCacheDulu(
         'produk_rekonsiliasi_ledger',
         {
+          if (idToko != null) 'toko_id': idToko,
           'page': _page,
           'page_size': _pageSize,
           'keyword': _cari.text.trim(),
           'hanya_selisih': _hanyaSelisih,
         },
-        'master:rekonsiliasi_ledger:${_hanyaSelisih ? 'selisih' : 'semua'}',
+        'master:rekonsiliasi_ledger:${idToko ?? 'semua'}:${_hanyaSelisih ? 'selisih' : 'semua'}',
         // Server tidak mengirim kolom 'id'; identitas baris = kode produk.
         kolomKunci: 'kode',
         onData: (hasil) {

@@ -165,6 +165,12 @@ class _TabBuatReturState extends State<_TabBuatRetur> with JejakGalat {
   String? _idempotencyKey;
 
   @override
+  void initState() {
+    super.initState();
+    _cariTransaksi('');
+  }
+
+  @override
   void dispose() {
     _kataKunciController.dispose();
     for (final b in _baris) {
@@ -173,16 +179,26 @@ class _TabBuatReturState extends State<_TabBuatRetur> with JejakGalat {
     super.dispose();
   }
 
+  /// Memuat daftar transaksi asal untuk diretur berdasarkan [kataKunci].
+  ///
+  /// Bila [kataKunci] kosong (mis. saat layar pertama kali dibuka), fungsi ini
+  /// tetap memuat 30 transaksi terakhir pada toko terpilih (`idTokoTerpilih`)
+  /// agar pengguna dapat langsung memilih nota terbaru tanpa harus mengetik.
   Future<void> _cariTransaksi(String kataKunci) async {
     final v = kataKunci.trim();
-    if (v.isEmpty) return;
     setStateIfMounted(() {
       _mencari = true;
       _errorPencarian = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi(
-          'laporan_order_list', {'keyword': v, 'page': 1, 'pageSize': 30});
+      final idToko = Sesi.instance.idTokoTerpilih;
+      final hasil = await ApiClient.instance.aksi('laporan_order_list', {
+        if (v.isNotEmpty) 'keyword': v,
+        if (idToko != null) 'tokoId': idToko,
+        if (idToko != null) 'idToko': idToko,
+        'page': 1,
+        'pageSize': 30,
+      });
       final data =
           ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       setStateIfMounted(() => _hasilPencarian = data);
@@ -412,7 +428,7 @@ class _TabBuatReturState extends State<_TabBuatRetur> with JejakGalat {
               data: _hasilPencarian,
               onPilih: _pilihTransaksi,
               emptyText: _kataKunciController.text.trim().isEmpty
-                  ? 'Ketik kata kunci lalu tekan Enter untuk mencari transaksi.'
+                  ? 'Belum ada transaksi pada toko terpilih.'
                   : 'Transaksi tidak ditemukan.',
             ),
         ],

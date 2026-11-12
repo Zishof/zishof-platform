@@ -1850,7 +1850,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
   Future<List<Map<String, dynamic>>> _arsipLokalSesuaiFilter() async {
     final rows = await CoreDb.instance.transaksiArsipLokal(
       akunKunci: Sesi.instance.userId,
-      tokoId: Sesi.instance.tokoId,
+      tokoId: Sesi.instance.idTokoTerpilih,
       limit: 5000,
     );
     final hasil = <Map<String, dynamic>>[];
@@ -1968,8 +1968,10 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
       _omzetTotal = 0;
     });
     final payload = {
-      if (Sesi.instance.tokoId != null) 'tokoId': Sesi.instance.tokoId,
-      if (Sesi.instance.tokoId != null) 'idToko': Sesi.instance.tokoId,
+      if (Sesi.instance.idTokoTerpilih != null)
+        'tokoId': Sesi.instance.idTokoTerpilih,
+      if (Sesi.instance.idTokoTerpilih != null)
+        'idToko': Sesi.instance.idTokoTerpilih,
       if (_mulai != null) 'tglMulai': _formatTanggalServer.format(_mulai!),
       if (_sampai != null) 'tglSampai': _formatTanggalServer.format(_sampai!),
       if (_cariPembeli.isNotEmpty) 'keyword': _cariPembeli,
@@ -2931,12 +2933,12 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
             ((baris['harga'] as num?)?.toDouble() ?? 0) *
                 ((baris['jumlah'] as num?)?.toDouble() ?? 0));
     final kode =
-        'SUP-${Sesi.instance.tokoId ?? 0}-${DateTime.now().microsecondsSinceEpoch}';
+        'SUP-${Sesi.instance.idTokoTerpilih ?? 0}-${DateTime.now().microsecondsSinceEpoch}';
     final payload = <String, dynamic>{
       'kodeUnik': kode,
       'clientTrxId': kode,
-      'idToko': Sesi.instance.tokoId,
-      'tokoId': Sesi.instance.tokoId,
+      'idToko': Sesi.instance.idTokoTerpilih,
+      'tokoId': Sesi.instance.idTokoTerpilih,
       'kasir': '${isian['kasir_user_id'] ?? Sesi.instance.userId}',
       'kasir_user_id': '${isian['kasir_user_id'] ?? Sesi.instance.userId}',
       'waktu': _formatWaktuBayar(waktu),
@@ -2955,7 +2957,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
     };
     await CoreDb.instance.simpanTransaksiPending(kode, jsonEncode(payload),
         akunKunci: Sesi.instance.userId,
-        tokoId: Sesi.instance.tokoId,
+        tokoId: Sesi.instance.idTokoTerpilih,
         idPerangkat: IdentitasMesin.instance.idMesin);
     TransaksiOutboxService.instance.kirimDiBackground();
     if (!mounted) return;
@@ -2974,7 +2976,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
     while (halaman <= 1000) {
       final hasil =
           await ApiClient.instance.aksi('transaksi_backup_toko_list', {
-        'toko_id': Sesi.instance.tokoId,
+        'toko_id': Sesi.instance.idTokoTerpilih,
         if (tanggalMulai != null)
           'tglMulai': _formatTanggalServer.format(tanggalMulai),
         if (tanggalSampai != null)
@@ -3045,8 +3047,8 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
     return <String, dynamic>{
       'kodeUnik': kode,
       'clientTrxId': kode,
-      'idToko': Sesi.instance.tokoId,
-      'tokoId': Sesi.instance.tokoId,
+      'idToko': Sesi.instance.idTokoTerpilih,
+      'tokoId': Sesi.instance.idTokoTerpilih,
       'kasir':
           '${detail['kasirUserId'] ?? row['kasirUserId'] ?? row['kasir'] ?? ''}',
       'kasir_user_id':
@@ -3101,7 +3103,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
       }
       _perbaruiStatusSinkronisasiDuaArah('Memeriksa arsip lokal...');
       final lokal = await CoreDb.instance.transaksiArsipLokal(
-        tokoId: Sesi.instance.tokoId,
+        tokoId: Sesi.instance.idTokoTerpilih,
         tanggalMulai: _mulai,
         tanggalSampai: _sampai,
         sertakanBelumSinkron: true,
@@ -3186,7 +3188,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                 jsonEncode(payload),
                 akunKunci:
                     '${payload['sumber_username'] ?? payload['kasir'] ?? ''}',
-                tokoId: Sesi.instance.tokoId,
+                tokoId: Sesi.instance.idTokoTerpilih,
                 idPerangkat:
                     '${payload['id_perangkat'] ?? payload['sumber_mesin'] ?? ''}',
               )) {
@@ -3298,7 +3300,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
     try {
       final hasil = bandingkanTransaksiLokalDanServer(
         (await CoreDb.instance.transaksiArsipLokal(
-          tokoId: Sesi.instance.tokoId,
+          tokoId: Sesi.instance.idTokoTerpilih,
           tanggalMulai: _mulai,
           tanggalSampai: _sampai,
           sertakanBelumSinkron: true,

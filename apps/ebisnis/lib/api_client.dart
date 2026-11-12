@@ -166,11 +166,28 @@ class ApiClient {
   /// Melempar [ApiException] bila status bukan "success" ATAU permintaan HTTP gagal.
   /// Aksi yang ikut disaring oleh combo filter toko di bilah atas.
   ///
-  /// Hanya BACA (Dashboard + Laporan). Aksi kasir sengaja TIDAK ikut: itu
-  /// operasi pada satu toko, dan menyuntik toko lain ke sana berarti mencatat
-  /// transaksi ke toko yang salah.
+  /// Mencakup aksi BACA maupun kelola per-toko (Dashboard, Laporan, Retur,
+  /// Piutang, Pesanan, Kulakan, Diskon, Cara Bayar, Rekonsiliasi, dll.) agar
+  /// saat Admin atau Supervisor memilih satu toko di bilah atas, seluruh layar
+  /// secara konsisten memuat dan memproses data toko terpilih tersebut.
   static bool _ikutFilterToko(String namaAksi) =>
-      namaAksi.startsWith('dashboard_') || namaAksi.startsWith('laporan_');
+      namaAksi.startsWith('dashboard_') ||
+      namaAksi.startsWith('laporan_') ||
+      namaAksi.startsWith('retur_') ||
+      namaAksi.startsWith('piutang_') ||
+      namaAksi.startsWith('pelunasan_') ||
+      namaAksi.startsWith('pesanan_') ||
+      namaAksi.startsWith('kulakan_') ||
+      namaAksi.startsWith('diskon_') ||
+      namaAksi.startsWith('harga_grosir_') ||
+      namaAksi.startsWith('cara_bayar_') ||
+      namaAksi.startsWith('mutasi_') ||
+      namaAksi.startsWith('hutang_') ||
+      namaAksi.startsWith('deposit_') ||
+      namaAksi == 'ringkasan' ||
+      namaAksi == 'batal_pesanan' ||
+      namaAksi == 'batalkan_transaksi' ||
+      namaAksi == 'edit_transaksi';
 
   /// Aksi yang menentukan tokonya lewat `toko_id` DI PAYLOAD.
   ///
@@ -309,11 +326,12 @@ class ApiClient {
     // Peran berizin lintas toko: pilihan combo disisipkan di satu tempat
     // supaya tiap layar tidak perlu mengingatnya sendiri. Toko yang sudah
     // ditentukan pemanggil TIDAK ditimpa.
-    if (Sesi.instance.bolehSemuaToko &&
-        Sesi.instance.tokoFilter != null &&
+    if ((Sesi.instance.bolehSemuaToko || Sesi.instance.multiToko || Sesi.instance.isAdmin) &&
+        Sesi.instance.idTokoTerpilih != null &&
         _ikutFilterToko(namaAksi) &&
         !sudahAdaToko) {
-      payload['tokoId'] = Sesi.instance.tokoFilter;
+      payload['tokoId'] = Sesi.instance.idTokoTerpilih;
+      payload['toko_id'] = Sesi.instance.idTokoTerpilih;
     }
     // Kunci `toko_id` (garis bawah) -- kontrak yang berbeda dari `tokoId` di
     // atas, dan memang beda aksi. Nilainya toko yang TERTULIS di kotak toko,
@@ -325,6 +343,7 @@ class ApiClient {
       final idToko = Sesi.instance.idTokoTerpilih;
       if (idToko != null) {
         payload['toko_id'] = idToko;
+        payload['tokoId'] = idToko;
       }
     }
     // `katalog` dan `produk_mutasi_ringkasan` memiliki perlakuan khusus:
@@ -358,7 +377,18 @@ class ApiClient {
       namaAksi.startsWith('so_') ||
       namaAksi.startsWith('stok_') ||
       namaAksi.startsWith('pkm_') ||
-      namaAksi.startsWith('produk_');
+      namaAksi.startsWith('produk_') ||
+      namaAksi.startsWith('retur_') ||
+      namaAksi.startsWith('piutang_') ||
+      namaAksi.startsWith('pelunasan_') ||
+      namaAksi.startsWith('pesanan_') ||
+      namaAksi.startsWith('kulakan_') ||
+      namaAksi.startsWith('diskon_') ||
+      namaAksi.startsWith('harga_grosir_') ||
+      namaAksi.startsWith('cara_bayar_') ||
+      namaAksi.startsWith('mutasi_') ||
+      namaAksi.startsWith('hutang_') ||
+      namaAksi.startsWith('deposit_');
 
   /// Nama field yang isinya TIDAK BOLEH ikut tercatat di log teknis.
   ///
