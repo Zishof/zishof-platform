@@ -1511,17 +1511,15 @@ class _TabOrderState extends State<_TabOrder> with JejakGalat {
           ],
         );
       }).toList(),
-      pagination: _total > _pageSize
-          ? AppTablePagination(
-              halaman: _halaman,
-              totalHalaman: _totalHalaman,
-              totalData: _total,
-              labelData: 'transaksi',
-              onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
-              onBerikutnya:
-                  _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
-            )
-          : null,
+      pagination: AppTablePagination(
+        halaman: _halaman,
+        totalHalaman: _totalHalaman,
+        totalData: _total,
+        labelData: 'transaksi',
+        onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+        onBerikutnya:
+            _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
+      ),
     );
   }
 
@@ -1785,17 +1783,15 @@ class _TabSesiState extends State<_TabSesi> with JejakGalat {
           ],
         );
       }).toList(),
-      pagination: _total > _pageSize
-          ? AppTablePagination(
-              halaman: _halaman,
-              totalHalaman: _totalHalaman,
-              totalData: _total,
-              labelData: 'sesi',
-              onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
-              onBerikutnya:
-                  _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
-            )
-          : null,
+      pagination: AppTablePagination(
+        halaman: _halaman,
+        totalHalaman: _totalHalaman,
+        totalData: _total,
+        labelData: 'sesi',
+        onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+        onBerikutnya:
+            _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
+      ),
     );
   }
 
@@ -2527,32 +2523,31 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir>
                 ),
               );
             }),
-          if (_data.length > _pageSize)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Text('${_data.length} kasir'),
-                  const SizedBox(width: 12),
-                  IconButton(
-                    tooltip: 'Halaman sebelumnya',
-                    onPressed: _halaman > 1
-                        ? () => setStateIfMounted(() => _halaman--)
-                        : null,
-                    icon: const Icon(Icons.chevron_left),
-                  ),
-                  Text('Halaman $_halaman / $_totalHalaman'),
-                  IconButton(
-                    tooltip: 'Halaman berikutnya',
-                    onPressed: _halaman < _totalHalaman
-                        ? () => setStateIfMounted(() => _halaman++)
-                        : null,
-                    icon: const Icon(Icons.chevron_right),
-                  ),
-                ],
-              ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text('${_data.length} kasir'),
+                const SizedBox(width: 12),
+                IconButton(
+                  tooltip: 'Halaman sebelumnya',
+                  onPressed: _halaman > 1
+                      ? () => setStateIfMounted(() => _halaman--)
+                      : null,
+                  icon: const Icon(Icons.chevron_left),
+                ),
+                Text('Halaman $_halaman / $_totalHalaman'),
+                IconButton(
+                  tooltip: 'Halaman berikutnya',
+                  onPressed: _halaman < _totalHalaman
+                      ? () => setStateIfMounted(() => _halaman++)
+                      : null,
+                  icon: const Icon(Icons.chevron_right),
+                ),
+              ],
             ),
+          ),
           _AnalitikLaporanFooter(statistik: widget.statistik),
         ],
       ),
@@ -2750,17 +2745,15 @@ class _TabPaymentState extends State<_TabPayment> with JejakGalat {
           ],
         );
       }).toList(),
-      pagination: _total > _pageSize
-          ? AppTablePagination(
-              halaman: _halaman,
-              totalHalaman: _totalHalaman,
-              totalData: _total,
-              labelData: 'pembayaran',
-              onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
-              onBerikutnya:
-                  _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
-            )
-          : null,
+      pagination: AppTablePagination(
+        halaman: _halaman,
+        totalHalaman: _totalHalaman,
+        totalData: _total,
+        labelData: 'pembayaran',
+        onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+        onBerikutnya:
+            _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
+      ),
     );
   }
 
@@ -3244,17 +3237,15 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
                 ],
               ))
           .toList(),
-      pagination: _total > _pageSize
-          ? AppTablePagination(
-              halaman: _halaman,
-              totalHalaman: _totalHalaman,
-              totalData: _total,
-              labelData: 'penjualan',
-              onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
-              onBerikutnya:
-                  _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
-            )
-          : null,
+      pagination: AppTablePagination(
+        halaman: _halaman,
+        totalHalaman: _totalHalaman,
+        totalData: _total,
+        labelData: 'penjualan',
+        onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+        onBerikutnya:
+            _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
+      ),
     );
   }
 
@@ -3733,18 +3724,16 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
                   ],
                 ))
             .toList(),
-        pagination: _total > _pageSize
-            ? AppTablePagination(
-                halaman: _halaman,
-                totalHalaman: _totalHalaman,
-                totalData: _total,
-                labelData: 'ringkasan penerimaan',
-                onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
-                onBerikutnya: _halaman < _totalHalaman
-                    ? () => _pindah(_halaman + 1)
-                    : null,
-              )
-            : null,
+        pagination: AppTablePagination(
+          halaman: _halaman,
+          totalHalaman: _totalHalaman,
+          totalData: _total,
+          labelData: 'ringkasan penerimaan',
+          onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+          onBerikutnya: _halaman < _totalHalaman
+              ? () => _pindah(_halaman + 1)
+              : null,
+        ),
       );
 
   @override
@@ -4450,17 +4439,15 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
           ],
         );
       }).toList(),
-      pagination: _totalTransaksi > _pageSize
-          ? AppTablePagination(
-              halaman: _halaman,
-              totalHalaman: _totalHalaman,
-              totalData: _totalTransaksi,
-              labelData: 'transaksi',
-              onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
-              onBerikutnya:
-                  _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
-            )
-          : null,
+      pagination: AppTablePagination(
+        halaman: _halaman,
+        totalHalaman: _totalHalaman,
+        totalData: _totalTransaksi,
+        labelData: 'transaksi',
+        onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+        onBerikutnya:
+            _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
+      ),
     );
   }
 

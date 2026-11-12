@@ -3982,19 +3982,17 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                     ],
                   );
                 }).toList(),
-                pagination: _total > _pageSize
-                    ? AppTablePagination(
-                        halaman: _halaman,
-                        totalHalaman: _totalHalaman,
-                        totalData: _total,
-                        labelData: 'transaksi',
-                        onSebelumnya:
-                            _halaman > 1 ? () => _pindah(_halaman - 1) : null,
-                        onBerikutnya: _halaman < _totalHalaman
-                            ? () => _pindah(_halaman + 1)
-                            : null,
-                      )
-                    : null,
+                pagination: AppTablePagination(
+                  halaman: _halaman,
+                  totalHalaman: _totalHalaman,
+                  totalData: _total,
+                  labelData: 'transaksi',
+                  onSebelumnya:
+                      _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+                  onBerikutnya: _halaman < _totalHalaman
+                      ? () => _pindah(_halaman + 1)
+                      : null,
+                ),
               ),
           ],
         ),

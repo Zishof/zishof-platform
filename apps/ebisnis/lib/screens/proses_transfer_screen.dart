@@ -320,6 +320,7 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
     int? satkerId;
     bool memuatKandidat = false;
     bool sudahMuat = false;
+    int halamanKandidat = 1;
 
     if (ubah) {
       try {
@@ -394,6 +395,7 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
               });
               kandidat =
                   ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+              halamanKandidat = 1;
             } catch (e) {
               _pesan('$e');
             } finally {
@@ -407,11 +409,21 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
           }
 
           final total = terpilih.values.fold<double>(0, (a, b) => a + b);
+          final totalHalamanKandidat =
+              (kandidat.length / kBarisPerHalamanTabel).ceil().clamp(1, 1 << 30);
+          final halamanAktif = halamanKandidat.clamp(1, totalHalamanKandidat);
+          final indeksMulai = (halamanAktif - 1) * kBarisPerHalamanTabel;
+          final kandidatHalaman = kandidat.isEmpty || indeksMulai >= kandidat.length
+              ? const <Map<String, dynamic>>[]
+              : kandidat.sublist(
+                  indeksMulai,
+                  (indeksMulai + kBarisPerHalamanTabel).clamp(0, kandidat.length),
+                );
           return AlertDialog(
             title: Text(ubah ? 'Ubah Proses Transfer' : 'Proses Transfer Baru'),
             content: SizedBox(
               width: 820,
-              height: 560,
+              height: 600,
               child: Column(children: [
                 Row(children: [
                   Expanded(
@@ -530,29 +542,40 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                 ]),
                 const SizedBox(height: 6),
                 // Penyaring kategori bersifat MENAMBAH, bukan menyembunyikan: tanpa
-                // satu pun dipilih, semua baris tampil. Kategori "Lainnya" menampung
-                // baris yang sumbernya belum dikenali, jadi tidak ada yang bisa hilang.
-                SizedBox(
-                  height: 40,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
+                // satu pun dipilih (chip "Semua" aktif), semua baris tampil.
+                // Dirapikan dengan Wrap agar tidak terpotong di sisi kanan.
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
                     children: [
+                      FilterChip(
+                        visualDensity: VisualDensity.compact,
+                        label: const Text('Semua',
+                            style: TextStyle(fontSize: 11.5)),
+                        selected: kategoriAktif.isEmpty,
+                        onSelected: (_) {
+                          if (kategoriAktif.isNotEmpty) {
+                            kategoriAktif.clear();
+                            muatKandidat();
+                          }
+                        },
+                      ),
                       for (final k in _kategori)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: FilterChip(
-                            label: Text('${k['label']}',
-                                style: const TextStyle(fontSize: 11.5)),
-                            selected: kategoriAktif.contains('${k['kunci']}'),
-                            onSelected: (v) {
-                              if (v) {
-                                kategoriAktif.add('${k['kunci']}');
-                              } else {
-                                kategoriAktif.remove('${k['kunci']}');
-                              }
-                              muatKandidat();
-                            },
-                          ),
+                        FilterChip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text('${k['label']}',
+                              style: const TextStyle(fontSize: 11.5)),
+                          selected: kategoriAktif.contains('${k['kunci']}'),
+                          onSelected: (v) {
+                            if (v) {
+                              kategoriAktif.add('${k['kunci']}');
+                            } else {
+                              kategoriAktif.remove('${k['kunci']}');
+                            }
+                            muatKandidat();
+                          },
                         ),
                     ],
                   ),
@@ -566,9 +589,9 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                               child: Text(
                                   'Tidak ada baris DPC yang menunggu diproses.'))
                           : ListView.builder(
-                              itemCount: kandidat.length,
+                              itemCount: kandidatHalaman.length,
                               itemBuilder: (_, i) {
-                                final b = kandidat[i];
+                                final b = kandidatHalaman[i];
                                 final id = (b['id'] as num).toInt();
                                 return CheckboxListTile(
                                   dense: true,
@@ -592,6 +615,20 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                                 );
                               },
                             ),
+                ),
+                AppTableFooter(
+                  pagination: AppTablePagination(
+                    halaman: halamanAktif,
+                    totalHalaman: totalHalamanKandidat,
+                    totalData: kandidat.length,
+                    labelData: 'baris DPC',
+                    onSebelumnya: halamanAktif > 1
+                        ? () => setDialog(() => halamanKandidat = halamanAktif - 1)
+                        : null,
+                    onBerikutnya: halamanAktif < totalHalamanKandidat
+                        ? () => setDialog(() => halamanKandidat = halamanAktif + 1)
+                        : null,
+                  ),
                 ),
                 const Divider(height: 1),
                 Padding(

@@ -12,6 +12,7 @@ import '../parse_util.dart';
 import '../sesi.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/app_components.dart';
+import '../widgets/aksi_baris_menu.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/pencarian_produk_banbox.dart';
 import '../theme/app_colors.dart';
@@ -1052,14 +1053,16 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
   /// dua sisi berbeda sementara. Karena itu pesan offline-nya menyebut hal tersebut,
   /// dan barisnya hanya ditandai terhapus di perangkat (bisa diurungkan) sampai
   /// server mengonfirmasi.
-  Future<void> _batalkanFaktur(
-      Map<String, dynamic> f, Map<String, dynamic> header) async {
+  Future<void> _batalkanFaktur(Map<String, dynamic> f,
+      [Map<String, dynamic>? header, bool dariDialogDetail = true]) async {
+    final nomorFaktur =
+        '${header?['nomorFaktur'] ?? f['nomorFaktur'] ?? ''}'.trim();
     final yakin = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
         title: const Text('Batalkan Faktur?'),
         content: Text(
-            'Faktur ${header['nomorFaktur'] ?? ''} akan dibatalkan: stok barang '
+            'Faktur $nomorFaktur akan dibatalkan: stok barang '
             'yang diterima dari faktur ini dikurangi kembali dan datanya dihapus '
             '(riwayat tetap tercatat di audit). Batch yang stoknya sudah '
             'terpakai transaksi lain akan membuat pembatalan DITOLAK server.'),
@@ -1095,7 +1098,9 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                   ? '${res['description'] ?? 'Faktur dibatalkan.'}'
                   : 'Gagal: ${res['description'] ?? res['status']}')));
       if (sukses) {
-        Navigator.of(context).pop(); // tutup dialog detail faktur.
+        if (dariDialogDetail) {
+          Navigator.of(context).pop(); // tutup dialog detail faktur.
+        }
         await _muatRiwayat();
       }
     } catch (e) {
@@ -1963,6 +1968,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                 AppTableColumn('Supplier', flex: 2),
                 AppTableColumn('Item', flex: 1, align: TextAlign.right),
                 AppTableColumn('Total', flex: 2, align: TextAlign.right),
+                AppTableColumn('Aksi', width: 64, align: TextAlign.center),
               ],
               rows: _riwayat.map((f) {
                 final supplier =
@@ -1973,6 +1979,9 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                 final totalFinal = diskon > 0
                     ? ((f['totalHitung'] as num? ?? 0) - diskon)
                     : (f['totalHitung'] ?? 0);
+                final ket = '${f['keterangan'] ?? ''}'.trim();
+                final bolehHapus = Sesi.instance.bolehKelola ||
+                    Sesi.instance.bolehAksiPos('kulakan', 'delete');
                 return AppTableRowData(cells: [
                   AppTableCell(
                     flex: 2,
@@ -1980,11 +1989,24 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                       kunci: _kunciKilau(f),
                       idBaru: _diff.idBaru,
                       idBerubah: _diff.idBerubah,
-                      child: Text('${f['nomorFaktur']}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 13)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('${f['nomorFaktur']}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 13)),
+                          if (ket.isNotEmpty)
+                            Text(ket,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.textSecondaryOf(context))),
+                        ],
+                      ),
                     ),
                   ),
                   AppTableCell.text('${f['tanggalFaktur']}', flex: 2),
@@ -1996,6 +2018,26 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                       align: TextAlign.right,
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 12.5)),
+                  AppTableCell(
+                    width: 64,
+                    align: TextAlign.center,
+                    child: AksiBarisMenu(
+                      aksi: [
+                        AksiBaris(
+                          ikon: Icons.visibility_outlined,
+                          label: 'Detail / Edit Faktur',
+                          onTap: () => _lihatDetailFaktur(f),
+                        ),
+                        if (bolehHapus)
+                          AksiBaris(
+                            ikon: Icons.delete_outline,
+                            label: 'Batalkan / Hapus Faktur',
+                            merusak: true,
+                            onTap: () => _batalkanFaktur(f, null, false),
+                          ),
+                      ],
+                    ),
+                  ),
                 ], onTap: () => _lihatDetailFaktur(f));
               }).toList(),
               pagination: AppTablePagination(

@@ -298,84 +298,79 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
     final jumlahSudah = semua.where((r) => r['sudahDiposting'] == true).length;
     final jumlahBelum = semua.length - jumlahSudah;
     final siap = rincian.where((r) => r['siap'] == true).toList();
-    final Widget tabelDraf = rincianTerfilter.isEmpty
-        ? Padding(
-            padding: const EdgeInsets.symmetric(vertical: 28),
-            child: Center(
-                child: Text(_sibuk
-                    ? 'Menghitung...'
-                    : 'Tidak ada dokumen untuk filter yang dipilih.')),
-          )
-        : AppDataTable(
-            minWidth: 1160,
-            emptyText: 'Tidak ada draf.',
-            columns: const [
-              AppTableColumn('Tanggal', flex: 2),
-              AppTableColumn('Referensi', flex: 3),
-              AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
-              AppTableColumn('Debet', flex: 4),
-              AppTableColumn('Kredit', flex: 4),
-              AppTableColumn('Status', flex: 4),
-              AppTableColumn('Aksi', flex: 4),
-            ],
-            rows: rincianTerfilter.map((r) {
-              final sudahDiposting = r['sudahDiposting'] == true;
-              final bisa = !sudahDiposting && r['siap'] == true;
-              final status =
-                  '${r['statusLabel'] ?? (bisa ? 'Belum Diposting - Siap' : 'Belum Diposting - Tertahan')}';
-              return AppTableRowData(cells: [
-                AppTableCell.text('${r['tanggal'] ?? ''}', flex: 2),
-                AppTableCell.text('${r['referensi'] ?? ''}', flex: 3),
-                AppTableCell.text(
-                    _uang.format((r['nilai'] as num?)?.toDouble() ?? 0),
-                    flex: 2,
-                    align: TextAlign.right),
-                AppTableCell.text('${r['debet'] ?? ''}', flex: 4),
-                AppTableCell.text('${r['kredit'] ?? ''}', flex: 4),
-                AppTableCell.text(
-                    sudahDiposting
-                        ? '$status${'${r['nomorJurnal'] ?? ''}'.isEmpty ? '' : ' • Jurnal ${r['nomorJurnal']}'}'
-                        : bisa
-                            ? status
-                            : '$status${'${r['alasan'] ?? ''}'.isEmpty ? '' : ' — ${r['alasan']}'}',
-                    flex: 4),
-                AppTableCell(
-                  flex: 4,
-                  child: sudahDiposting
-                      ? const Text('Tercatat di buku besar',
-                          style: TextStyle(
-                              color: Color(0xFF15803D),
-                              fontWeight: FontWeight.w600))
-                      : bisa
-                          ? TextButton(
-                              onPressed: _sibuk || !_bolehTerapkan
-                                  ? null
-                                  : () => _posting([r['id']]),
-                              child: const Text('Posting'))
-                          : Wrap(
-                              spacing: 4,
-                              runSpacing: 4,
-                              children: [
-                                TombolSesuaikanAkunPosting(
-                                  jenis: widget.jenis,
-                                  sisi: SisiAkunPosting.debet,
-                                  alasan: '${r['alasan'] ?? ''}',
-                                  ringkas: true,
-                                  onSelesai: _muatDraf,
-                                ),
-                                TombolSesuaikanAkunPosting(
-                                  jenis: widget.jenis,
-                                  sisi: SisiAkunPosting.kredit,
-                                  alasan: '${r['alasan'] ?? ''}',
-                                  ringkas: true,
-                                  onSelesai: _muatDraf,
-                                ),
-                              ],
-                            ),
-                ),
-              ]);
-            }).toList(),
-          );
+    final Widget tabelDraf = AppDataTable(
+      minWidth: 1160,
+      emptyText: _sibuk
+          ? 'Menghitung...'
+          : 'Tidak ada dokumen untuk filter yang dipilih.',
+      labelData: 'dokumen',
+      columns: const [
+        AppTableColumn('Tanggal', flex: 2),
+        AppTableColumn('Referensi', flex: 3),
+        AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
+        AppTableColumn('Debet', flex: 4),
+        AppTableColumn('Kredit', flex: 4),
+        AppTableColumn('Status', flex: 4),
+        AppTableColumn('Aksi', flex: 4),
+      ],
+      rows: rincianTerfilter.map((r) {
+        final sudahDiposting = r['sudahDiposting'] == true;
+        final bisa = !sudahDiposting && r['siap'] == true;
+        final status =
+            '${r['statusLabel'] ?? (bisa ? 'Belum Diposting - Siap' : 'Belum Diposting - Tertahan')}';
+        return AppTableRowData(cells: [
+          AppTableCell.text('${r['tanggal'] ?? ''}', flex: 2),
+          AppTableCell.text('${r['referensi'] ?? ''}', flex: 3),
+          AppTableCell.text(
+              _uang.format((r['nilai'] as num?)?.toDouble() ?? 0),
+              flex: 2,
+              align: TextAlign.right),
+          AppTableCell.text('${r['debet'] ?? ''}', flex: 4),
+          AppTableCell.text('${r['kredit'] ?? ''}', flex: 4),
+          AppTableCell.text(
+              sudahDiposting
+                  ? '$status${'${r['nomorJurnal'] ?? ''}'.isEmpty ? '' : ' • Jurnal ${r['nomorJurnal']}'}'
+                  : bisa
+                      ? status
+                      : '$status${'${r['alasan'] ?? ''}'.isEmpty ? '' : ' — ${r['alasan']}'}',
+              flex: 4),
+          AppTableCell(
+            flex: 4,
+            child: sudahDiposting
+                ? const Text('Tercatat di buku besar',
+                    style: TextStyle(
+                        color: Color(0xFF15803D),
+                        fontWeight: FontWeight.w600))
+                : bisa
+                    ? TextButton(
+                        onPressed: _sibuk || !_bolehTerapkan
+                            ? null
+                            : () => _posting([r['id']]),
+                        child: const Text('Posting'))
+                    : Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: [
+                          TombolSesuaikanAkunPosting(
+                            jenis: widget.jenis,
+                            sisi: SisiAkunPosting.debet,
+                            alasan: '${r['alasan'] ?? ''}',
+                            ringkas: true,
+                            onSelesai: _muatDraf,
+                          ),
+                          TombolSesuaikanAkunPosting(
+                            jenis: widget.jenis,
+                            sisi: SisiAkunPosting.kredit,
+                            alasan: '${r['alasan'] ?? ''}',
+                            ringkas: true,
+                            onSelesai: _muatDraf,
+                          ),
+                        ],
+                      ),
+          ),
+        ]);
+      }).toList(),
+    );
     final Widget isi = Padding(
       padding: EdgeInsets.all(widget.inline ? 0 : 20),
       child: Column(

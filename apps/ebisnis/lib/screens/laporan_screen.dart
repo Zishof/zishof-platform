@@ -780,6 +780,11 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
   Map<String, dynamic>? _data;
   FilterStatusPosting _filterStatus = FilterStatusPosting.semua;
 
+  /// Halaman aktif pada daftar rincian transaksi posting (maksimal 15 baris per
+  /// halaman sesuai standar [kBarisPerHalamanTabel] agar perenderan ribuan
+  /// transaksi tidak pernah membebani UI secara sinkron).
+  int _halaman = 1;
+
   @override
   void initState() {
     super.initState();
@@ -849,7 +854,10 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
       );
       final data = Map<String, dynamic>.from((hasil['data'] as Map?) ?? hasil);
       if (!mounted) return;
-      setState(() => _data = data);
+      setState(() {
+        _data = data;
+        _halaman = 1;
+      });
       if (posting) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('${widget.judul} berhasil diposting.')));
@@ -901,7 +909,10 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
       );
       final data = Map<String, dynamic>.from((hasil['data'] as Map?) ?? hasil);
       if (!mounted) return;
-      setState(() => _data = data);
+      setState(() {
+        _data = data;
+        _halaman = 1;
+      });
       final ringkas = (data['hasilPosting'] as Map?) ?? const {};
       final diposting = ringkas['diposting'] ?? 0;
       final gagal = ringkas['gagal'] ?? 0;
@@ -1047,17 +1058,40 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
     final jumlahSudah = semua.where((r) => r['sudahDiposting'] == true).length;
     final jumlahBelum = semua.length - jumlahSudah;
     final siap = _data?['siap'] == true && _data?['diposting'] != true;
+
+    // Wajib paging 15 data per halaman (kBarisPerHalamanTabel) agar daftar
+    // ribuan transaksi pada Posting Penjualan / Posting HPP / Posting Keuangan
+    // dimuat cepat tanpa merender seluruh item sekaligus.
+    final pakeJurnalFallback = rincian.isEmpty && semua.isEmpty && jurnal.isNotEmpty;
+    final totalItemAktif = pakeJurnalFallback ? jurnal.length : rincian.length;
+    final totalHalaman =
+        (totalItemAktif / kBarisPerHalamanTabel).ceil().clamp(1, 1 << 30);
+    final halamanAktif = _halaman.clamp(1, totalHalaman);
+    final indeksMulai = (halamanAktif - 1) * kBarisPerHalamanTabel;
+    final rincianHalaman = rincian.isEmpty || indeksMulai >= rincian.length
+        ? const <Map<String, dynamic>>[]
+        : rincian.sublist(
+            indeksMulai,
+            (indeksMulai + kBarisPerHalamanTabel).clamp(0, rincian.length),
+          );
+    final jurnalHalaman = !pakeJurnalFallback || indeksMulai >= jurnal.length
+        ? const <Map<String, dynamic>>[]
+        : jurnal.sublist(
+            indeksMulai,
+            (indeksMulai + kBarisPerHalamanTabel).clamp(0, jurnal.length),
+          );
+
     final Widget daftarTransaksi = rincian.isEmpty
-        ? (semua.isEmpty && jurnal.isNotEmpty
+        ? (pakeJurnalFallback
             ? ListView.separated(
                 shrinkWrap: widget.inline,
                 physics: widget.inline
                     ? const NeverScrollableScrollPhysics()
                     : null,
-                itemCount: jurnal.length,
+                itemCount: jurnalHalaman.length,
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (_, i) {
-                  final row = jurnal[i];
+                  final row = jurnalHalaman[i];
                   return ListTile(
                     dense: true,
                     title: Text(row['akun']?.toString() ?? '-'),
@@ -1077,10 +1111,10 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
             shrinkWrap: widget.inline,
             physics:
                 widget.inline ? const NeverScrollableScrollPhysics() : null,
-            itemCount: rincian.length,
+            itemCount: rincianHalaman.length,
             separatorBuilder: (_, __) => const Divider(height: 1),
             itemBuilder: (_, i) {
-              final t = rincian[i];
+              final t = rincianHalaman[i];
               final sudahDiposting = t['sudahDiposting'] == true;
               final siapBaris = !sudahDiposting && t['siap'] == true;
               final barisJurnal = ((t['jurnal'] as List?) ?? [])
@@ -1266,7 +1300,10 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
               jumlahSemua: semua.length,
               jumlahSudah: jumlahSudah,
               jumlahBelum: jumlahBelum,
-              onChanged: (nilai) => setState(() => _filterStatus = nilai),
+              onChanged: (nilai) => setState(() {
+                _filterStatus = nilai;
+                _halaman = 1;
+              }),
             ),
             const SizedBox(height: 8),
           ],
@@ -1274,6 +1311,21 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
             daftarTransaksi
           else
             Expanded(child: daftarTransaksi),
+          if (_data != null)
+            AppTableFooter(
+              pagination: AppTablePagination(
+                halaman: halamanAktif,
+                totalHalaman: totalHalaman,
+                totalData: totalItemAktif,
+                labelData: pakeJurnalFallback ? 'baris jurnal' : 'transaksi',
+                onSebelumnya: halamanAktif > 1
+                    ? () => setState(() => _halaman = halamanAktif - 1)
+                    : null,
+                onBerikutnya: halamanAktif < totalHalaman
+                    ? () => setState(() => _halaman = halamanAktif + 1)
+                    : null,
+              ),
+            ),
           const SizedBox(height: 12),
           Row(mainAxisAlignment: MainAxisAlignment.end, children: [
             if (!widget.inline) ...[

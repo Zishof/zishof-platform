@@ -325,26 +325,24 @@ class _PengadaanBdpScreenState extends State<PengadaanBdpScreen> {
               AppTableColumn('Batas kirim', flex: 2),
             ],
       rows: _daftar.map(_modeBast ? _barisBast : _barisBelum).toList(),
-      pagination: _total > _pageSize
-          ? AppTablePagination(
-              halaman: _halaman,
-              totalHalaman: totalHalaman,
-              totalData: _total,
-              labelData: _modeBast ? 'penerimaan' : 'baris',
-              onSebelumnya: _halaman > 1
-                  ? () {
-                      setStateIfMounted(() => _halaman--);
-                      _muat();
-                    }
-                  : null,
-              onBerikutnya: _halaman < totalHalaman
-                  ? () {
-                      setStateIfMounted(() => _halaman++);
-                      _muat();
-                    }
-                  : null,
-            )
-          : null,
+      pagination: AppTablePagination(
+        halaman: _halaman,
+        totalHalaman: totalHalaman,
+        totalData: _total,
+        labelData: _modeBast ? 'penerimaan' : 'baris',
+        onSebelumnya: _halaman > 1
+            ? () {
+                setStateIfMounted(() => _halaman--);
+                _muat();
+              }
+            : null,
+        onBerikutnya: _halaman < totalHalaman
+            ? () {
+                setStateIfMounted(() => _halaman++);
+                _muat();
+              }
+            : null,
+      ),
     );
   }
 

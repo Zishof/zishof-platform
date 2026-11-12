@@ -1333,19 +1333,17 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> with JejakGalat {
               onUbah: _ubah,
               onHapus: _hapus,
               onCetak: _cetak,
-              pagination: _total > _pageSize
-                  ? AppTablePagination(
-                      halaman: _halaman,
-                      totalHalaman: _totalHalaman,
-                      totalData: _total,
-                      labelData: 'retur',
-                      onSebelumnya:
-                          _halaman > 1 ? () => _pindah(_halaman - 1) : null,
-                      onBerikutnya: _halaman < _totalHalaman
-                          ? () => _pindah(_halaman + 1)
-                          : null,
-                    )
-                  : null,
+              pagination: AppTablePagination(
+                halaman: _halaman,
+                totalHalaman: _totalHalaman,
+                totalData: _total,
+                labelData: 'retur',
+                onSebelumnya:
+                    _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+                onBerikutnya: _halaman < _totalHalaman
+                    ? () => _pindah(_halaman + 1)
+                    : null,
+              ),
             ),
         ],
       ),

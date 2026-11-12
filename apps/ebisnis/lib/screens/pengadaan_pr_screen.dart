@@ -440,26 +440,24 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen>
         AppTableColumn('Aksi', width: 64),
       ],
       rows: _daftar.map(_barisPr).toList(),
-      pagination: _total > _pageSize
-          ? AppTablePagination(
-              halaman: _halaman,
-              totalHalaman: totalHalaman,
-              totalData: _total,
-              labelData: 'PR',
-              onSebelumnya: _halaman > 1
-                  ? () {
-                      setStateIfMounted(() => _halaman--);
-                      _muat();
-                    }
-                  : null,
-              onBerikutnya: _halaman < totalHalaman
-                  ? () {
-                      setStateIfMounted(() => _halaman++);
-                      _muat();
-                    }
-                  : null,
-            )
-          : null,
+      pagination: AppTablePagination(
+        halaman: _halaman,
+        totalHalaman: totalHalaman,
+        totalData: _total,
+        labelData: 'PR',
+        onSebelumnya: _halaman > 1
+            ? () {
+                setStateIfMounted(() => _halaman--);
+                _muat();
+              }
+            : null,
+        onBerikutnya: _halaman < totalHalaman
+            ? () {
+                setStateIfMounted(() => _halaman++);
+                _muat();
+              }
+            : null,
+      ),
     );
   }
 

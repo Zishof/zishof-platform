@@ -1466,20 +1466,19 @@ class _AppPagedDataTableState extends State<AppPagedDataTable> {
           border: widget.border,
           clipBehavior: widget.clipBehavior,
         ),
-        if (widget.rows.length > kBarisPerHalamanTabel)
-          _AppTableFooter(
-            pagination: AppTablePagination(
-              halaman: _halaman,
-              totalHalaman: _totalHalaman,
-              totalData: widget.rows.length,
-              labelData: widget.labelData,
-              onSebelumnya:
-                  _halaman > 1 ? () => _keHalaman(_halaman - 1) : null,
-              onBerikutnya: _halaman < _totalHalaman
-                  ? () => _keHalaman(_halaman + 1)
-                  : null,
-            ),
+        AppTableFooter(
+          pagination: AppTablePagination(
+            halaman: _halaman,
+            totalHalaman: _totalHalaman,
+            totalData: widget.rows.length,
+            labelData: widget.labelData,
+            onSebelumnya:
+                _halaman > 1 ? () => _keHalaman(_halaman - 1) : null,
+            onBerikutnya: _halaman < _totalHalaman
+                ? () => _keHalaman(_halaman + 1)
+                : null,
           ),
+        ),
       ],
     );
     return widget.tableWidth == null
@@ -1532,10 +1531,11 @@ class _AppDataTableState extends State<AppDataTable> {
   final ScrollController _verticalController = ScrollController();
   final ScrollController _horizontalController = ScrollController();
 
+  /// Seluruh tabel dengan [pagingOtomatis] aktif wajib menampilkan bilah paging
+  /// maksimal [kBarisPerHalamanTabel] (15 data per halaman) agar pemuatan dan
+  /// perenderan konsisten serta ringan di setiap halaman.
   bool get _pagingSendiri =>
-      widget.pagination == null &&
-      widget.pagingOtomatis &&
-      widget.rows.length > kBarisPerHalamanTabel;
+      widget.pagination == null && widget.pagingOtomatis;
 
   int get _totalHalaman =>
       (widget.rows.length / kBarisPerHalamanTabel).ceil().clamp(1, 1 << 30);
@@ -1665,7 +1665,7 @@ class _AppDataTableState extends State<AppDataTable> {
                 );
               },
             ),
-            if (pagingTampil != null) _AppTableFooter(pagination: pagingTampil),
+            if (pagingTampil != null) AppTableFooter(pagination: pagingTampil),
           ],
         ),
       ),
@@ -1878,10 +1878,12 @@ class _AppTableSlot extends StatelessWidget {
   }
 }
 
-class _AppTableFooter extends StatelessWidget {
+/// Bilah navigasi halaman standar (15 data per halaman) untuk seluruh tabel dan
+/// daftar transaksi di aplikasi.
+class AppTableFooter extends StatelessWidget {
   final AppTablePagination pagination;
 
-  const _AppTableFooter({required this.pagination});
+  const AppTableFooter({super.key, required this.pagination});
 
   @override
   Widget build(BuildContext context) {
