@@ -389,10 +389,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         _splitBayar
             .every((slot) => metodeMenurutId.containsKey(slot.caraBayar.id));
     final splitTersegar = splitMasihDiizinkan
-        ? _splitBayar
-            .map((slot) =>
-                SlotBayar(metodeMenurutId[slot.caraBayar.id]!, slot.nominal))
-            .toList()
+        ? urutkanSlotSplitPaten(_splitBayar.map(
+            (slot) => SlotBayar(metodeMenurutId[slot.caraBayar.id]!, slot.nominal)))
         : <SlotBayar>[];
 
     setStateIfMounted(() {
@@ -2182,8 +2180,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   }
 
   Future<bool> _konfirmasiRincianPembayaran() async {
-    final metode =
-        _splitAktif ? _splitBayar : [SlotBayar(_caraBayarTerpilih!, _total)];
+    final metode = _splitAktif
+        ? urutkanSlotSplitPaten(_splitBayar)
+        : [SlotBayar(_caraBayarTerpilih!, _total)];
     final rupiah =
         NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
     final setuju = await showDialog<bool>(
@@ -2192,25 +2191,72 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Periksa pembayaran'),
         content: SizedBox(
-          width: 380,
+          width: 400,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                  'Pastikan metode dan nominal sesuai dengan uang/voucher yang diterima.'),
+                  'Pastikan metode dan nominal sesuai dengan uang tunai/voucher yang benar-benar diterima.'),
               const SizedBox(height: 12),
-              for (final slot in metode)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: [
-                      Expanded(child: Text(slot.caraBayar.nama)),
-                      Text(rupiah.format(slot.nominal)),
-                    ],
-                  ),
-                ),
-              const Divider(),
+              for (var idx = 0; idx < metode.length; idx++) ...[
+                Builder(builder: (_) {
+                  final slot = metode[idx];
+                  final cara = slot.caraBayar;
+                  final warna = cara.adalahTunai
+                      ? const Color(0xFF1B7F3B)
+                      : (cara.masukSebagaiHutang
+                          ? const Color(0xFFB45309)
+                          : const Color(0xFF4338CA));
+                  return Container(
+                    margin: const EdgeInsets.symmetric(vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: warna.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: warna.withValues(alpha: 0.25)),
+                    ),
+                    child: Row(
+                      children: [
+                        if (metode.length >= 2) ...[
+                          Text('${idx + 1}. ',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, color: warna)),
+                        ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(cara.nama,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700)),
+                              Text(
+                                labelKategoriCaraBayar(cara),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: warna,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          rupiah.format(slot.nominal),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                            color: warna,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+              const Divider(height: 20),
               Row(
                 children: [
                   const Expanded(
@@ -2222,7 +2268,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
               ),
               const SizedBox(height: 8),
               const Text(
-                  'Jika ada yang tidak sesuai, kembali dan ubah pembayarannya sebelum transaksi diproses.'),
+                  'Jika ada nominal yang tertukar, tekan "Kembali, periksa lagi" sebelum transaksi diproses.'),
             ],
           ),
         ),
@@ -2257,6 +2303,15 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           content: Text(
               'Uang diterima kurang ${_formatRupiah.format((_total - _uangDiterima).abs())}.')));
       return;
+    }
+    if (_splitAktif) {
+      final galatSplit = validasiAlokasiPembayaran(_splitBayar, _total);
+      if (galatSplit != null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(galatSplit)));
+        await _pilihMetode();
+        return;
+      }
     }
     // PIUTANG WAJIB BERPEMILIK: metode ber-flag masukSebagaiHutang membentuk
     // tagihan toko ke pelanggan. Tanpa nama pelanggan, tim keuangan tidak dapat
@@ -2565,10 +2620,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       }
       return;
     }
+    final hasilUrut = urutkanSlotSplitPaten(hasil);
     setStateIfMounted(() {
       _pilihanCaraBayarPerluKonfirmasi = false;
-      _caraBayarTerpilih = hasil.first.caraBayar;
-      _splitBayar = hasil.length >= 2 ? hasil : [];
+      _caraBayarTerpilih = hasilUrut.first.caraBayar;
+      _splitBayar = hasilUrut.length >= 2 ? hasilUrut : [];
     });
   }
 
@@ -3363,6 +3419,65 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                 ),
               ),
             ),
+            if (_splitAktif) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.pageBgOf(context),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.borderOf(context)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var idx = 0; idx < _splitBayar.length; idx++)
+                      Padding(
+                        padding: EdgeInsets.only(top: idx == 0 ? 0 : 4),
+                        child: Row(
+                          children: [
+                            Text(
+                              '${idx + 1}. ${_splitBayar[idx].caraBayar.nama}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _splitBayar[idx].caraBayar.adalahTunai
+                                    ? const Color(0xFF1B7F3B)
+                                    : null,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              _formatRupiah.format(_splitBayar[idx].nominal),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: _splitBayar[idx].caraBayar.adalahTunai
+                                    ? const Color(0xFF1B7F3B)
+                                    : null,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if ((_splitBayar.fold<double>(
+                                    0, (s, item) => s + item.nominal) -
+                                _total)
+                            .abs() >=
+                        1) ...[
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Total belanja berubah — tekan F4 untuk menyesuaikan nominal split.',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.red),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
             if (_caraBayarTersedia.isNotEmpty &&
                 (_memuatCaraBayar || _caraBayarDariCache)) ...[
               const SizedBox(height: 6),

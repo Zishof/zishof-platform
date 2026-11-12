@@ -5,10 +5,11 @@ import 'package:ebisnis/widgets/pemilih_metode_split.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-CaraBayar _cara(int id, String nama) => CaraBayar(
+CaraBayar _cara(int id, String nama, {bool? adaKembalian}) => CaraBayar(
       id: id,
       nama: nama,
       manual: true,
+      adaKembalian: adaKembalian,
     );
 
 void main() {
@@ -49,6 +50,40 @@ void main() {
     );
   });
 
+  test(
+      'urutkanSlotSplitPaten selalu mengunci Tunai di posisi #1 walau urutan klik atau abjad berbeda',
+      () {
+    final tunai = _cara(1, 'Tunai');
+    final voucher = _cara(6, 'Voucher Pejuang');
+    final qris = _cara(3, 'QRIS BSI');
+    final edc = _cara(7, 'EDC Merchant');
+
+    // Kasus 1: Voucher dipilih dulu baru Tunai -> Tunai tetap terkunci di #1
+    final dariVoucherDulu = urutkanSlotSplitPaten([
+      SlotBayar(voucher, 15000),
+      SlotBayar(tunai, 3000),
+    ]);
+    expect(dariVoucherDulu[0].caraBayar.nama, 'Tunai');
+    expect(dariVoucherDulu[0].nominal, 3000);
+    expect(dariVoucherDulu[1].caraBayar.nama, 'Voucher Pejuang');
+    expect(dariVoucherDulu[1].nominal, 15000);
+
+    // Kasus 2: Metode yang abjadnya sebelum "Tunai" (EDC / QRIS) + Tunai ->
+    // Tunai TETAP terkunci di posisi #1, sisanya berurutan abjad tetap.
+    final campuran = urutkanSlotSplitPaten([
+      SlotBayar(voucher, 10000),
+      SlotBayar(edc, 5000),
+      SlotBayar(tunai, 2000),
+      SlotBayar(qris, 3000),
+    ]);
+    expect(campuran.map((s) => s.caraBayar.nama).toList(), [
+      'Tunai',
+      'EDC Merchant',
+      'QRIS BSI',
+      'Voucher Pejuang',
+    ]);
+  });
+
   testWidgets('pemilih UI mengembalikan dua metode beserta nominalnya',
       (tester) async {
     List<SlotBayar>? hasil;
@@ -75,6 +110,7 @@ void main() {
       ),
     ));
 
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Buka'));
     await tester.pumpAndSettle();
     await tester.tap(find.byType(Checkbox).at(0));
@@ -97,6 +133,66 @@ void main() {
     expect(hasil![1].nominal, 23500);
   });
 
+  testWidgets(
+      'skenario video Al-Bahjah: diawali Voucher Pejuang 18.000 lalu centang Tunai -> Tunai tetap di atas & ketik Voucher 15.000 otomatis mengisi Tunai 3.000',
+      (tester) async {
+    List<SlotBayar>? hasil;
+    final tunai = _cara(1, 'Tunai');
+    final voucher = _cara(6, 'Voucher Pejuang');
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Builder(builder: (context) {
+          return ElevatedButton(
+            onPressed: () async {
+              hasil = await showModalBottomSheet<List<SlotBayar>>(
+                context: context,
+                isScrollControlled: true,
+                builder: (_) => PemilihMetodeSplit(
+                  daftarMetode: [voucher, tunai],
+                  // Simulasi kasir sebelumnya memakai Voucher Pejuang penuh:
+                  terpilihAwal: [SlotBayar(voucher, 18000)],
+                  total: 18000,
+                ),
+              );
+            },
+            child: const Text('Buka F4'),
+          );
+        }),
+      ),
+    ));
+
+    await tester.tap(find.text('Buka F4'));
+    await tester.pumpAndSettle();
+
+    // Kasir mencentang Tunai (indeks ke-1 di daftarMetode karena sengaja dibalik)
+    await tester.tap(find.byType(Checkbox).at(1));
+    await tester.pumpAndSettle();
+
+    // Pastikan posisi kotak input di layar: Tunai (key nominal-split-1) berada
+    // DI ATAS Voucher Pejuang (key nominal-split-6)
+    final posTunai =
+        tester.getTopLeft(find.byKey(const ValueKey('nominal-split-1')));
+    final posVoucher =
+        tester.getTopLeft(find.byKey(const ValueKey('nominal-split-6')));
+    expect(posTunai.dy, lessThan(posVoucher.dy));
+
+    // Kasir cukup mengetik 15000 pada kotak Voucher Pejuang -> kotak Tunai
+    // otomatis terhitung 3000 tanpa harus mengetik dua kali!
+    await tester.enterText(
+        find.byKey(const ValueKey('nominal-split-6')), '15000');
+    await tester.pump();
+
+    await tester.tap(find.text('Terapkan Split Pembayaran'));
+    await tester.pumpAndSettle();
+
+    expect(hasil, isNotNull);
+    expect(hasil, hasLength(2));
+    expect(hasil![0].caraBayar.nama, 'Tunai');
+    expect(hasil![0].nominal, 3000);
+    expect(hasil![1].caraBayar.nama, 'Voucher Pejuang');
+    expect(hasil![1].nominal, 15000);
+  });
+
   test('form koreksi memakai capability server dan payload pembayaran rinci',
       () {
     final source =
@@ -107,7 +203,10 @@ void main() {
     expect(source, contains("'pembayaran': _splitBayar"));
     expect(source, contains("'cara_bayar': slot.caraBayar.id"));
     expect(source, contains('validasiAlokasiPembayaran'));
-    expect(source, contains('Split belum tersedia dari server. Hubungi admin untuk pembaruan server.'));
+    expect(
+        source,
+        contains(
+            'Split belum tersedia dari server. Hubungi admin untuk pembaruan server.'));
   });
 
   test('backend mengembalikan slot lama dan memvalidasi split baru', () {

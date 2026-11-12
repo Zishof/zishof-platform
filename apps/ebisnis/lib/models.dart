@@ -425,8 +425,23 @@ class CaraBayar {
   /// Lebih luas daripada [masukSebagaiHutang]: metode potong saldo juga wajib
   /// mempunyai pemilik. Semua Kasbon sendiri dinormalisasi menjadi piutang.
   final bool wajibPilihMember;
+  /// Menandakan metode pembayaran uang fisik di laci kasir yang mendukung uang
+  /// kembalian (`cara_pembayaran_koperasi.ada_kembalian`).
+  ///
+  /// Properti ini mengikuti kontrak `CaraPembayaranKoperasi.getAdaKembalian()`
+  /// di server AIS (true bila kolom `ada_kembalian` bernilai true, atau bila
+  /// belum diisi pada data lama namun nama metodenya memuat kata "tunai"/"cash").
+  /// Digunakan secara konsisten untuk:
+  /// 1. Mengunci posisi metode Tunai SELALU di urutan #1 (paling atas) pada
+  ///    pembagian nominal multi-metode (Split Payment) agar kasir tidak salah
+  ///    ketik nominal uang fisik ke kolom voucher/non-tunai atau sebaliknya.
+  /// 2. Menampilkan lencana pembeda visual `TUNAI (Laci Kas)` vs `NON-TUNAI`.
+  final bool adaKembalian;
   final bool online;
   final bool onlineBmt;
+
+  /// True apabila metode ini mewakili uang fisik tunai di laci kasir.
+  bool get adalahTunai => adaKembalian;
 
   /// Aturan efektif yang sama dengan backend: metode non-manual memerlukan
   /// otorisasi saldo pusat, kecuali metode tersebut memang dicatat sebagai
@@ -445,10 +460,14 @@ class CaraBayar {
     this.memotongDeposit = false,
     this.wajibPin = false,
     this.masukSebagaiHutang = false,
+    bool? adaKembalian,
     this.online = false,
     this.onlineBmt = false,
     bool? wajibPilihMember,
-  }) : wajibPilihMember = wajibPilihMember ??
+  })  : adaKembalian = adaKembalian ??
+            (nama.toLowerCase().contains('tunai') ||
+                nama.toLowerCase().contains('cash')),
+        wajibPilihMember = wajibPilihMember ??
             (masukSebagaiHutang ||
                 (!masukSebagaiHutang && !online && !onlineBmt && (!manual || memotongDeposit)));
   factory CaraBayar.fromJson(Map<String, dynamic> j) {
@@ -467,12 +486,16 @@ class CaraBayar {
     // ke tagihan BMT. Status online metode toko tetap mengikuti flag umumnya.
     const onlineBmt = false;
     final online = j['online'] == true;
+    final rawAdaKembalian = j['adaKembalian'] ?? j['ada_kembalian'];
     return CaraBayar(
       id: j['id'] as int,
       nama: nama,
       manual: j['manual'] == true,
       online: online,
       onlineBmt: onlineBmt,
+      adaKembalian: rawAdaKembalian is bool
+          ? rawAdaKembalian
+          : (namaLower.contains('tunai') || namaLower.contains('cash')),
       wajibPin: j['wajibPin'] == true || j['wajib_pin'] == true,
       masukSebagaiHutang: metodeKasbon ||
           j['masukSebagaiHutang'] == true ||

@@ -528,7 +528,7 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
         hasil.add(SlotBayar(cara, widget.totalAwal));
       }
     }
-    return hasil;
+    return urutkanSlotSplitPaten(hasil);
   }
 
   double get _subtotalItemAwal =>
@@ -591,8 +591,9 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
       ),
     );
     if (hasil == null || hasil.isEmpty || !mounted) return;
+    final hasilUrut = urutkanSlotSplitPaten(hasil);
     setState(() {
-      _splitBayar = hasil.map((slot) => slot.salin()).toList();
+      _splitBayar = hasilUrut;
       _caraBayarId = _splitBayar.first.caraBayar.id;
       _caraBayarDiubah = true;
       _pesan = null;
