@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
@@ -3987,6 +3989,134 @@ double hitungTotalBarisRincian(Map<String, dynamic> row) {
   return totalDb > 0 ? totalDb : ((qty * harga) - diskon);
 }
 
+/// Token khusus filter rincian produk untuk menampilkan item yang belum
+/// memiliki kategori pada master `koperasi.jenis_produk` (selaras dengan
+/// `PosApi.TOKEN_TANPA_KATEGORI` di sisi server).
+const String kTokenTanpaKategoriRincian = '__TANPA_KATEGORI__';
+
+/// Menormalisasi nilai teks kategori untuk sel tabel & ekspor agar tidak pernah
+/// tampil kosong melompong (`''` di Dart bukan `null`, sehingga `row['kategori'] ?? '-'`
+/// sebelumnya menghasilkan string kosong).
+@visibleForTesting
+String labelKategoriRincian(Object? raw) {
+  final teks = '${raw ?? ''}'.trim();
+  return teks.isEmpty ? '-' : teks;
+}
+
+/// Mengekstrak nama kategori mentah dari satu baris rincian/rekap produk.
+@visibleForTesting
+String kategoriMentahBarisRincian(Map<String, dynamic> row) {
+  return '${row['kategori'] ?? row['kategoriNama'] ?? row['jenisProduk'] ?? ''}'
+      .trim();
+}
+
+/// Memperkaya satu baris rincian produk dengan nama kategori dari katalog lokal
+/// (`produk_cache`) apabila respons server lama belum menyertakan kolom `kategori`.
+///
+/// Urutan pencocokan:
+/// 1. `id:<produkId>`
+/// 2. `k:<kodeKanonis>` (mengatasi kode berawalan transaksi historis seperti `EB...-...`)
+/// 3. `n:<namaLower>`
+@visibleForTesting
+Map<String, dynamic> perkayaKategoriBarisRincian(
+  Map<String, dynamic> row,
+  Map<String, String> petaKategoriProduk,
+) {
+  final katServer = kategoriMentahBarisRincian(row);
+  if (katServer.isNotEmpty) {
+    return <String, dynamic>{
+      ...row,
+      'kategori': katServer,
+      'kategoriTampil': labelKategoriRincian(katServer),
+    };
+  }
+  String katLokal = '';
+  if (petaKategoriProduk.isNotEmpty) {
+    final produkId = (row['produkId'] as num?)?.toInt();
+    if (produkId != null && produkId > 0) {
+      katLokal = petaKategoriProduk['id:$produkId'] ?? '';
+    }
+    if (katLokal.isEmpty) {
+      final kode =
+          '${row['produkKodeRekap'] ?? row['produkKode'] ?? ''}'.trim();
+      final nama =
+          '${row['produkNamaRekap'] ?? row['produkNama'] ?? ''}'.trim();
+      final kodeKanonis = kodeKanonisRekapProduk(kode, nama);
+      if (kodeKanonis.isNotEmpty) {
+        katLokal = petaKategoriProduk['k:$kodeKanonis'] ?? '';
+      }
+      if (katLokal.isEmpty && nama.isNotEmpty) {
+        katLokal = petaKategoriProduk['n:${nama.toLowerCase()}'] ?? '';
+      }
+    }
+  }
+  return <String, dynamic>{
+    ...row,
+    'kategori': katLokal,
+    'kategoriTampil': labelKategoriRincian(katLokal),
+  };
+}
+
+/// Menyaring satu baris rincian produk terhadap filter kategori aktif.
+///
+/// Dipakai sebagai pengaman kompatibilitas mundur apabila aplikasi terbaru
+/// sedang terhubung ke server lama yang belum menyaring parameter `kategori`,
+/// sekaligus menjaga konsistensi pada mode rincian, rekap per produk, dan ekspor.
+@visibleForTesting
+bool cocokFilterKategoriRincian(
+    Map<String, dynamic> row, String filterKategori) {
+  final f = filterKategori.trim();
+  if (f.isEmpty) return true;
+  final kat = kategoriMentahBarisRincian(row);
+  if (f == kTokenTanpaKategoriRincian) {
+    return kat.isEmpty;
+  }
+  return kat.toLowerCase() == f.toLowerCase();
+}
+
+/// Membangun indeks pencarian cepat (`id:`, `k:`, `n:`) -> nama kategori dari
+/// baris `produk_cache` SQLite lokal beserta daftar unik nama kategorinya.
+@visibleForTesting
+({Map<String, String> peta, List<String> daftarKategori})
+    bangunIndeksKategoriDariProdukCache(List<Map<String, Object?>> barisCache) {
+  final peta = <String, String>{};
+  final setKategori = <String>{};
+  for (final r in barisCache) {
+    var kat = '${r['kategori_nama'] ?? ''}'.trim();
+    if (kat.isEmpty) {
+      final dj = '${r['detail_json'] ?? ''}'.trim();
+      if (dj.isNotEmpty) {
+        try {
+          final m = jsonDecode(dj);
+          if (m is Map) {
+            kat =
+                '${m['jenisProdukNama'] ?? m['kategoriNama'] ?? m['kategori'] ?? ''}'
+                    .trim();
+          }
+        } catch (_) {}
+      }
+    }
+    if (kat.isEmpty) continue;
+    setKategori.add(kat);
+    final id = (r['id'] as num?)?.toInt();
+    if (id != null && id > 0) {
+      peta.putIfAbsent('id:$id', () => kat);
+    }
+    final kode = '${r['kode'] ?? ''}'.trim();
+    final nama = '${r['nama'] ?? ''}'.trim();
+    final kodeKanonis = kodeKanonisRekapProduk(kode, nama);
+    if (kodeKanonis.isNotEmpty) {
+      peta.putIfAbsent('k:$kodeKanonis', () => kat);
+    }
+    if (nama.isNotEmpty) {
+      peta.putIfAbsent('n:${nama.toLowerCase()}', () => kat);
+    }
+  }
+  final daftar = setKategori.toList()
+    ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  return (peta: peta, daftarKategori: daftar);
+}
+
 @visibleForTesting
 List<Map<String, dynamic>> rekapProdukDariRincian(
     List<Map<String, dynamic>> baris) {
@@ -4007,15 +4137,14 @@ List<Map<String, dynamic>> rekapProdukDariRincian(
     final kunci = kodeKanonis.isNotEmpty
         ? 'k:$kodeKanonis'
         : (produkId != null ? 'id:$produkId' : 'n:${nama.toLowerCase()}');
-    final kat = (b['kategori'] ?? b['kategoriNama'] ?? b['jenisProduk'] ?? '')
-        .toString()
-        .trim();
+    final kat = kategoriMentahBarisRincian(b);
     final row = peta.putIfAbsent(
         kunci,
         () => <String, dynamic>{
               'produkKode': kodeKanonis,
               'produkNama': nama.isEmpty ? 'Produk tanpa nama' : nama,
               'kategori': kat,
+              'kategoriTampil': labelKategoriRincian(kat),
               'satuan': (b['satuan'] ?? '').toString(),
               'qty': 0.0,
               'total': 0.0,
@@ -4025,6 +4154,7 @@ List<Map<String, dynamic>> rekapProdukDariRincian(
             });
     if ((row['kategori'] as String).isEmpty && kat.isNotEmpty) {
       row['kategori'] = kat;
+      row['kategoriTampil'] = labelKategoriRincian(kat);
     }
     final qtyBaris = (b['qty'] as num?)?.toDouble() ?? 0;
     row['qty'] = (row['qty'] as double) + qtyBaris;
@@ -4077,13 +4207,16 @@ class HasilBarisRincian {
 /// "berhasil" padahal isinya terpotong. Di sini batas berhentinya adalah nomor
 /// halaman, dihitung dari jumlah transaksi.
 Future<HasilBarisRincian> _ambilSemuaBarisRincianProduk(
-    Map<String, dynamic> payload) async {
+  Map<String, dynamic> payload, {
+  Map<String, String> petaKategoriProduk = const {},
+}) async {
   const ukuranHalaman = 100;
   const batasHalaman =
       1000; // pengaman; disentuh berarti hasilnya TIDAK lengkap
   final hasil = <Map<String, dynamic>>[];
   var halaman = 1;
   var totalHalaman = 1;
+  final filterKategori = '${payload['kategori'] ?? ''}'.trim();
   // (batas berhenti dihitung oleh totalHalamanRincian -- diuji terpisah)
   do {
     final respons = await ApiClient.instance.aksi('laporan_rincian_produk', {
@@ -4094,10 +4227,17 @@ Future<HasilBarisRincian> _ambilSemuaBarisRincianProduk(
     final batch =
         ((respons['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
     for (final row in batch) {
-      hasil.add({
-        ...row,
-        'total': hitungTotalBarisRincian(row),
-      });
+      final diperkaya = perkayaKategoriBarisRincian(
+        <String, dynamic>{
+          ...row,
+          'total': hitungTotalBarisRincian(row),
+        },
+        petaKategoriProduk,
+      );
+      if (!cocokFilterKategoriRincian(diperkaya, filterKategori)) {
+        continue;
+      }
+      hasil.add(diperkaya);
     }
     final totalTransaksi = (respons['total'] as num?)?.toInt() ?? 0;
     totalHalaman = totalHalamanRincian(totalTransaksi, ukuranHalaman);
@@ -4137,6 +4277,10 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
   List<String> _daftarKasir = [];
   String _metode = '';
   List<String> _daftarMetode = [];
+  String _kategori = '';
+  List<String> _daftarKategori = [];
+  bool _adaTanpaKategori = false;
+  Map<String, String> _petaKategoriLokal = const {};
   // Mode rekap merangkum baris rincian yang sama, sehingga angkanya tidak pernah
   // berselisih dengan mode rincian pada filter yang sama.
   bool _modeRekap = true;
@@ -4153,6 +4297,12 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
     final kini = DateTime.now();
     _mulai = DateTime(kini.year, kini.month, kini.day);
     _sampai = _mulai;
+    _inisialisasiAwal();
+  }
+
+  Future<void> _inisialisasiAwal() async {
+    await _muatKategoriLokalDanMaster();
+    if (!mounted) return;
     _muat();
     _muatOpsiMetode();
     _muatRekap();
@@ -4162,12 +4312,109 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
         if (_mulai != null) 'tglMulai': _formatTanggalServer.format(_mulai!),
         if (_sampai != null) 'tglSampai': _formatTanggalServer.format(_sampai!),
         if (_cariProduk.trim().isNotEmpty) 'produk': _cariProduk.trim(),
+        if (_kategori.trim().isNotEmpty) 'kategori': _kategori.trim(),
         if (_kasir.trim().isNotEmpty) 'kasir': _kasir.trim(),
         if (_metode.trim().isNotEmpty) ...{
           'metode': _metode.trim(),
           'metodeExact': _metode.trim(),
         },
       };
+
+  void _gabungkanOpsiKategori(Iterable<String> tambahan,
+      {bool? adaTanpaKategori}) {
+    final petaUnik = <String, String>{};
+    for (final k in _daftarKategori) {
+      final t = k.trim();
+      if (t.isNotEmpty) petaUnik.putIfAbsent(t.toLowerCase(), () => t);
+    }
+    for (final k in tambahan) {
+      final t = k.trim();
+      if (t.isNotEmpty && t != kTokenTanpaKategoriRincian) {
+        petaUnik.putIfAbsent(t.toLowerCase(), () => t);
+      }
+    }
+    final urut = petaUnik.values.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    _daftarKategori = urut;
+    if (adaTanpaKategori != null) {
+      _adaTanpaKategori = _adaTanpaKategori || adaTanpaKategori;
+    }
+    if (_kategori.isNotEmpty &&
+        _kategori != kTokenTanpaKategoriRincian &&
+        !_daftarKategori
+            .any((e) => e.toLowerCase() == _kategori.toLowerCase())) {
+      _daftarKategori = [_kategori, ..._daftarKategori];
+    }
+  }
+
+  /// Memuat indeks kategori dari SQLite `produk_cache` lokal (instan & bekerja
+  /// bahkan pada server versi lama sebelum deployment), lalu melengkapi daftar
+  /// opsi dari endpoint `laporan_kategori_produk_opsi` atau `jenis_produk_list`.
+  Future<void> _muatKategoriLokalDanMaster() async {
+    try {
+      final db = await CoreDb.instance.db;
+      final barisCache = await db.query(
+        'produk_cache',
+        columns: const ['id', 'kode', 'nama', 'kategori_nama', 'detail_json'],
+      );
+      final indeks = bangunIndeksKategoriDariProdukCache(barisCache);
+      if (mounted) {
+        setStateIfMounted(() {
+          _petaKategoriLokal = indeks.peta;
+          _gabungkanOpsiKategori(indeks.daftarKategori);
+        });
+      }
+    } catch (_) {
+      // Pada lingkungan pengujian widget tanpa SQLite terinisialisasi, lewati aman.
+    }
+
+    // Lengkapi opsi dari server: coba endpoint khusus laporan terlebih dahulu,
+    // lalu fallback ke master jenis_produk_list (kompatibel dengan seluruh versi server).
+    try {
+      final resOpsi = await ApiClient.instance.aksi(
+        'laporan_kategori_produk_opsi',
+        {
+          if (_mulai != null) 'tglMulai': _formatTanggalServer.format(_mulai!),
+          if (_sampai != null)
+            'tglSampai': _formatTanggalServer.format(_sampai!),
+        },
+      );
+      if (!mounted) return;
+      final dariNama = ((resOpsi['daftarNama'] as List?) ?? const [])
+          .map((e) => '$e'.trim())
+          .where((e) => e.isNotEmpty);
+      final dariObjek = ((resOpsi['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((m) => '${m['nama'] ?? ''}'.trim())
+          .where((e) => e.isNotEmpty);
+      final adaTanpa = resOpsi['adaTanpaKategori'] == true;
+      setStateIfMounted(() {
+        _gabungkanOpsiKategori([...dariNama, ...dariObjek],
+            adaTanpaKategori: adaTanpa);
+      });
+      return;
+    } catch (_) {
+      // Fallback ke master jenis_produk_list bila server belum memiliki action baru.
+    }
+
+    try {
+      final resMaster = await MasterOffline.daftarDenganCache(
+        'jenis_produk_list',
+        const {'page': 1, 'page_size': 500},
+        'master:jenis_produk:opsi_laporan',
+      );
+      if (!mounted) return;
+      final namaMaster = ((resMaster['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((m) => '${m['nama'] ?? ''}'.trim())
+          .where((e) => e.isNotEmpty);
+      setStateIfMounted(() {
+        _gabungkanOpsiKategori(namaMaster);
+      });
+    } catch (_) {
+      // Opsi kategori bersifat bantuan filter; laporan tetap dapat dibuka.
+    }
+  }
 
   Future<void> _muatOpsiMetode() async {
     if (_mulai == null || _sampai == null) return;
@@ -4215,13 +4462,35 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
             .toSet());
       }
       final aktif = '${hasil['kasirAktif'] ?? ''}'.trim();
-      setStateIfMounted(() {
-        _data = listRaw
-            .map((row) => {
+      final opsiKategoriServer = ((hasil['daftarKategori'] as List?) ?? const [])
+          .map((e) => '$e'.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      final adaTanpaDariServer = hasil['adaTanpaKategori'] == true;
+      final barisDiperkaya = listRaw
+          .map((row) => perkayaKategoriBarisRincian(
+                <String, dynamic>{
                   ...row,
                   'total': hitungTotalBarisRincian(row),
-                })
-            .toList();
+                },
+                _petaKategoriLokal,
+              ))
+          .toList();
+      final kategoriDariBaris = barisDiperkaya
+          .map(kategoriMentahBarisRincian)
+          .where((e) => e.isNotEmpty)
+          .toList();
+      final adaBarisTanpaKat =
+          barisDiperkaya.any((r) => kategoriMentahBarisRincian(r).isEmpty);
+      final barisTersaring = barisDiperkaya
+          .where((r) => cocokFilterKategoriRincian(r, _kategori))
+          .toList();
+      setStateIfMounted(() {
+        _gabungkanOpsiKategori(
+          [...opsiKategoriServer, ...kategoriDariBaris],
+          adaTanpaKategori: adaTanpaDariServer || adaBarisTanpaKat,
+        );
+        _data = barisTersaring;
         _totalTransaksi = (hasil['total'] as num?)?.toInt() ?? 0;
         _bolehFilterKasir = hasil['bolehFilterKasir'] != false;
         if (daftarKasir.isNotEmpty) _daftarKasir = daftarKasir;
@@ -4257,8 +4526,21 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
   Future<void> _muatRekap() async {
     setStateIfMounted(() => _memuatRekap = true);
     try {
-      final semua = await _ambilSemuaBarisRincianProduk(_filter);
+      final semua = await _ambilSemuaBarisRincianProduk(
+        _filter,
+        petaKategoriProduk: _petaKategoriLokal,
+      );
+      final kategoriDariSemua = semua.baris
+          .map(kategoriMentahBarisRincian)
+          .where((e) => e.isNotEmpty)
+          .toList();
+      final adaTanpaDariSemua =
+          semua.baris.any((r) => kategoriMentahBarisRincian(r).isEmpty);
       setStateIfMounted(() {
+        _gabungkanOpsiKategori(
+          kategoriDariSemua,
+          adaTanpaKategori: _kategori.isEmpty ? adaTanpaDariSemua : null,
+        );
         _rekap = rekapProdukDariRincian(semua.baris);
         _terpotong = semua.terpotong;
       });
@@ -4276,9 +4558,18 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
   double get _totalNilai => _data.fold<double>(
       0, (jumlah, row) => jumlah + ((row['total'] as num?)?.toDouble() ?? 0));
 
+  String get _labelFilterKategoriAktif {
+    final k = _kategori.trim();
+    if (k.isEmpty) return '';
+    if (k == kTokenTanpaKategoriRincian) return 'Tanpa kategori';
+    return k;
+  }
+
   String get _subjudulFilter {
     final bagian = <String>[
       if (_cariProduk.trim().isNotEmpty) 'Produk "${_cariProduk.trim()}"',
+      if (_labelFilterKategoriAktif.isNotEmpty)
+        'Kategori "$_labelFilterKategoriAktif"',
       if (_kasir.trim().isNotEmpty) 'Kasir "${_kasir.trim()}"',
       if (_metode.trim().isNotEmpty) 'Metode "${_metode.trim()}"',
     ];
@@ -4286,7 +4577,10 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
   }
 
   Future<DynamicReportData> _reportData() async {
-    final hasil = await _ambilSemuaBarisRincianProduk(_filter);
+    final hasil = await _ambilSemuaBarisRincianProduk(
+      _filter,
+      petaKategoriProduk: _petaKategoriLokal,
+    );
     final rows = hasil.baris;
     if (mounted) setStateIfMounted(() => _terpotong = hasil.terpotong);
     final catatanPotong = hasil.terpotong
@@ -4300,7 +4594,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
         columns: const [
           DynamicReportColumn('produkKode', 'Kode'),
           DynamicReportColumn('produkNama', 'Produk'),
-          DynamicReportColumn('kategori', 'Kategori'),
+          DynamicReportColumn('kategoriTampil', 'Kategori'),
           DynamicReportColumn('satuan', 'Satuan'),
           DynamicReportColumn('qty', 'Qty Terjual', numeric: true),
           DynamicReportColumn('jumlahTransaksi', 'Jml Transaksi',
@@ -4323,6 +4617,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
         DynamicReportColumn('metode', 'Metode'),
         DynamicReportColumn('produkKode', 'Kode'),
         DynamicReportColumn('produkNama', 'Produk'),
+        DynamicReportColumn('kategoriTampil', 'Kategori'),
         DynamicReportColumn('qtyTampil', 'Qty'),
         DynamicReportColumn('hargaSatuan', 'Harga', numeric: true),
         DynamicReportColumn('diskon', 'Diskon', numeric: true),
@@ -4332,6 +4627,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
           .map((row) => {
                 ...row,
                 'total': hitungTotalBarisRincian(row),
+                'kategoriTampil': labelKategoriRincian(row['kategori']),
                 'waktuTampil': _formatWaktu(row['waktu']),
               })
           .toList(),
@@ -4357,7 +4653,8 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
                   AppTableCell.text('${row['produkNama'] ?? '-'}',
                       flex: 4,
                       style: const TextStyle(fontWeight: FontWeight.w700)),
-                  AppTableCell.text('${row['kategori'] ?? '-'}', flex: 2),
+                  AppTableCell.text(labelKategoriRincian(row['kategori']),
+                      flex: 2),
                   AppTableCell.text(
                       '${_angkaRingkasRekap(row['qty'])}'
                       '${(row['satuan'] ?? '').toString().isEmpty ? '' : ' ${row['satuan']}'}',
@@ -4384,17 +4681,19 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
 
   Widget _tabel() {
     return AppDataTable(
-      minWidth: 940,
+      minWidth: 1020,
       emptyText: 'Belum ada produk terjual pada rentang ini.',
       columns: const [
         AppTableColumn('Nota', flex: 3),
         AppTableColumn('Produk', flex: 4),
-        AppTableColumn('Metode', flex: 3),
+        AppTableColumn('Kategori', flex: 2),
+        AppTableColumn('Metode', flex: 2),
         AppTableColumn('Qty', flex: 2),
         AppTableColumn('Harga', flex: 2, align: TextAlign.right),
         AppTableColumn('Total', flex: 2, align: TextAlign.right),
       ],
       rows: _data.map((row) {
+        final katLabel = labelKategoriRincian(row['kategori']);
         return AppTableRowData(
           cells: [
             AppTableCell.text(
@@ -4408,8 +4707,13 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
               style: const TextStyle(fontSize: 12.5),
             ),
             AppTableCell.text(
+              katLabel,
+              flex: 2,
+              style: const TextStyle(fontSize: 12),
+            ),
+            AppTableCell.text(
               '${row['metode'] ?? '-'}',
-              flex: 3,
+              flex: 2,
               style: const TextStyle(fontSize: 12),
             ),
             AppTableCell.text('${row['qtyTampil'] ?? row['qty'] ?? '-'}',
@@ -4425,6 +4729,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
                   rincian: {
                     'Nota': '${row['nomorNota'] ?? '-'}',
                     'Waktu': _formatWaktu(row['waktu']),
+                    'Kategori': katLabel,
                     'Kasir': '${row['kasir'] ?? '-'}',
                     'Metode': '${row['metode'] ?? '-'}',
                     'Jumlah': '${row['qtyTampil'] ?? row['qty'] ?? '-'}',
@@ -4453,6 +4758,103 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
 
   @override
   Widget build(BuildContext context) {
+    final inputCariProduk = TextField(
+      key: const ValueKey('filter-rincian-produk-cari'),
+      decoration: const InputDecoration(
+        isDense: true,
+        labelText: 'Cari produk',
+        hintText: 'nama atau kode',
+        border: OutlineInputBorder(),
+      ),
+      onChanged: (v) => _cariProduk = v,
+      onSubmitted: (_) => _terapkan(),
+    );
+    final nilaiKategoriTerpilih = _kategori.isEmpty
+        ? ''
+        : (_kategori == kTokenTanpaKategoriRincian
+            ? kTokenTanpaKategoriRincian
+            : _daftarKategori.firstWhere(
+                (e) => e.toLowerCase() == _kategori.toLowerCase(),
+                orElse: () => _kategori,
+              ));
+    final itemDropdownKategori = <DropdownMenuItem<String>>[
+      const DropdownMenuItem<String>(
+        value: '',
+        child: Text('Semua kategori', overflow: TextOverflow.ellipsis),
+      ),
+      ..._daftarKategori.map(
+        (kat) => DropdownMenuItem<String>(
+          value: kat,
+          child: Text(kat, overflow: TextOverflow.ellipsis),
+        ),
+      ),
+      if (_adaTanpaKategori || _kategori == kTokenTanpaKategoriRincian)
+        const DropdownMenuItem<String>(
+          value: kTokenTanpaKategoriRincian,
+          child: Text('Tanpa kategori', overflow: TextOverflow.ellipsis),
+        ),
+    ];
+    final dropdownKategoriProduk = DropdownButtonFormField<String>(
+      key: ValueKey(
+          'filter-rincian-kategori-$nilaiKategoriTerpilih-${itemDropdownKategori.length}'),
+      value: nilaiKategoriTerpilih,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        isDense: true,
+        labelText: 'Kategori Produk',
+        prefixIcon: Icon(Icons.category_outlined),
+        border: OutlineInputBorder(),
+      ),
+      items: itemDropdownKategori,
+      onChanged: (v) {
+        final baru = v ?? '';
+        if (baru == _kategori) return;
+        setStateIfMounted(() => _kategori = baru);
+        _terapkan();
+      },
+    );
+    final dropdownKasir = DropdownButtonFormField<String>(
+      value: _kasir.isEmpty && !_bolehFilterKasir ? null : _kasir,
+      isExpanded: true,
+      decoration: const InputDecoration(
+          isDense: true,
+          labelText: 'Kasir',
+          prefixIcon: Icon(Icons.person_outline),
+          border: OutlineInputBorder()),
+      items: [
+        if (_bolehFilterKasir)
+          const DropdownMenuItem(value: '', child: Text('Semua kasir')),
+        ..._daftarKasir.map((k) => DropdownMenuItem(value: k, child: Text(k))),
+      ],
+      onChanged: _bolehFilterKasir
+          ? (v) {
+              final baru = v ?? '';
+              if (baru == _kasir) return;
+              setStateIfMounted(() => _kasir = baru);
+              _terapkan();
+            }
+          : null,
+    );
+    final dropdownMetode = DropdownButtonFormField<String>(
+      value: _metode.isEmpty ? '' : _metode,
+      isExpanded: true,
+      decoration: const InputDecoration(
+          isDense: true,
+          labelText: 'Metode Bayar',
+          prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+          border: OutlineInputBorder()),
+      items: [
+        const DropdownMenuItem(value: '', child: Text('Semua metode')),
+        ..._daftarMetode.map((m) => DropdownMenuItem(value: m, child: Text(m))),
+      ],
+      onChanged: (v) {
+        final baru = v ?? '';
+        if (baru == _metode) return;
+        setStateIfMounted(() => _metode = baru);
+        _terapkan();
+      },
+    );
+
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -4466,62 +4868,46 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
             onTerapkan: _terapkan,
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-            child: Row(children: [
-              Expanded(
-                child: TextField(
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    labelText: 'Cari produk',
-                    hintText: 'nama atau kode',
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (v) => _cariProduk = v,
-                  onSubmitted: (_) => _terapkan(),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: _kasir.isEmpty && !_bolehFilterKasir ? null : _kasir,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                      isDense: true,
-                      labelText: 'Kasir',
-                      prefixIcon: Icon(Icons.person_outline),
-                      border: OutlineInputBorder()),
-                  items: [
-                    if (_bolehFilterKasir)
-                      const DropdownMenuItem(
-                          value: '', child: Text('Semua kasir')),
-                    ..._daftarKasir
-                        .map((k) => DropdownMenuItem(value: k, child: Text(k))),
-                  ],
-                  onChanged: _bolehFilterKasir
-                      ? (v) => setStateIfMounted(() => _kasir = v ?? '')
-                      : null,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: _metode.isEmpty ? '' : _metode,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                      isDense: true,
-                      labelText: 'Metode Bayar',
-                      prefixIcon: Icon(Icons.account_balance_wallet_outlined),
-                      border: OutlineInputBorder()),
-                  items: [
-                    const DropdownMenuItem(
-                        value: '', child: Text('Semua metode')),
-                    ..._daftarMetode
-                        .map((m) => DropdownMenuItem(value: m, child: Text(m))),
-                  ],
-                  onChanged: (v) => setStateIfMounted(() => _metode = v ?? ''),
-                ),
-              ),
-            ]),
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth >= 820) {
+                  return Row(children: [
+                    Expanded(child: inputCariProduk),
+                    const SizedBox(width: 8),
+                    Expanded(child: dropdownKategoriProduk),
+                    const SizedBox(width: 8),
+                    Expanded(child: dropdownKasir),
+                    const SizedBox(width: 8),
+                    Expanded(child: dropdownMetode),
+                  ]);
+                }
+                if (constraints.maxWidth >= 520) {
+                  return Column(children: [
+                    Row(children: [
+                      Expanded(child: inputCariProduk),
+                      const SizedBox(width: 8),
+                      Expanded(child: dropdownKategoriProduk),
+                    ]),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Expanded(child: dropdownKasir),
+                      const SizedBox(width: 8),
+                      Expanded(child: dropdownMetode),
+                    ]),
+                  ]);
+                }
+                return Column(children: [
+                  inputCariProduk,
+                  const SizedBox(height: 8),
+                  dropdownKategoriProduk,
+                  const SizedBox(height: 8),
+                  dropdownKasir,
+                  const SizedBox(height: 8),
+                  dropdownMetode,
+                ]);
+              },
+            ),
           ),
           if (!_bolehFilterKasir && !_memuat)
             const Padding(

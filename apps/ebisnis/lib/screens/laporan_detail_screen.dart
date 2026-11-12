@@ -12,6 +12,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../api_client.dart';
 import '../app_variant.dart';
+import '../services/master_offline.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
@@ -85,6 +86,8 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
         _ => {},
       };
   int? _satkerId;
+  int _jenisProdukId = 0;
+  List<Map<String, dynamic>> _daftarJenisProduk = const [];
 
   int _versiPermintaan = 0;
   bool _memuat = false;
@@ -98,6 +101,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
   DateTime? _cacheDisimpanPada;
 
   bool get _adaFilterProduk => widget.item['produk'] == true;
+  bool get _adaFilterKategoriProduk => widget.item['kategoriProduk'] == true;
   bool get _adaFilterPelanggan => widget.item['pelanggan'] == true;
   bool get _adaFilterPerToko => widget.item['perToko'] == true;
 
@@ -126,6 +130,9 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
     final adaBawaan = widget.satuanKerja
         .any((e) => (e['id'] as num?)?.toInt() == widget.satuanKerjaDefault);
     _satkerId = adaBawaan ? widget.satuanKerjaDefault : 0;
+    if (_adaFilterKategoriProduk) {
+      _muatOpsiJenisProduk();
+    }
     if (widget.hasilAwal != null) {
       _hasil = Map<String, dynamic>.from(widget.hasilAwal!);
     } else if (widget.autoTampilkan) {
@@ -135,6 +142,46 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
         }
       });
     }
+  }
+
+  Future<void> _muatOpsiJenisProduk() async {
+    try {
+      final res = await ApiClient.instance
+          .aksi('laporan_kategori_produk_opsi', const <String, dynamic>{});
+      if (!mounted) return;
+      final list = ((res['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => <String, dynamic>{
+                'id': (e['id'] as num?)?.toInt() ?? 0,
+                'nama': '${e['nama'] ?? ''}'.trim(),
+              })
+          .where((e) => (e['id'] as int) > 0 && (e['nama'] as String).isNotEmpty)
+          .toList();
+      if (list.isNotEmpty) {
+        setStateIfMounted(() => _daftarJenisProduk = list);
+        return;
+      }
+    } catch (_) {}
+    try {
+      final resMaster = await MasterOffline.daftarDenganCache(
+        'jenis_produk_list',
+        const {'page': 1, 'page_size': 500},
+        'master:jenis_produk:opsi_laporan_detail',
+      );
+      if (!mounted) return;
+      final list = ((resMaster['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => <String, dynamic>{
+                'id': (e['id'] as num?)?.toInt() ?? 0,
+                'nama': '${e['nama'] ?? ''}'.trim(),
+              })
+          .where((e) => (e['id'] as int) > 0 && (e['nama'] as String).isNotEmpty)
+          .toList()
+        ..sort((a, b) => (a['nama'] as String)
+            .toLowerCase()
+            .compareTo((b['nama'] as String).toLowerCase()));
+      setStateIfMounted(() => _daftarJenisProduk = list);
+    } catch (_) {}
   }
 
   @override
@@ -155,6 +202,8 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
       if (_tglSampai != null) 'tglSampai': _formatTgl.format(_tglSampai!),
       if (_adaFilterProduk && _controllerProduk.text.trim().isNotEmpty)
         'qProduk': _controllerProduk.text.trim(),
+      if (_adaFilterKategoriProduk && _jenisProdukId > 0)
+        'jenisProdukId': '$_jenisProdukId',
       if (_adaFilterPelanggan && _controllerPelanggan.text.trim().isNotEmpty)
         'qPelanggan': _controllerPelanggan.text.trim(),
       if (_adaFilterPerToko && _modeLaporan.isEmpty && _perToko)
@@ -477,6 +526,44 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
                       controller: _controllerProduk,
                       labelText: 'Cari Produk',
                       scanProduk: true,
+                    ),
+                  ],
+                  if (_adaFilterKategoriProduk) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      key: ValueKey(
+                          'filter-laporan-jenis-produk-$_jenisProdukId-${_daftarJenisProduk.length}'),
+                      value: _daftarJenisProduk.any(
+                                  (e) => (e['id'] as int) == _jenisProdukId) ||
+                              _jenisProdukId == 0
+                          ? _jenisProdukId
+                          : 0,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Kategori Produk',
+                        prefixIcon: Icon(Icons.category_outlined),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: [
+                        const DropdownMenuItem<int>(
+                          value: 0,
+                          child: Text('Semua Kategori'),
+                        ),
+                        ..._daftarJenisProduk.map(
+                          (jp) => DropdownMenuItem<int>(
+                            value: jp['id'] as int,
+                            child: Text(
+                              '${jp['nama'] ?? ''}',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: (v) => setStateIfMounted(() {
+                        _hapusHasil();
+                        _jenisProdukId = v ?? 0;
+                      }),
                     ),
                   ],
                   if (_adaFilterPelanggan) ...[
