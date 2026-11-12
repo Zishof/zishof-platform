@@ -20,6 +20,7 @@ import '../widgets/app_shell.dart';
 import '../widgets/pencarian_produk_banbox.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
+import '../services/simpan_berkas_helper.dart';
 
 final _bulkRp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -1091,10 +1092,9 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
       );
       final fileName =
           'Template_Bulk_Kulakan_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx';
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan Template Bulk Kulakan',
         fileName: fileName,
-        type: FileType.custom,
         allowedExtensions: const ['xlsx'],
         bytes: bytes,
       );

@@ -15,6 +15,7 @@ import '../widgets/proses_simpan_master.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
 import '../widgets/aksi_baris_menu.dart';
+import '../services/simpan_berkas_helper.dart';
 
 /// Layar siklus akuntansi: **Saldo Awal**, **Jurnal Penyesuaian Berkala**, dan **Tutup Buku**.
 ///
@@ -413,11 +414,10 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
       ],
       rows: barisUnduh,
     );
-    final path = await FilePicker.platform.saveFile(
+    final path = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan Saldo Awal',
         fileName:
             'Saldo_Awal_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx',
-        type: FileType.custom,
         allowedExtensions: const ['xlsx'],
         bytes: bytes);
     if (path != null) await File(path).writeAsBytes(bytes);

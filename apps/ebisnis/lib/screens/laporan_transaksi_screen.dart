@@ -408,7 +408,9 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
           .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
           .replaceAll(RegExp(r'^-|-$'), '');
       if (format == 'pdf') {
-        await DynamicReportDesigner.exportPdf(data, model, '$slug.pdf');
+        if (!mounted) return;
+        await DynamicReportDesigner.exportPdf(
+            data, model, '$slug.pdf', context: context);
       } else if (format == 'excel') {
         await DynamicReportDesigner.exportExcel(
             context, data, model, '$slug.xlsx');
@@ -3792,8 +3794,9 @@ Future<void> lihatRincianPenerimaan(
             final nama =
                 'rincian-penerimaan-${ringkasan['tanggal'] ?? 'harian'}';
             if (format == 'pdf') {
+              if (!context.mounted) return;
               await DynamicReportDesigner.exportPdf(
-                  laporan, model, '$nama.pdf');
+                  laporan, model, '$nama.pdf', context: context);
             } else {
               await DynamicReportDesigner.exportExcel(
                   context, laporan, model, '$nama.xlsx');

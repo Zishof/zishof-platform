@@ -22,6 +22,7 @@ import '../widgets/pemilih_anggaran.dart';
 import '../widgets/penanda_data_tersimpan.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/aksi_baris_menu.dart';
+import '../services/simpan_berkas_helper.dart';
 
 /// Layar **Jurnal Umum** — pencatatan jurnal manual dari POS.
 ///
@@ -478,10 +479,9 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
             'Jurnal_Umum_${_fmtTanggal.format(_mulai)}_sd_${_fmtTanggal.format(_sampai)}.xlsx';
       }
 
-      final savePath = await FilePicker.platform.saveFile(
+      final savePath = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan Berkas Jurnal Umum',
         fileName: namaBerkas,
-        type: FileType.custom,
         allowedExtensions: ['xlsx'],
         bytes: bytes,
       );

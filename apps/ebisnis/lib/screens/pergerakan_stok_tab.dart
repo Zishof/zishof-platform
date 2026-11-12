@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:core_db/core_db.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -18,6 +17,7 @@ import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/aksi_baris_menu.dart';
 import '../widgets/rincian_intip_dialog.dart';
+import '../services/simpan_berkas_helper.dart';
 
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
 
@@ -247,11 +247,10 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
         );
       }
 
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan Rekap Pergerakan Stok',
         fileName: namaFile,
         bytes: bytes,
-        type: FileType.custom,
         allowedExtensions: ['xlsx'],
       );
       if (path == null) return;
@@ -1186,11 +1185,10 @@ class _DialogDetailPergerakanStokState
       final namaFile = (res['namaFile'] as String?) ??
           'Buku_Besar_${widget.namaProduk}_${_formatTglParam(widget.tglMulai)}.xlsx';
 
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan Buku Besar Produk',
         fileName: namaFile,
         bytes: bytes,
-        type: FileType.custom,
         allowedExtensions: ['xlsx'],
       );
       if (path == null) return;

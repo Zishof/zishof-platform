@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -14,6 +13,7 @@ import '../widgets/aksi_baris_menu.dart';
 import '../widgets/app_components.dart';
 import '../widgets/rincian_intip_dialog.dart';
 import '../widgets/safe_state.dart';
+import '../services/simpan_berkas_helper.dart';
 
 /// Tab PKM (Penentuan Kuantitas Maksimum & Rekomendasi Purchase Order)
 ///
@@ -184,11 +184,10 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
       final namaFile = res['namaFile'] as String? ?? 'format-PKM.xlsx';
       final bytes = base64Decode(base64Str);
 
-      final result = await FilePicker.platform.saveFile(
+      final result = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan Lembar Kerja PKM Excel',
         fileName: namaFile,
         bytes: bytes,
-        type: FileType.custom,
         allowedExtensions: ['xlsx'],
       );
 

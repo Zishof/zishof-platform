@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:core_db/core_db.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -22,6 +21,7 @@ import '../widgets/jejak_galat.dart';
 import '../widgets/aksi_baris_menu.dart';
 import '../widgets/rincian_intip_dialog.dart';
 import 'pergerakan_stok_tab.dart';
+import '../services/simpan_berkas_helper.dart';
 
 final _mutasiRp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -447,10 +447,9 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
           : 'Mutasi_Barang';
       final nama =
           '${prefix}_${_mutasiTanggal.format(_dari)}_sd_${_mutasiTanggal.format(_sampai)}.xlsx';
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan Ringkasan Mutasi Barang',
         fileName: nama,
-        type: FileType.custom,
         allowedExtensions: const ['xlsx'],
         bytes: bytes,
       );

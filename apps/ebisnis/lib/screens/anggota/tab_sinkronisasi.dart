@@ -41,6 +41,13 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
   int? _jurusanId;
   int? _yayasanId;
   int? _sekolahId;
+
+  /// Secara bawaan bernilai `true` agar satu klik **"Sinkronkan Semua"** atau
+  /// **"Jalankan Sinkronisasi"** menyertakan **SELURUH tahun masuk / angkatan**
+  /// lintas pondok pesantren, sekolah, dan perguruan tinggi (termasuk santri
+  /// Tahfidz, Tafaqquh, SMA/SMP/SD yang masuk di tahun-tahun sebelumnya).
+  bool _semuaTahun = true;
+
   final _tahunController =
       TextEditingController(text: '${DateTime.now().year}');
 
@@ -66,13 +73,14 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
   String? _galatCacheOffline;
 
   Future<void> _jalankanSemua() async {
-    if (_koperasiId == null) {
-      setStateIfMounted(
-          () => _pesanErrorSemua = 'Koperasi wajib dipilih terlebih dahulu.');
+    final int? tahun = _semuaTahun
+        ? null
+        : int.tryParse(_tahunController.text.trim());
+    if (!_semuaTahun && tahun == null) {
+      setStateIfMounted(() => _pesanErrorSemua =
+          'Isi Tahun Angkatan/Masuk yang valid, atau aktifkan "Semua Tahun Masuk / Angkatan".');
       return;
     }
-    final tahun =
-        int.tryParse(_tahunController.text.trim()) ?? DateTime.now().year;
     setStateIfMounted(() {
       _menjalankanSemua = true;
       _pesanErrorSemua = null;
@@ -87,8 +95,9 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
           () => _labelProgresSemua = 'Menyingkronkan Data ${s.$2}...');
       try {
         final hasil = await ApiClient.instance.aksi(s.$1, {
-          'koperasi_id': _koperasiId,
-          if (s.$3) 'tahun': tahun,
+          if (_koperasiId != null) 'koperasi_id': _koperasiId,
+          if (s.$3 && _semuaTahun) 'semua_tahun': true,
+          if (s.$3 && !_semuaTahun && tahun != null) 'tahun': tahun,
         });
         hasilPerSumber.add({
           'label': s.$2,
@@ -98,6 +107,9 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
           'description': '${hasil['description'] ?? ''}'.trim(),
           'dilewatiDosenGuru': hasil['dilewatiDosenGuru'] ?? 0,
           'dilewatiTidakAktif': hasil['dilewatiTidakAktif'] ?? 0,
+          'rincianUnit': hasil['rincianUnit'] is Map
+              ? Map<String, dynamic>.from(hasil['rincianUnit'] as Map)
+              : const <String, dynamic>{},
           // Id pegawai yang gagal (server membatasi 5). Log galat server
           // dikunci `idPegawai=<id>`, jadi daftar inilah yang membuat perintah
           // "buka Log Error untuk baris yang gagal" bisa dijalankan.
@@ -163,14 +175,10 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
           // Instalasi satu-institusi umumnya hanya memiliki satu koperasi.
           // Pilih otomatis agar tombol "Sinkronkan Semua" langsung siap dan
           // pengguna tidak mengira dropdown kosong/terlewat dipilih.
-          if (_koperasi.length == 1) {
+          if (_koperasi.isNotEmpty && _koperasiId == null) {
             _koperasiId = (_koperasi.first['id'] as num?)?.toInt();
           }
-          _pesanErrorSemua = _koperasi.isEmpty
-              ? 'Master Koperasi belum tersedia di server. Deploy backend SVN '
-                  'r78394 atau buat satu Koperasi terlebih dahulu, lalu tekan '
-                  'Muat Ulang Referensi.'
-              : null;
+          _pesanErrorSemua = null;
           _fakultas = hasil[1];
           _yayasan = hasil[2];
         });
@@ -209,9 +217,12 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
   }
 
   Future<void> _jalankan() async {
-    final tahun = int.tryParse(_tahunController.text.trim());
-    if (_koperasiId == null || tahun == null) {
-      setStateIfMounted(() => _pesanError = 'Koperasi dan Tahun wajib diisi.');
+    final int? tahun = _semuaTahun
+        ? null
+        : int.tryParse(_tahunController.text.trim());
+    if (!_semuaTahun && tahun == null) {
+      setStateIfMounted(() => _pesanError =
+          'Isi Tahun Angkatan/Masuk yang valid, atau aktifkan "Semua Tahun Masuk / Angkatan".');
       return;
     }
     setStateIfMounted(() {
@@ -223,14 +234,19 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
       final hasil = await ApiClient.instance.aksi(
         _modeMahasiswa ? 'sinkron_mahasiswa' : 'sinkron_siswa',
         {
-          'koperasi_id': _koperasiId,
-          'tahun': tahun,
+          if (_koperasiId != null) 'koperasi_id': _koperasiId,
+          if (_semuaTahun) 'semua_tahun': true,
+          if (!_semuaTahun && tahun != null) 'tahun': tahun,
           if (_modeMahasiswa) 'fakultas_id': _fakultasId,
           if (_modeMahasiswa) 'jurusan_id': _jurusanId,
           if (!_modeMahasiswa) 'yayasan_id': _yayasanId,
           if (!_modeMahasiswa) 'sekolah_id': _sekolahId,
         },
       );
+      try {
+        await SinkronisasiTabelService.instance.sinkronkanAnggota();
+        widget.onSinkronSelesai?.call();
+      } catch (_) {}
       if (mounted) setStateIfMounted(() => _hasilTerakhir = hasil);
     } catch (e) {
       setStateIfMounted(() => _pesanError = terapkanGalat(e));
@@ -284,22 +300,35 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
                     color: AppColors.primary),
               ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<int?>(
-                value: _koperasiId,
-                decoration: AppFormStyle.fieldDecoration(context,
-                    labelText: 'Koperasi *'),
-                items: _koperasi
-                    .map((k) => DropdownMenuItem<int?>(
-                        value: k['id'] as int, child: Text('${k['nama']}')))
-                    .toList(),
-                onChanged: (v) => setStateIfMounted(() => _koperasiId = v),
+              if (_koperasi.isNotEmpty) ...[
+                DropdownButtonFormField<int?>(
+                  value: _koperasiId,
+                  decoration: AppFormStyle.fieldDecoration(context,
+                      labelText: 'Koperasi'),
+                  items: _koperasi
+                      .map((k) => DropdownMenuItem<int?>(
+                          value: k['id'] as int, child: Text('${k['nama']}')))
+                      .toList(),
+                  onChanged: (v) => setStateIfMounted(() => _koperasiId = v),
+                ),
+                const SizedBox(height: 12),
+              ],
+              AppFormSwitchTile(
+                title:
+                    'Sinkronkan Semua Tahun Masuk / Angkatan (Direkomendasikan)',
+                subtitle:
+                    'Menyertakan seluruh santri/siswa aktif lintas pondok pesantren & sekolah serta seluruh angkatan mahasiswa tanpa terkunci 1 tahun saja.',
+                value: _semuaTahun,
+                onChanged: (v) => setStateIfMounted(() => _semuaTahun = v),
               ),
-              const SizedBox(height: 12),
-              AppFormTextField(
-                label: 'Tahun Angkatan/Masuk (khusus Siswa & Mahasiswa)',
-                controller: _tahunController,
-                keyboardType: TextInputType.number,
-              ),
+              if (!_semuaTahun) ...[
+                const SizedBox(height: 12),
+                AppFormTextField(
+                  label: 'Tahun Angkatan/Masuk (khusus Siswa & Mahasiswa)',
+                  controller: _tahunController,
+                  keyboardType: TextInputType.number,
+                ),
+              ],
               const SizedBox(height: 16),
               if (_pesanErrorSemua != null) ...[
                 Container(
@@ -333,9 +362,7 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: _menjalankanSemua || _koperasi.isEmpty
-                      ? null
-                      : _jalankanSemua,
+                  onPressed: _menjalankanSemua ? null : _jalankanSemua,
                   icon: _menjalankanSemua
                       ? const SizedBox(
                           width: 18,
@@ -475,6 +502,35 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
                               style: const TextStyle(fontSize: 11.5)),
                         ],
                         if (error == null &&
+                            r['rincianUnit'] is Map &&
+                            (r['rincianUnit'] as Map).isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: (r['rincianUnit'] as Map)
+                                .entries
+                                .map((e) => Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary
+                                            .withValues(alpha: 0.08),
+                                        borderRadius:
+                                            BorderRadius.circular(999),
+                                      ),
+                                      child: Text(
+                                        '${e.key}: ${e.value}',
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.primary),
+                                      ),
+                                    ))
+                                .toList(),
+                          ),
+                        ],
+                        if (error == null &&
                             (dilewatiDosenGuru > 0 ||
                                 dilewatiTidakAktif > 0)) ...[
                           const SizedBox(height: 3),
@@ -543,22 +599,33 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
                     setStateIfMounted(() => _modeMahasiswa = v.first),
               ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<int?>(
-                value: _koperasiId,
-                decoration: AppFormStyle.fieldDecoration(context,
-                    labelText: 'Koperasi *'),
-                items: _koperasi
-                    .map((k) => DropdownMenuItem<int?>(
-                        value: k['id'] as int, child: Text('${k['nama']}')))
-                    .toList(),
-                onChanged: (v) => setStateIfMounted(() => _koperasiId = v),
+              if (_koperasi.isNotEmpty) ...[
+                DropdownButtonFormField<int?>(
+                  value: _koperasiId,
+                  decoration: AppFormStyle.fieldDecoration(context,
+                      labelText: 'Koperasi'),
+                  items: _koperasi
+                      .map((k) => DropdownMenuItem<int?>(
+                          value: k['id'] as int, child: Text('${k['nama']}')))
+                      .toList(),
+                  onChanged: (v) => setStateIfMounted(() => _koperasiId = v),
+                ),
+                const SizedBox(height: 12),
+              ],
+              AppFormSwitchTile(
+                title: 'Semua Tahun Masuk / Angkatan',
+                value: _semuaTahun,
+                onChanged: (v) => setStateIfMounted(() => _semuaTahun = v),
               ),
               const SizedBox(height: 12),
-              AppFormTextField(
-                label: _modeMahasiswa ? 'Tahun Angkatan *' : 'Tahun Masuk *',
-                controller: _tahunController,
-                keyboardType: TextInputType.number,
-              ),
+              if (!_semuaTahun) ...[
+                AppFormTextField(
+                  label: _modeMahasiswa ? 'Tahun Angkatan *' : 'Tahun Masuk *',
+                  controller: _tahunController,
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 12),
+              ],
               if (_modeMahasiswa) ...[
                 DropdownButtonFormField<int?>(
                   value: _fakultasId,
@@ -647,34 +714,65 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
           const SizedBox(height: 12),
           AppSectionCard(
             judul: 'Hasil Sinkronisasi Terakhir',
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: AppKpiCard(
-                    icon: Icons.groups_outlined,
-                    warna: AppColors.primary,
-                    nilai: '${_hasilTerakhir!['total'] ?? 0}',
-                    label: 'Total Kandidat',
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppKpiCard(
+                        icon: Icons.groups_outlined,
+                        warna: AppColors.primary,
+                        nilai: '${_hasilTerakhir!['total'] ?? 0}',
+                        label: 'Total Kandidat',
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: AppKpiCard(
+                        icon: Icons.check_circle_outline,
+                        warna: AppColors.success,
+                        nilai: '${_hasilTerakhir!['berhasil'] ?? 0}',
+                        label: 'Berhasil',
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: AppKpiCard(
+                        icon: Icons.error_outline,
+                        warna: AppColors.danger,
+                        nilai: '${_hasilTerakhir!['gagal'] ?? 0}',
+                        label: 'Gagal',
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: AppKpiCard(
-                    icon: Icons.check_circle_outline,
-                    warna: AppColors.success,
-                    nilai: '${_hasilTerakhir!['berhasil'] ?? 0}',
-                    label: 'Berhasil',
+                if (_hasilTerakhir!['rincianUnit'] is Map &&
+                    (_hasilTerakhir!['rincianUnit'] as Map).isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: (_hasilTerakhir!['rincianUnit'] as Map)
+                        .entries
+                        .map((e) => Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                '${e.key}: ${e.value}',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primary),
+                              ),
+                            ))
+                        .toList(),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: AppKpiCard(
-                    icon: Icons.error_outline,
-                    warna: AppColors.danger,
-                    nilai: '${_hasilTerakhir!['gagal'] ?? 0}',
-                    label: 'Gagal',
-                  ),
-                ),
+                ],
               ],
             ),
           ),

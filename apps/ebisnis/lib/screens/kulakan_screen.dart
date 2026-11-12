@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:core_hw/core_hw.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:flutter/material.dart';
@@ -26,6 +25,7 @@ import 'retur_pembelian_screen.dart';
 import 'kulakan_bulk_entry_screen.dart';
 import 'pengadaan_cetak_util.dart';
 import '../widgets/jejak_galat.dart';
+import '../services/simpan_berkas_helper.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -1511,10 +1511,9 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
     required String judulDialog,
     required String pesanSukses,
   }) async {
-    final path = await FilePicker.platform.saveFile(
+    final path = await SimpanBerkasHelper.simpanBytes(
       dialogTitle: judulDialog,
       fileName: namaFile,
-      type: FileType.custom,
       allowedExtensions: [ekstensi],
       bytes: bytes,
     );

@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -17,6 +16,7 @@ import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import 'tab_mutasi_tabungan.dart' show PilihAnggotaSheet;
 import '../../widgets/jejak_galat.dart';
+import '../../services/simpan_berkas_helper.dart';
 
 final _rpPembantuPiutang =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -209,11 +209,10 @@ class _AnggotaTabPembantuPiutangState extends State<AnggotaTabPembantuPiutang> w
       );
       final nama =
           'Buku_Besar_Pembantu_Piutang_${DateFormat('yyyyMMdd').format(_dari)}_${DateFormat('yyyyMMdd').format(_sampai)}.xlsx';
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan Buku Besar Pembantu Piutang',
         fileName: nama,
         bytes: bytes,
-        type: FileType.custom,
         allowedExtensions: const ['xlsx'],
       );
       if (path != null && !Platform.isAndroid && !Platform.isIOS) {

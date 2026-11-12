@@ -21,6 +21,7 @@ import '../../widgets/safe_state.dart';
 import 'tab_mutasi_tabungan.dart' show PilihAnggotaSheet;
 import '../../widgets/jejak_galat.dart';
 import '../../widgets/aksi_baris_menu.dart';
+import '../../services/simpan_berkas_helper.dart';
 
 final _formatRpMutasiHutang =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -426,11 +427,10 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
     );
     final nama =
         'Mutasi_Piutang_${DateFormat('yyyyMMdd').format(_dari)}_${DateFormat('yyyyMMdd').format(_sampai)}.xlsx';
-    final path = await FilePicker.platform.saveFile(
+    final path = await SimpanBerkasHelper.simpanBytes(
       dialogTitle: 'Simpan Mutasi Piutang (Excel)',
       fileName: nama,
       bytes: bytes,
-      type: FileType.custom,
       allowedExtensions: const ['xlsx'],
     );
     if (path != null) await File(path).writeAsBytes(bytes);

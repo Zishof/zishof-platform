@@ -7,6 +7,7 @@ import '../api_client.dart';
 import '../services/simple_xlsx.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../widgets/safe_state.dart';
+import '../services/simpan_berkas_helper.dart';
 
 /// Jenis dokumen pengadaan yang dapat diisi massal.
 enum JenisPengadaanBulk { pr, po, bast }
@@ -280,7 +281,7 @@ class _PengadaanBulkEntryScreenState extends State<PengadaanBulkEntryScreen> {
           ['8999999999999', 'Contoh Barang', 12, 7500],
         ],
       );
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan format bulk pengadaan',
         fileName: 'format-bulk-pengadaan.xlsx',
         bytes: bytes,

@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../services/simple_xlsx.dart';
 
@@ -22,6 +21,7 @@ import '../widgets/kilau_perubahan.dart';
 import 'laporan_detail_screen.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
+import '../services/simpan_berkas_helper.dart';
 
 /// Katalog ~150 laporan (32 kategori) -- padanan `laporan.html`/`laporan-renderer.js`
 /// Electron & `laporan_laporan.jsp`. Metadata katalog (`laporan_katalog`) SEPENUHNYA
@@ -984,10 +984,9 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
       );
       final namaFile =
           '${widget.judul.replaceAll(RegExp(r"[^A-Za-z0-9_]+"), "_")}_${_formatTanggalLaporan.format(_mulai)}_${_formatTanggalLaporan.format(_sampai)}.xlsx';
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan Excel ${widget.judul}',
         fileName: namaFile,
-        type: FileType.custom,
         allowedExtensions: const ['xlsx'],
         bytes: bytes,
       );

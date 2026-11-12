@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:core_db/core_db.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
@@ -20,6 +19,8 @@ import '../widgets/penanda_data_tersimpan.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
 import '../widgets/dialog_analisis_data.dart';
+import '../services/simpan_berkas_helper.dart';
+import 'pengadaan_cetak_util.dart';
 
 /// Jalankan+tampilkan SATU laporan dari katalog (spec §Laporan-Laporan) --
 /// form filter dibangun murni dari metadata katalog (`produk`/`pelanggan`/
@@ -350,9 +351,13 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
       }
       final bytes = base64Decode(b64);
       if (!mounted) return;
-      await Printing.layoutPdf(
-          onLayout: (_) async => Uint8List.fromList(bytes),
-          name: '${widget.item['id']}.pdf');
+      final judulFile =
+          (widget.item['judul'] as String? ?? widget.item['id']).toString().trim();
+      await tampilkanPratinjauPdf(
+        context,
+        judul: judulFile.isEmpty ? '${widget.item['id']}' : judulFile,
+        isi: Uint8List.fromList(bytes),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -413,11 +418,10 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
           periode: '${hasil['periode'] ?? ''}');
       final namaFile =
           '${(widget.item['judul'] as String? ?? widget.item['id']).toString().replaceAll(RegExp(r'[^A-Za-z0-9 _-]'), '')}.xlsx';
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
           dialogTitle: 'Simpan Laporan (Excel)',
           fileName: namaFile,
           bytes: bytes,
-          type: FileType.custom,
           allowedExtensions: ['xlsx']);
       if (path == null) return;
       // Sama seperti ekspor Excel Produk -- Desktop hanya mengembalikan path,

@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -15,6 +14,7 @@ import '../widgets/penanda_data_tersimpan.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
 import 'posting_akun_perbaikan.dart';
+import '../services/simpan_berkas_helper.dart';
 
 /// Dialog posting jurnal untuk rantai pengadaan &rarr; pembayaran toko:
 /// kulakan, pembayaran hutang supplier, penerimaan piutang customer, dan
@@ -233,10 +233,9 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
       );
       final namaFile =
           '${widget.judul.replaceAll(RegExp(r"[^A-Za-z0-9_]+"), "_")}_${_fmt.format(_mulai)}_${_fmt.format(_sampai)}.xlsx';
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan Excel ${widget.judul}',
         fileName: namaFile,
-        type: FileType.custom,
         allowedExtensions: const ['xlsx'],
         bytes: bytes,
       );

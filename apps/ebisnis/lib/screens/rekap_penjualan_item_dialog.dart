@@ -2,7 +2,6 @@ import '../widgets/app_components.dart';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -17,6 +16,7 @@ import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/penanda_data_tersimpan.dart';
+import '../services/simpan_berkas_helper.dart';
 
 final _formatRupiahDialog =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -296,11 +296,10 @@ class _RekapPenjualanItemDialogState extends State<RekapPenjualanItemDialog> {
       );
       final namaFile = 'Rekap_Penjualan_Item_$_tglFormatted.xlsx';
 
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan Rekap Penjualan Item Excel',
         fileName: namaFile,
         bytes: bytes,
-        type: FileType.custom,
         allowedExtensions: ['xlsx'],
       );
       if (path == null) return;

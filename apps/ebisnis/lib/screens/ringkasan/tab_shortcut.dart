@@ -698,11 +698,72 @@ Future<void> bukaShortcutMenu(
   }
 
   // Default: jenis == 'MENU'
+  final menuTarget = _menuEBisnisDariShortcutTarget(target);
+  if (menuTarget != null &&
+      (MediaQuery.maybeSizeOf(context)?.width ?? 0) >= kAmbangLebarDesktop &&
+      !Navigator.of(context).canPop()) {
+    bukaMenuEBisnis(context, menuTarget);
+    return;
+  }
   final layar = _bangunLayarMenuTarget(target);
   if (layar != null) {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => layar),
     );
+  }
+}
+
+MenuEBisnis? _menuEBisnisDariShortcutTarget(String target) {
+  switch (target.trim().toLowerCase()) {
+    case 'kasir':
+      return MenuEBisnis.kasir;
+    case 'pesanan':
+      return MenuEBisnis.pesanan;
+    case 'anggota':
+      return MenuEBisnis.anggota;
+    case 'produk':
+      return MenuEBisnis.produk;
+    case 'jenis_produk':
+    case 'jenisproduk':
+      return MenuEBisnis.jenisProduk;
+    case 'uom':
+    case 'uom_konversi':
+      return MenuEBisnis.uom;
+    case 'grup_produk':
+    case 'grupproduk':
+      return MenuEBisnis.grupProduk;
+    case 'rak_produk':
+    case 'rakproduk':
+      return MenuEBisnis.rakProduk;
+    case 'stokopname':
+    case 'stok_opname':
+      return MenuEBisnis.stokOpname;
+    case 'kedaluwarsa':
+      return MenuEBisnis.kedaluwarsa;
+    case 'kulakan':
+      return MenuEBisnis.kulakan;
+    case 'penyedia':
+    case 'supplier':
+      return MenuEBisnis.penyedia;
+    case 'diskon':
+      return MenuEBisnis.diskon;
+    case 'pembayaran':
+    case 'cara_bayar':
+      return MenuEBisnis.caraBayar;
+    case 'returpenjualan':
+    case 'retur_penjualan':
+      return MenuEBisnis.returPenjualan;
+    case 'riwayatpenjualan':
+    case 'riwayat_penjualan':
+      return MenuEBisnis.riwayatPenjualan;
+    case 'laporantransaksi':
+    case 'laporan_transaksi':
+      return MenuEBisnis.laporanTransaksi;
+    case 'laporan':
+    case 'laporan_laporan':
+      return MenuEBisnis.laporanLaporan;
+    default:
+      return null;
   }
 }
 

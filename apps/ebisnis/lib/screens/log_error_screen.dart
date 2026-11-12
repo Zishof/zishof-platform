@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:core_db/core_db.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -14,6 +13,7 @@ import '../widgets/safe_state.dart';
 import '../api_client.dart';
 import '../widgets/jejak_galat.dart';
 import '../widgets/aksi_baris_menu.dart';
+import '../services/simpan_berkas_helper.dart';
 
 const _urlIssueBaruGithub =
     'https://github.com/Zishof/zishof-platform/issues/new';
@@ -366,11 +366,10 @@ class _LogErrorScreenState extends State<LogErrorScreen> with JejakGalat {
     required String ekstensi,
   }) async {
     final bytes = utf8.encode(konten);
-    final path = await FilePicker.platform.saveFile(
+    final path = await SimpanBerkasHelper.simpanBytes(
       dialogTitle: 'Simpan Log Error',
       fileName: namaFileDefault,
       bytes: bytes,
-      type: FileType.custom,
       allowedExtensions: [ekstensi],
     );
     if (path == null) return;

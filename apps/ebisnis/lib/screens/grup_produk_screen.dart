@@ -17,6 +17,7 @@ import '../widgets/kilau_perubahan.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../widgets/riwayat_data_dialog.dart';
 import '../widgets/safe_state.dart';
+import '../services/simpan_berkas_helper.dart';
 
 /// Grup Produk (harga terpusat lintas toko) -- padanan layar ZK GrupProdukAction.
 ///
@@ -694,11 +695,10 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
               ])
           .toList(),
     );
-    final path = await FilePicker.platform.saveFile(
+    final path = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan Produk Anggota Grup',
         fileName:
             'Grup_Produk_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx',
-        type: FileType.custom,
         allowedExtensions: const ['xlsx'],
         bytes: bytes);
     if (path != null) await File(path).writeAsBytes(bytes);

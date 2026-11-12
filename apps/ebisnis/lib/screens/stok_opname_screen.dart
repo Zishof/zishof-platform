@@ -35,6 +35,7 @@ import 'tab_so_grand.dart';
 import 'tab_riwayat_so_grand.dart';
 import 'proses_stok_opname_dialog.dart';
 import 'tab_pkm_screen.dart';
+import '../services/simpan_berkas_helper.dart';
 
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
 final _formatRupiah =
@@ -130,11 +131,10 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
       }
       final bytes = base64Decode(b64);
       final namaFile = (hasil['namaFile'] as String?) ?? 'TemplateStokOpname.xlsx';
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
           dialogTitle: 'Simpan Template Stok Opname Excel',
           fileName: namaFile,
           bytes: bytes,
-          type: FileType.custom,
           allowedExtensions: ['xlsx']);
       if (path == null) return;
       await File(path).writeAsBytes(bytes);
@@ -163,11 +163,10 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
       }
       final bytes = base64Decode(b64);
       final namaFile = (hasil['namaFile'] as String?) ?? 'StokOpname.xlsx';
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
           dialogTitle: 'Simpan Stok Opname Excel',
           fileName: namaFile,
           bytes: bytes,
-          type: FileType.custom,
           allowedExtensions: ['xlsx']);
       if (path == null) return;
       // Desktop: saveFile hanya mengembalikan path (belum menulis) -- mobile
@@ -1554,11 +1553,10 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
       }
       final bytes = base64Decode(b64);
       final nama = '${hasil['namaFile'] ?? 'SO-Harian-$_tanggalTeks.xlsx'}';
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan Form SO Harian',
         fileName: nama,
         bytes: bytes,
-        type: FileType.custom,
         allowedExtensions: ['xlsx'],
       );
       if (path == null) return;

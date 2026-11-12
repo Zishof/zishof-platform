@@ -15,6 +15,7 @@ import '../widgets/pulihkan_terhapus.dart';
 import '../widgets/pemilih_akun.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/aksi_baris_menu.dart';
+import '../services/simpan_berkas_helper.dart';
 
 String _normalisasiNamaGrupAkun(String nama) =>
     nama.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
@@ -410,11 +411,10 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
         headers: _defKolom,
         rows: _defBaris(),
       );
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
           dialogTitle: 'Simpan $_defJudul',
           fileName:
               '${_defJudul.replaceAll(' ', '_')}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx',
-          type: FileType.custom,
           allowedExtensions: const ['xlsx'],
           bytes: bytes);
       if (path != null) await File(path).writeAsBytes(bytes);

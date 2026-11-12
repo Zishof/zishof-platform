@@ -14,7 +14,7 @@ import '../widgets/app_shell.dart';
 import '../widgets/pencarian_produk_banbox.dart';
 import '../widgets/rincian_intip_dialog.dart';
 import '../widgets/safe_state.dart';
-import 'stok_opname_screen.dart';
+import '../services/simpan_berkas_helper.dart';
 
 /// Layar **Manajemen Rak Produk** (`MenuEBisnis.rakProduk`).
 ///
@@ -1114,10 +1114,9 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
           }
           final bytes = base64Decode(b64);
           final namaDefault = '${res['namaFile'] ?? 'Master-Rak-Produk.xlsx'}';
-          final savePath = await FilePicker.platform.saveFile(
+          final savePath = await SimpanBerkasHelper.pilihLokasiSimpan(
             dialogTitle: 'Simpan Excel Rak Produk',
             fileName: namaDefault,
-            type: FileType.custom,
             allowedExtensions: ['xlsx'],
           );
           if (savePath != null && savePath.isNotEmpty) {
@@ -1257,9 +1256,7 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
   }
 
   void _bukaStokOpname() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const StokOpnameScreen()),
-    );
+    bukaMenuEBisnis(context, MenuEBisnis.stokOpname);
   }
 
   @override

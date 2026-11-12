@@ -13,7 +13,6 @@ import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
 import '../widgets/aksi_baris_menu.dart';
-import 'anggota/tab_mutasi_hutang.dart';
 
 /// Layar "Cara Pembayaran" (padanan `cara_bayar/index.jsp`) -- CRUD penuh
 /// metode pembayaran koperasi, termasuk toggle "Memotong Deposit" dan
@@ -209,21 +208,7 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
   }
 
   void _bukaPelunasanPiutang() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => const AppShell(
-          menuAktif: MenuEBisnis.piutangPelanggan,
-          judul: 'Pelunasan Piutang',
-          subjudul:
-              'Daftar piutang pelanggan & pelunasan beberapa faktur penjualan sekaligus',
-          scrollable: false,
-          body: Padding(
-            padding: EdgeInsets.only(bottom: 16),
-            child: AnggotaTabMutasiHutang(),
-          ),
-        ),
-      ),
-    );
+    bukaMenuEBisnis(context, MenuEBisnis.piutangPelanggan);
   }
 
   int get _totalHalaman => (_total / _pageSize).ceil().clamp(1, 999999);

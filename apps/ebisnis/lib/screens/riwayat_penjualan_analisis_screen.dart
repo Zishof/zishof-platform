@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:core_db/core_db.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -20,6 +19,7 @@ import '../widgets/app_shell.dart';
 import '../widgets/penanda_data_tersimpan.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
+import '../services/simpan_berkas_helper.dart';
 
 final _rpAnalisis =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -392,11 +392,10 @@ class _RiwayatPenjualanAnalisisScreenState
       String judul, List<String> header, List<List<Object?>> baris) async {
     final bytes =
         buildSimpleXlsx(sheetName: judul, headers: header, rows: baris);
-    final path = await FilePicker.platform.saveFile(
+    final path = await SimpanBerkasHelper.simpanBytes(
       dialogTitle: 'Simpan $judul',
       fileName:
           '${_namaBerkas(judul)}-${DateFormat('yyyyMMdd-HHmmss').format(DateTime.now())}.xlsx',
-      type: FileType.custom,
       allowedExtensions: const ['xlsx'],
       bytes: bytes,
     );

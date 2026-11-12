@@ -17,6 +17,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
 import '../../widgets/app_components.dart';
+import '../../services/simpan_berkas_helper.dart';
 
 final _rupiahGrup =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -466,11 +467,10 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> with JejakGalat {
           .map((p) => [p['kode'] ?? '', p['barcode'] ?? '', p['nama'] ?? ''])
           .toList(),
     );
-    final path = await FilePicker.platform.saveFile(
+    final path = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan Produk Diskon Grup',
         fileName:
             'Diskon_Grup_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx',
-        type: FileType.custom,
         allowedExtensions: const ['xlsx'],
         bytes: bytes);
     if (path != null) await File(path).writeAsBytes(bytes);

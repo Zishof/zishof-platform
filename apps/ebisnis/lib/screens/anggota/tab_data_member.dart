@@ -32,6 +32,7 @@ import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
 import '../../widgets/aksi_baris_menu.dart';
 import 'member_biometric_panel.dart';
+import '../../services/simpan_berkas_helper.dart';
 
 final _formatTanggalKadaluarsa = DateFormat('dd-MM-yyyy');
 
@@ -411,11 +412,10 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
                 ])
             .toList(),
       );
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan Template PIN Member',
         fileName:
             'Template_PIN_Member_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx',
-        type: FileType.custom,
         allowedExtensions: const ['xlsx'],
         bytes: bytes,
       );
@@ -777,6 +777,44 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
             berubah: _idBerubah.length,
             dihapus: _jumlahHapus,
           ),
+          if (!_memuat &&
+              _daftar.isEmpty &&
+              _kataKunci.trim().isNotEmpty &&
+              Sesi.instance.bolehKelola &&
+              widget.onBukaSinkronisasi != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.school_outlined,
+                      color: AppColors.primary, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Nama "${_kataKunci.trim()}" belum ditemukan di daftar Member Toko. '
+                      'Apabila yang dicari adalah Santri Pondok, Siswa Sekolah, Mahasiswa, atau Pejuang/Pegawai yang sudah tercatat di divisi masing-masing, jalankan Sinkronisasi Sivitas agar seluruh unit otomatis masuk ke Member Toko.',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: AppColors.textPrimaryOf(context),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  FilledButton.icon(
+                    onPressed: widget.onBukaSinkronisasi,
+                    icon: const Icon(Icons.sync_alt, size: 16),
+                    label: const Text('Sinkronkan Sivitas'),
+                  ),
+                ],
+              ),
+            ),
           _tabelAnggota(),
         ],
       ),

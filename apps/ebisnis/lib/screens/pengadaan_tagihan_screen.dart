@@ -21,6 +21,7 @@ import '../widgets/aksi_baris_menu.dart';
 import '../services/kompresi_gambar.dart';
 import '../widgets/pemilih_anggaran.dart';
 import 'foto_produk_camera_screen.dart';
+import '../services/simpan_berkas_helper.dart';
 
 /// Layar "Terima Tagihan Vendor" -- tahap 4 modul Pengadaan POS.
 ///
@@ -1102,7 +1103,7 @@ Future<void> _simpanLampiran(
     }
     final bytes = base64Decode(b64);
     final namaFile = _namaBerkasLampiran(item, r);
-    final path = await FilePicker.platform.saveFile(
+    final path = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan ${item['nama'] ?? 'lampiran'}',
         fileName: namaFile,
         bytes: bytes);

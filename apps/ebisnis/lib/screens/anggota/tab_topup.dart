@@ -21,6 +21,7 @@ import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
 import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/aksi_baris_menu.dart';
+import '../../services/simpan_berkas_helper.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -239,11 +240,10 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
                 ])
             .toList(),
       );
-      final lokasi = await FilePicker.platform.saveFile(
+      final lokasi = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan Riwayat Topup',
         fileName:
             'Topup_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx',
-        type: FileType.custom,
         allowedExtensions: const ['xlsx'],
         bytes: bytes,
       );
@@ -477,11 +477,10 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
                 ])
             .toList(),
       );
-      final lokasi = await FilePicker.platform.saveFile(
+      final lokasi = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan Template Topup Voucher',
         fileName:
             'Template_Topup_${labelFilter.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_')}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx',
-        type: FileType.custom,
         allowedExtensions: const ['xlsx'],
         bytes: bytes,
       );

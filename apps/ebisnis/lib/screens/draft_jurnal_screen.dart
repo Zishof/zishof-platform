@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -11,6 +10,7 @@ import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/jejak_galat.dart';
 import '../widgets/safe_state.dart';
+import '../services/simpan_berkas_helper.dart';
 
 /// Dasbor **Draft Jurnal**: satu tempat untuk melihat pekerjaan posting yang masih
 /// menggantung, padanan `draft_jurnal.zul` di web.
@@ -135,10 +135,9 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
       final namaBerkas =
           'draft_jurnal_${_tanggalIso.format(_mulai).replaceAll('-', '')}'
           '_${_tanggalIso.format(_sampai).replaceAll('-', '')}.xlsx';
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan $_namaKategoriAktif',
         fileName: namaBerkas,
-        type: FileType.custom,
         allowedExtensions: const ['xlsx'],
         bytes: bytes,
       );

@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show compute, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -42,6 +41,7 @@ import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
 import '../widgets/aksi_baris_menu.dart';
 import '../widgets/rincian_intip_dialog.dart';
+import '../services/simpan_berkas_helper.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -969,7 +969,9 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
           ? 'stok-produk'
           : 'stok-produk-${DateFormat('yyyyMMdd').format(_tanggalStok!)}';
       if (format == 'pdf') {
-        await DynamicReportDesigner.exportPdf(data, model, '$slug.pdf');
+        if (!mounted) return;
+        await DynamicReportDesigner.exportPdf(
+            data, model, '$slug.pdf', context: context);
       } else if (format == 'excel') {
         if (!mounted) return;
         await DynamicReportDesigner.exportExcel(
@@ -1509,11 +1511,10 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
       }
       final bytes = base64Decode(b64);
       final namaFile = (hasil['namaFile'] as String?) ?? 'Katalog.xlsx';
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
           dialogTitle: 'Simpan Katalog Produk',
           fileName: namaFile,
           bytes: bytes,
-          type: FileType.custom,
           allowedExtensions: ['xlsx']);
       if (path == null) return;
       // Di Desktop, saveFile HANYA mengembalikan path pilihan (belum menulis apa
@@ -2340,7 +2341,9 @@ class _DialogDetailStatistikProdukState
         ..showTotals = false;
       final slug = widget.tipe.replaceAll(RegExp('[^A-Za-z0-9_-]'), '-');
       if (format == 'pdf') {
-        await DynamicReportDesigner.exportPdf(data, model, 'produk-$slug.pdf');
+        if (!mounted) return;
+        await DynamicReportDesigner.exportPdf(
+            data, model, 'produk-$slug.pdf', context: context);
       } else {
         if (!mounted) return;
         await DynamicReportDesigner.exportExcel(

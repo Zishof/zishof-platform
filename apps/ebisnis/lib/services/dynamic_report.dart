@@ -2,15 +2,16 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
+import '../screens/pengadaan_cetak_util.dart';
 import '../widgets/app_components.dart';
 import 'simple_xlsx.dart';
+import 'simpan_berkas_helper.dart';
 
 class DynamicReportColumn {
   final String key;
@@ -180,8 +181,16 @@ class DynamicReportDesigner {
     return model.landscape ? base.landscape : base.portrait;
   }
 
+  /// Mengekspor laporan dinamis ke PDF.
+  ///
+  /// Bila [context] diberikan (jalur UI interaktif seperti Laporan Transaksi dan
+  /// Produk), jendela pratinjau [tampilkanPratinjauPdf] dibuka terlebih dahulu
+  /// sehingga pengguna dapat langsung menekan **Unduh / Simpan PDF** (dengan
+  /// bebas mengubah nama file dan memilih folder penyimpanan) maupun mencetak ke
+  /// printer. Bila [context] tidak diberikan, fallback ke `Printing.layoutPdf`.
   static Future<void> exportPdf(
-      DynamicReportData data, DynamicReportModel model, String fileName) async {
+      DynamicReportData data, DynamicReportModel model, String fileName,
+      {BuildContext? context}) async {
     final columns = selectedColumns(data, model);
     final rows = filteredRows(data, model);
     final total = totals(data, model, rows);
@@ -280,8 +289,18 @@ class DynamicReportDesigner {
         ],
       ],
     ));
+    final bytes = await document.save();
+    if (context != null && context.mounted) {
+      final judulBersih = fileName.replaceAll(RegExp(r'\.pdf$', caseSensitive: false), '');
+      await tampilkanPratinjauPdf(
+        context,
+        judul: judulBersih.isEmpty ? data.title : judulBersih,
+        isi: Uint8List.fromList(bytes),
+      );
+      return;
+    }
     await Printing.layoutPdf(
-        onLayout: (_) => document.save(),
+        onLayout: (_) async => bytes,
         name: fileName,
         format: _pageFormat(model),
         dynamicLayout: false);
@@ -372,11 +391,10 @@ class DynamicReportDesigner {
 
   static Future<void> _saveBytes(BuildContext context, String fileName,
       List<int> bytes, String label, List<String> extensions) async {
-    final path = await FilePicker.platform.saveFile(
+    final path = await SimpanBerkasHelper.simpanBytes(
       dialogTitle: 'Simpan $label',
       fileName: fileName,
       bytes: Uint8List.fromList(bytes),
-      type: FileType.custom,
       allowedExtensions: extensions,
     );
     if (path == null) return;

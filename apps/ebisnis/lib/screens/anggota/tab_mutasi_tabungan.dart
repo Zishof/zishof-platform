@@ -20,6 +20,7 @@ import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
 import '../../widgets/aksi_baris_menu.dart';
+import '../../services/simpan_berkas_helper.dart';
 
 final _formatRpMutasiTabungan =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -476,11 +477,10 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan>
     );
     final nama =
         'Mutasi_Tabungan_${DateFormat('yyyyMMdd').format(_dari)}_${DateFormat('yyyyMMdd').format(_sampai)}.xlsx';
-    final path = await FilePicker.platform.saveFile(
+    final path = await SimpanBerkasHelper.simpanBytes(
       dialogTitle: 'Simpan Mutasi Voucher (Excel)',
       fileName: nama,
       bytes: bytes,
-      type: FileType.custom,
       allowedExtensions: const ['xlsx'],
     );
     if (path != null) await File(path).writeAsBytes(bytes);
@@ -507,11 +507,10 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan>
         Uint8List.fromList(<int>[0xEF, 0xBB, 0xBF, ...utf8.encode(html)]);
     final nama =
         'Mutasi_Voucher_${DateFormat('yyyyMMdd').format(_dari)}_${DateFormat('yyyyMMdd').format(_sampai)}.doc';
-    final path = await FilePicker.platform.saveFile(
+    final path = await SimpanBerkasHelper.simpanBytes(
       dialogTitle: 'Simpan Mutasi Voucher (Word)',
       fileName: nama,
       bytes: bytes,
-      type: FileType.custom,
       allowedExtensions: const ['doc'],
     );
     if (path != null) await File(path).writeAsBytes(bytes);

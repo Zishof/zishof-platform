@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -17,6 +16,7 @@ import '../widgets/proses_simpan_master.dart';
 import '../widgets/pulihkan_terhapus.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/aksi_baris_menu.dart';
+import '../services/simpan_berkas_helper.dart';
 
 /// Layar **Anggaran (RAB Bulanan)** — padanan Desktop/Android dari empat layar ZK:
 ///
@@ -876,10 +876,9 @@ class _AnggaranScreenState extends State<AnggaranScreen>
         headers: _kolomEkspor,
         rows: baris,
       );
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
           dialogTitle: 'Simpan $_judulTab',
           fileName: '$_namaBerkas.xlsx',
-          type: FileType.custom,
           allowedExtensions: const ['xlsx'],
           bytes: bytes);
       if (path != null) await File(path).writeAsBytes(bytes);

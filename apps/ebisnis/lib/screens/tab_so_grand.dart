@@ -21,6 +21,7 @@ import '../widgets/app_components.dart';
 import '../widgets/rincian_intip_dialog.dart';
 import '../widgets/safe_state.dart';
 import 'proses_stok_opname_dialog.dart';
+import '../services/simpan_berkas_helper.dart';
 
 /// Tab SO Grand (Grand Stock Opname) — Audit Total Seluruh Fisik Barang Toko per Rak.
 ///
@@ -802,11 +803,10 @@ class _TabSoGrandState extends State<TabSoGrand> {
 
       _aturProgres(true,
           nilai: 0.90, teks: 'Membuka dialog penyimpanan berkas (90%)...');
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan Lembar Kerja SO Grand Excel',
         fileName: nama,
         bytes: bytes,
-        type: FileType.custom,
         allowedExtensions: ['xlsx'],
       );
       if (path == null) return;

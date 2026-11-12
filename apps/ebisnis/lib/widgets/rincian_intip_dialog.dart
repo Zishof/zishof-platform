@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -12,6 +11,7 @@ import '../sesi.dart';
 import '../theme/app_colors.dart';
 import 'app_components.dart';
 import 'safe_state.dart';
+import '../services/simpan_berkas_helper.dart';
 
 final _fmtTanggalFile = DateFormat('yyyyMMdd_HHmm');
 
@@ -118,10 +118,9 @@ class _DialogRincianKlikState extends State<_DialogRincianKlik> {
       );
       final fileName =
           '${_namaFileAman(widget.judul)}_${_fmtTanggalFile.format(DateTime.now())}.xlsx';
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
         dialogTitle: 'Simpan Excel ${widget.judul}',
         fileName: fileName,
-        type: FileType.custom,
         allowedExtensions: const ['xlsx'],
         bytes: bytes,
       );

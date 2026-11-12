@@ -110,6 +110,7 @@ import '../screens/abchicken/operasi_abchicken_screen.dart';
 import '../product_profile.dart';
 import 'safe_state.dart';
 import 'bantuan_fab.dart';
+import 'workspace_tab_bar.dart';
 import '../services/transaksi_outbox_service.dart';
 import '../screens/riwayat_audit_screen.dart';
 
@@ -141,6 +142,46 @@ final _sidebarRingkasNotifier = ValueNotifier<bool>(false);
 /// beserta seluruh tab di dalamnya agar data langsung dimuat ulang untuk toko
 /// yang baru dipilih tanpa menyisakan state toko sebelumnya.
 final _versiTokoNotifier = ValueNotifier<int>(0);
+
+/// Pengelola daftar tab fitur terbuka (`Multi-Tab Workspace`) di level sesi
+/// aplikasi agar setiap menu yang sedang dieksplorasi tetap hidup di memori
+/// (`IndexedStack`) tanpa tertutup saat berpindah ke menu lain.
+final WorkspaceTabController<MenuEBisnis> workspaceTabController =
+    WorkspaceTabController<MenuEBisnis>(maxTabs: 12);
+
+/// Penanda bahwa [AppShell] ini dirender sebagai isi salah satu slot tab di
+/// dalam `IndexedStack` milik host [AppShell] terluar, sehingga tidak membuat
+/// ulang `_AppSidebar`, `_AppTopbar`, atau [WorkspaceTabBar] kedua kalinya.
+class _WorkspacePaneScope extends InheritedWidget {
+  const _WorkspacePaneScope({required super.child});
+
+  static bool isInsidePane(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_WorkspacePaneScope>() != null;
+
+  @override
+  bool updateShouldNotify(_WorkspacePaneScope oldWidget) => false;
+}
+
+/// Membuka atau mengaktifkan tab [menu] di dalam `Multi-Tab Workspace` eBisnis.
+///
+/// Dipanggil dari pintasan halaman (*Menu Utama Shortcut*), tombol lintas modul
+/// (mis. *Cara Pembayaran -> Pelunasan Piutang*, *Rak Produk -> Stok Opname*),
+/// maupun bilah menu samping sehingga halaman tujuan terbuka sebagai tab kerja
+/// tanpa menggusur halaman sebelumnya.
+void bukaMenuEBisnis(BuildContext context, MenuEBisnis menu) {
+  final item = _itemMenu(menu);
+  if (item == null) return;
+  if (Navigator.of(context).canPop()) {
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+  _pindahMenu(context, item);
+}
+
+/// Mereset daftar tab `Multi-Tab Workspace` (misalnya saat keluar akun atau
+/// pada pengujian widget).
+void resetWorkspaceTabsEBisnis() {
+  workspaceTabController.reset();
+}
 
 /// Kunci menu, dipetakan ke label+ikon+builder layar tujuan -- dipakai
 /// AppSidebar (desktop) DAN AppDrawer (mobile, lihat app_drawer.dart) supaya
@@ -1624,10 +1665,12 @@ void _pindahMenu(BuildContext context, _ItemMenuShell item,
             '${item.label} sedang dikerjakan, menyusul di rilis berikutnya.')));
     return;
   }
-  if (item.kunci == menuSaatIni || item.kunci == _menuAktifNotifier.value) {
+  if (item.kunci == _menuAktifNotifier.value &&
+      workspaceTabController.activeId == item.kunci) {
     return;
   }
   if (PengamanKeranjang.cegahKeluar(context)) return;
+  workspaceTabController.activateOrOpen(item.kunci);
   AppDrawer.menuAktifNotifier.value = _labelDrawer(item.kunci);
   _menuAktifNotifier.value = item.kunci;
 }
@@ -1763,11 +1806,10 @@ Future<bool> _pilihTokoGlobal(BuildContext context) async {
 
 void _muatUlangHalamanAktif(BuildContext context) {
   if (PengamanKeranjang.cegahKeluar(context)) return;
+  // Menaikkan `_versiTokoNotifier` otomatis mengganti `ValueKey` setiap slot tab
+  // di `AppShell` sehingga seluruh tab pada toko baru dimuat ulang bersih tanpa
+  // perlu melepas daftar tab yang sedang dibuka pengguna.
   _versiTokoNotifier.value++;
-  final item = _itemMenu(_menuAktifNotifier.value);
-  if (item?.builder == null) return;
-  Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => item!.builder!(context)));
 }
 
 String _labelDrawer(MenuEBisnis kunci) {
@@ -2281,14 +2323,27 @@ class _AppShellState extends State<AppShell> {
       // balik pemanggilan ini menjaga agar dialog hanya muncul sekali per
       // versi/build dan tenant, serta menundanya bila server masih offline.
       PenawaranSinkronisasiVersi.tawarkanJikaPerlu(context);
+      if (_WorkspacePaneScope.isInsidePane(context)) {
+        if (mounted) {
+          setStateIfMounted(() => _notifierSudahSinkron = true);
+        }
+        return;
+      }
       final menuEfektif = (widget.menuAktif == MenuEBisnis.kasir &&
               !bolehTampilMenu(MenuEBisnis.kasir))
           ? menuAwalPosSesuaiHakAkses()
           : widget.menuAktif;
-      if (_menuAktifNotifier.value != menuEfektif) {
-        _menuAktifNotifier.value = menuEfektif;
+      workspaceTabController.ensureInitialized(
+        menuEfektif,
+        initialActiveId: workspaceTabController.openIds.isEmpty
+            ? menuEfektif
+            : workspaceTabController.activeId,
+      );
+      final menuAktifTarget = workspaceTabController.activeId ?? menuEfektif;
+      if (_menuAktifNotifier.value != menuAktifTarget) {
+        _menuAktifNotifier.value = menuAktifTarget;
       }
-      AppDrawer.menuAktifNotifier.value = _labelDrawer(menuEfektif);
+      AppDrawer.menuAktifNotifier.value = _labelDrawer(menuAktifTarget);
       if (mounted) {
         setStateIfMounted(() => _notifierSudahSinkron = true);
       }
@@ -2322,8 +2377,195 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  Widget _bangunBadanKontenDesktop(BuildContext context) {
+    if (widget.scrollable) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (widget.tampilkanJudul)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(widget.judul,
+                              style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimaryOf(context))),
+                          if (widget.subjudul != null)
+                            Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(widget.subjudul!,
+                                    style: TextStyle(
+                                        color: AppColors.textSecondaryOf(
+                                            context)))),
+                          _DropdownGrupMenu(menuAktif: widget.menuAktif),
+                        ],
+                      ),
+                    ),
+                    Flexible(
+                      child: Wrap(
+                        alignment: WrapAlignment.end,
+                        runAlignment: WrapAlignment.end,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          if (widget.aksiHeader != null) widget.aksiHeader!,
+                          if (widget.tampilkanBantuanHeader)
+                            OutlinedButton.icon(
+                              key: const Key('tombol-qa-halaman-desktop'),
+                              onPressed: () => _bukaTanyaJawab(context),
+                              icon: const Icon(
+                                  Icons.question_answer_outlined,
+                                  size: 18),
+                              label: const Text('Tanya Jawab'),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (widget.aksiHeader != null) widget.aksiHeader!,
+                      if (widget.tampilkanBantuanHeader)
+                        OutlinedButton.icon(
+                          key: const Key('tombol-qa-halaman-desktop'),
+                          onPressed: () => _bukaTanyaJawab(context),
+                          icon: const Icon(Icons.question_answer_outlined,
+                              size: 18),
+                          label: const Text('Tanya Jawab'),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            widget.body,
+          ],
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (widget.tampilkanJudul)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(widget.judul,
+                          style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimaryOf(context))),
+                      if (widget.subjudul != null)
+                        Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(widget.subjudul!,
+                                style: TextStyle(
+                                    color:
+                                        AppColors.textSecondaryOf(context)))),
+                      _DropdownGrupMenu(menuAktif: widget.menuAktif),
+                    ],
+                  ),
+                ),
+                Flexible(
+                  child: Wrap(
+                    alignment: WrapAlignment.end,
+                    runAlignment: WrapAlignment.end,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (widget.aksiHeader != null) widget.aksiHeader!,
+                      if (widget.tampilkanBantuanHeader)
+                        OutlinedButton.icon(
+                          key: const Key('tombol-qa-halaman-desktop'),
+                          onPressed: () => _bukaTanyaJawab(context),
+                          icon:
+                              const Icon(Icons.question_answer_outlined, size: 18),
+                          label: const Text('Tanya Jawab'),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (widget.aksiHeader != null) widget.aksiHeader!,
+                  if (widget.tampilkanBantuanHeader)
+                    OutlinedButton.icon(
+                      key: const Key('tombol-qa-halaman-desktop'),
+                      onPressed: () => _bukaTanyaJawab(context),
+                      icon: const Icon(Icons.question_answer_outlined, size: 18),
+                      label: const Text('Tanya Jawab'),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        Expanded(
+          child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                  24, widget.tampilkanJudul ? 12 : 20, 24, 0),
+              child: widget.body),
+        ),
+      ],
+    );
+  }
+
+  /// Panel konten satu slot tab di dalam `IndexedStack` Desktop (memiliki
+  /// `Scaffold` lokal sendiri agar `floatingActionButton`, `bottomBar`, dan
+  /// `SnackBar` masing-masing layar tetap terisolasi dengan rapi).
+  Widget _bangunPaneTabDesktop(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.pageBgOf(context),
+      floatingActionButton: _fabDenganBantuan(),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: _bangunBadanKontenDesktop(context)),
+          if (widget.bottomBar != null) widget.bottomBar!,
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_WorkspacePaneScope.isInsidePane(context)) {
+      return _bangunPaneTabDesktop(context);
+    }
     return ValueListenableBuilder<MenuEBisnis>(
       valueListenable: _menuAktifNotifier,
       builder: (context, menuTerpilih, _) {
@@ -2344,7 +2586,11 @@ class _AppShellState extends State<AppShell> {
                 }
               }
             }
-            if (_notifierSudahSinkron && menuTerpilih != widget.menuAktif) {
+            final lebarLayar = MediaQuery.maybeSizeOf(context)?.width ?? 0;
+            final modeDesktop = lebarLayar >= kAmbangLebarDesktop;
+            if (!modeDesktop &&
+                _notifierSudahSinkron &&
+                menuTerpilih != widget.menuAktif) {
               final item = _itemMenu(menuTerpilih);
               if (item?.builder != null) {
                 return KeyedSubtree(
@@ -2353,17 +2599,15 @@ class _AppShellState extends State<AppShell> {
                 );
               }
             }
-            return KeyedSubtree(
-              key: ValueKey('shell-${widget.menuAktif.name}-$kunciToko'),
-              child: _buildShell(context),
-            );
+            return _buildShell(context, kunciToko: kunciToko, menuTerpilih: menuTerpilih);
           },
         );
       },
     );
   }
 
-  Widget _buildShell(BuildContext context) {
+  Widget _buildShell(BuildContext context,
+      {required String kunciToko, required MenuEBisnis menuTerpilih}) {
     return LayoutBuilder(builder: (context, constraints) {
       final desktop = constraints.maxWidth >= kAmbangLebarDesktop;
       if (!desktop) {
@@ -2432,236 +2676,134 @@ class _AppShellState extends State<AppShell> {
           bottomNavigationBar: widget.bottomBar,
         );
       }
-      return Scaffold(
-        backgroundColor: AppColors.pageBgOf(context),
-        floatingActionButton: _fabDenganBantuan(),
-        body: Row(
-          children: [
-            ValueListenableBuilder<bool>(
-              valueListenable: _sidebarRingkasNotifier,
-              builder: (context, ringkas, _) => _AppSidebar(
-                menuAktif: widget.menuAktif,
-                ringkas: ringkas,
-                onToggle: () => _sidebarRingkasNotifier.value = !ringkas,
-              ),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const _AppTopbar(),
-                  Expanded(
-                    child: widget.scrollable
-                        ? SingleChildScrollView(
-                            padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                if (widget.tampilkanJudul)
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 16),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(widget.judul,
-                                                  style: TextStyle(
-                                                      fontSize: 22,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: AppColors
-                                                          .textPrimaryOf(
-                                                              context))),
-                                              if (widget.subjudul != null)
-                                                Padding(
-                                                    padding:
-                                                        const EdgeInsets.only(
-                                                            top: 2),
-                                                    child: Text(
-                                                        widget.subjudul!,
-                                                        style: TextStyle(
-                                                            color: AppColors
-                                                                .textSecondaryOf(
-                                                                    context)))),
-                                              _DropdownGrupMenu(
-                                                  menuAktif: widget.menuAktif),
-                                            ],
-                                          ),
-                                        ),
-                                        Flexible(
-                                          child: Wrap(
-                                            alignment: WrapAlignment.end,
-                                            runAlignment: WrapAlignment.end,
-                                            spacing: 8,
-                                            runSpacing: 8,
-                                            children: [
-                                              if (widget.aksiHeader != null)
-                                                widget.aksiHeader!,
-                                              if (widget.tampilkanBantuanHeader)
-                                                OutlinedButton.icon(
-                                                  key: const Key(
-                                                      'tombol-qa-halaman-desktop'),
-                                                  onPressed: () =>
-                                                      _bukaTanyaJawab(context),
-                                                  icon: const Icon(
-                                                      Icons
-                                                          .question_answer_outlined,
-                                                      size: 18),
-                                                  label:
-                                                      const Text('Tanya Jawab'),
-                                                ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  )
-                                else
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    child: Align(
-                                      alignment: Alignment.centerRight,
-                                      child: Wrap(
-                                        alignment: WrapAlignment.end,
-                                        spacing: 8,
-                                        runSpacing: 8,
-                                        children: [
-                                          if (widget.aksiHeader != null)
-                                            widget.aksiHeader!,
-                                          if (widget.tampilkanBantuanHeader)
-                                            OutlinedButton.icon(
-                                              key: const Key(
-                                                  'tombol-qa-halaman-desktop'),
-                                              onPressed: () =>
-                                                  _bukaTanyaJawab(context),
-                                              icon: const Icon(
-                                                  Icons
-                                                      .question_answer_outlined,
-                                                  size: 18),
-                                              label: const Text('Tanya Jawab'),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                widget.body,
-                              ],
-                            ),
-                          )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              if (widget.tampilkanJudul)
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.fromLTRB(24, 20, 24, 0),
-                                  child: Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(widget.judul,
-                                                style: TextStyle(
-                                                    fontSize: 22,
-                                                    fontWeight: FontWeight.bold,
-                                                    color:
-                                                        AppColors.textPrimaryOf(
-                                                            context))),
-                                            if (widget.subjudul != null)
-                                              Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                          top: 2),
-                                                  child: Text(widget.subjudul!,
-                                                      style: TextStyle(
-                                                          color: AppColors
-                                                              .textSecondaryOf(
-                                                                  context)))),
-                                            _DropdownGrupMenu(
-                                                menuAktif: widget.menuAktif),
-                                          ],
-                                        ),
-                                      ),
-                                      Flexible(
-                                        child: Wrap(
-                                          alignment: WrapAlignment.end,
-                                          runAlignment: WrapAlignment.end,
-                                          spacing: 8,
-                                          runSpacing: 8,
-                                          children: [
-                                            if (widget.aksiHeader != null)
-                                              widget.aksiHeader!,
-                                            if (widget.tampilkanBantuanHeader)
-                                              OutlinedButton.icon(
-                                                key: const Key(
-                                                    'tombol-qa-halaman-desktop'),
-                                                onPressed: () =>
-                                                    _bukaTanyaJawab(context),
-                                                icon: const Icon(
-                                                    Icons
-                                                        .question_answer_outlined,
-                                                    size: 18),
-                                                label:
-                                                    const Text('Tanya Jawab'),
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              else
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.fromLTRB(24, 12, 24, 0),
-                                  child: Align(
-                                    alignment: Alignment.centerRight,
-                                    child: Wrap(
-                                      alignment: WrapAlignment.end,
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children: [
-                                        if (widget.aksiHeader != null)
-                                          widget.aksiHeader!,
-                                        if (widget.tampilkanBantuanHeader)
-                                          OutlinedButton.icon(
-                                            key: const Key(
-                                                'tombol-qa-halaman-desktop'),
-                                            onPressed: () =>
-                                                _bukaTanyaJawab(context),
-                                            icon: const Icon(
-                                                Icons.question_answer_outlined,
-                                                size: 18),
-                                            label: const Text('Tanya Jawab'),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              Expanded(
-                                child: Padding(
-                                    padding: EdgeInsets.fromLTRB(24,
-                                        widget.tampilkanJudul ? 12 : 20, 24, 0),
-                                    child: widget.body),
-                              ),
-                            ],
-                          ),
+      return AnimatedBuilder(
+        animation: workspaceTabController,
+        builder: (context, _) {
+          final daftarMenuBuka = workspaceTabController.openIds.isEmpty
+              ? <MenuEBisnis>[widget.menuAktif]
+              : workspaceTabController.openIds;
+          final daftarValid = <MenuEBisnis>[];
+          for (final m in daftarMenuBuka) {
+            if (m == widget.menuAktif || _itemMenu(m)?.builder != null) {
+              daftarValid.add(m);
+            }
+          }
+          if (!daftarValid.contains(widget.menuAktif)) {
+            daftarValid.insert(0, widget.menuAktif);
+          }
+          final menuAktifWorkspace = _notifierSudahSinkron
+              ? (workspaceTabController.activeId ?? menuTerpilih)
+              : widget.menuAktif;
+          final idxAktif = daftarValid.indexOf(menuAktifWorkspace);
+          final indexTampil = idxAktif >= 0 ? idxAktif : 0;
+          final menuTampil = daftarValid[indexTampil];
+
+          final tabItems = daftarValid.map((m) {
+            final info = _itemMenu(m);
+            final adalahBeranda =
+                m == (workspaceTabController.pinnedId ?? widget.menuAktif);
+            return WorkspaceTabItem<MenuEBisnis>(
+              id: m,
+              label: info?.label ??
+                  (m == widget.menuAktif ? widget.judul : _labelDrawer(m)),
+              icon: info?.icon ?? Icons.tab_outlined,
+              pinned: adalahBeranda,
+            );
+          }).toList();
+
+          return Scaffold(
+            backgroundColor: AppColors.pageBgOf(context),
+            body: Row(
+              children: [
+                ValueListenableBuilder<bool>(
+                  valueListenable: _sidebarRingkasNotifier,
+                  builder: (context, ringkas, _) => _AppSidebar(
+                    menuAktif: menuTampil,
+                    ringkas: ringkas,
+                    onToggle: () => _sidebarRingkasNotifier.value = !ringkas,
                   ),
-                  if (widget.bottomBar != null) widget.bottomBar!,
-                ],
-              ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const _AppTopbar(),
+                      if (!Navigator.of(context).canPop())
+                        WorkspaceTabBar<MenuEBisnis>(
+                          tabs: tabItems,
+                          activeId: menuTampil,
+                          onSelect: (target) {
+                            final item = _itemMenu(target);
+                            if (item != null) {
+                              _pindahMenu(context, item,
+                                  menuSaatIni: menuTampil);
+                            } else {
+                              workspaceTabController.activateOrOpen(target);
+                              _menuAktifNotifier.value = target;
+                            }
+                          },
+                          onClose: (target) {
+                            if (target == MenuEBisnis.kasir &&
+                                menuTampil == MenuEBisnis.kasir &&
+                                PengamanKeranjang.cegahKeluar(context)) {
+                              return;
+                            }
+                            final aktifBerikutnya =
+                                workspaceTabController.closeTab(target);
+                            if (aktifBerikutnya != null) {
+                              AppDrawer.menuAktifNotifier.value =
+                                  _labelDrawer(aktifBerikutnya);
+                              _menuAktifNotifier.value = aktifBerikutnya;
+                            }
+                          },
+                          onCloseOthers: (keep) {
+                            final aktifBerikutnya =
+                                workspaceTabController.closeOthers(keep);
+                            if (aktifBerikutnya != null) {
+                              AppDrawer.menuAktifNotifier.value =
+                                  _labelDrawer(aktifBerikutnya);
+                              _menuAktifNotifier.value = aktifBerikutnya;
+                            }
+                          },
+                          onCloseAll: () {
+                            final aktifBerikutnya =
+                                workspaceTabController.closeAllClosable();
+                            if (aktifBerikutnya != null) {
+                              AppDrawer.menuAktifNotifier.value =
+                                  _labelDrawer(aktifBerikutnya);
+                              _menuAktifNotifier.value = aktifBerikutnya;
+                            }
+                          },
+                        ),
+                      Expanded(
+                        child: IndexedStack(
+                          index: indexTampil,
+                          children: daftarValid.map((m) {
+                            if (m == widget.menuAktif) {
+                              return KeyedSubtree(
+                                key: ValueKey('ws-root-${m.name}-$kunciToko'),
+                                child: _bangunPaneTabDesktop(context),
+                              );
+                            }
+                            final item = _itemMenu(m)!;
+                            return KeyedSubtree(
+                              key: ValueKey('ws-pane-${m.name}-$kunciToko'),
+                              child: _WorkspacePaneScope(
+                                child: Builder(
+                                  builder: (ctx) => item.builder!(ctx),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       );
     });
   }
@@ -3047,6 +3189,7 @@ class _AppTopbarState extends State<_AppTopbar> {
     if (PengamanKeranjang.cegahKeluar(context)) return;
     await ApiClient.instance.hapusToken();
     Sesi.instance.reset();
+    workspaceTabController.reset();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),

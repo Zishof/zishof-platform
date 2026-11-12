@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -8,6 +7,7 @@ import 'package:printing/printing.dart';
 
 import '../../sesi.dart';
 import '../../services/simple_xlsx.dart';
+import '../../services/simpan_berkas_helper.dart';
 
 /// Util cetak/ekspor bersama layar varian Inventory & Sales (SCR-12..16 dkk):
 /// PDF client-side (pola voucher P3, package pdf+printing) + XLSX client-side
@@ -96,11 +96,10 @@ class CetakUtilIs {
         rows: rows,
       );
       final fileName = namaFile.replaceFirst(RegExp(r'\.[^.]+$'), '.xlsx');
-      final path = await FilePicker.platform.saveFile(
+      final path = await SimpanBerkasHelper.simpanBytes(
           dialogTitle: 'Simpan Excel',
           fileName: fileName,
           bytes: bytes,
-          type: FileType.custom,
           allowedExtensions: ['xlsx']);
       if (path == null) return;
       // Desktop hanya mengembalikan path (bytes belum tertulis); mobile sudah

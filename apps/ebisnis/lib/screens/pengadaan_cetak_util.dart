@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../api_client.dart';
+import '../services/simpan_berkas_helper.dart';
 
 /// Cetak satu dokumen Pengadaan, SELALU lewat pratinjau di dalam aplikasi.
 ///
@@ -129,6 +130,26 @@ class _PratinjauCetakDialog extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
               ),
+              FilledButton.tonalIcon(
+                onPressed: () async {
+                  final namaDefault =
+                      judul.toLowerCase().endsWith('.pdf') ? judul : '$judul.pdf';
+                  final path = await SimpanBerkasHelper.simpanBytes(
+                    dialogTitle: 'Simpan PDF $judul',
+                    fileName: namaDefault,
+                    bytes: isi,
+                    allowedExtensions: const ['pdf'],
+                  );
+                  if (path != null && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('PDF disimpan: $path')),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.download_outlined, size: 18),
+                label: const Text('Unduh / Simpan PDF'),
+              ),
+              const SizedBox(width: 8),
               IconButton(
                   tooltip: 'Tutup',
                   onPressed: () => Navigator.of(context).pop(),

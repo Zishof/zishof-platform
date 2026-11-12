@@ -4366,10 +4366,11 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
   }
 
   Future<void> _tambahMemberBaru() async {
+    final kataKunciAwal = _controller.text.trim();
     final anggota = await showDialog<Anggota>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const _DialogTambahMemberCepat(),
+      builder: (_) => _DialogTambahMemberCepat(kataKunciAwal: kataKunciAwal),
     );
     if (anggota != null && mounted) Navigator.of(context).pop(anggota);
   }
@@ -4419,6 +4420,12 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
                           leading: const Icon(Icons.person),
                           title: Text(a.nama),
                           subtitle: Text([
+                            if (a.tipeNama.trim().isNotEmpty &&
+                                a.tipeNama.trim() != '-')
+                              a.tipeNama.trim(),
+                            if (a.unit.trim().isNotEmpty &&
+                                a.unit.trim() != '-')
+                              a.unit.trim(),
                             if (a.kodeIdentitas.isNotEmpty) a.kodeIdentitas,
                             if (a.hp.isNotEmpty) a.hp,
                             if (a.hp.isEmpty && a.telp.isNotEmpty) a.telp,
@@ -4453,8 +4460,19 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
   }
 }
 
+/// Dialog pendaftaran member cepat langsung dari Kasir/POS.
+///
+/// Menyediakan pilihan **Kategori / Tipe Member** (`tipe_anggota_list`,
+/// terfilter per toko aktif dan otomatis pra-pilih **Umum**) serta **Jenis
+/// Keanggotaan** (`jenis_anggota_list`, otomatis pra-pilih opsi bawaan seperti
+/// `Biasa`). Apabila kasir memilih kategori sivitas internal (`Santri`/`Siswa`,
+/// `Mahasiswa`, `Pejuang`/`Pegawai`, `Dosen`, `Guru`), ditampilkan pengingat
+/// tata kelola divisi agar pendaftaran resmi diutamakan lewat Sekolah/Pondok,
+/// Akademik, atau SDM tanpa menghalangi transaksi mendesak.
 class _DialogTambahMemberCepat extends StatefulWidget {
-  const _DialogTambahMemberCepat();
+  final String kataKunciAwal;
+
+  const _DialogTambahMemberCepat({this.kataKunciAwal = ''});
 
   @override
   State<_DialogTambahMemberCepat> createState() =>
@@ -4466,6 +4484,131 @@ class _DialogTambahMemberCepatState extends State<_DialogTambahMemberCepat> {
   final _nama = TextEditingController();
   final _hp = TextEditingController();
   bool _menyimpan = false;
+  bool _memuatKategori = true;
+
+  List<Kategori> _daftarTipe = const [];
+  List<Kategori> _daftarJenis = const [];
+  int? _tipeId;
+  int? _jenisId;
+
+  @override
+  void initState() {
+    super.initState();
+    final awal = widget.kataKunciAwal.trim();
+    if (awal.isNotEmpty) {
+      final hanyaAngkaTelepon = RegExp(r'^[0-9+() -]{6,}$').hasMatch(awal);
+      if (hanyaAngkaTelepon) {
+        _hp.text = awal;
+      } else {
+        _nama.text = awal;
+      }
+    }
+    _muatReferensiKategori();
+  }
+
+  Future<void> _muatReferensiKategori() async {
+    final idToko = Sesi.instance.idTokoTerpilih;
+    List<Kategori> tipe = const [];
+    List<Kategori> jenis = const [];
+    try {
+      final resTipe = await MasterOffline.daftarDenganCache(
+        'tipe_anggota_list',
+        {if (idToko != null) 'toko_id': idToko},
+        'master:tipe_anggota_pilihan_kasir:${idToko ?? 0}',
+      );
+      tipe = ((resTipe['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Kategori.fromJson(Map<String, dynamic>.from(e)))
+          .where((k) => k.id > 0 && k.nama.trim().isNotEmpty)
+          .toList();
+    } catch (_) {
+      try {
+        final fallback = await MasterOffline.daftarDenganCache(
+          'tipe_anggota_list',
+          const {},
+          'master:tipe_anggota_pilihan',
+        );
+        tipe = ((fallback['data'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((e) => Kategori.fromJson(Map<String, dynamic>.from(e)))
+            .where((k) => k.id > 0 && k.nama.trim().isNotEmpty)
+            .toList();
+      } catch (_) {}
+    }
+
+    try {
+      final resJenis = await MasterOffline.daftarDenganCache(
+        'jenis_anggota_list',
+        const {},
+        'master:jenis_anggota_pilihan',
+      );
+      jenis = ((resJenis['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Kategori.fromJson(Map<String, dynamic>.from(e)))
+          .where((k) => k.id > 0 && k.nama.trim().isNotEmpty)
+          .toList();
+    } catch (_) {}
+
+    if (!mounted) return;
+    int? defaultTipeId;
+    for (final t in tipe) {
+      if (t.defaultKasir || t.nama.trim().toLowerCase() == 'umum') {
+        defaultTipeId = t.id;
+        break;
+      }
+    }
+    defaultTipeId ??= tipe.isNotEmpty ? tipe.first.id : null;
+
+    int? defaultJenisId;
+    for (final j in jenis) {
+      if (j.dipilih || j.nama.trim().toLowerCase() == 'biasa') {
+        defaultJenisId = j.id;
+        break;
+      }
+    }
+    defaultJenisId ??= jenis.isNotEmpty ? jenis.first.id : null;
+
+    setStateIfMounted(() {
+      _daftarTipe = tipe;
+      _daftarJenis = jenis;
+      _tipeId = defaultTipeId;
+      _jenisId = defaultJenisId;
+      _memuatKategori = false;
+    });
+  }
+
+  Kategori? get _tipeTerpilih {
+    if (_tipeId == null) return null;
+    for (final t in _daftarTipe) {
+      if (t.id == _tipeId) return t;
+    }
+    return null;
+  }
+
+  bool get _adalahKategoriSivitas {
+    final t = _tipeTerpilih;
+    if (t == null) return false;
+    if (t.kategoriSivitas) return true;
+    final n = t.nama.trim().toLowerCase();
+    return n.contains('siswa') ||
+        n.contains('santri') ||
+        n.contains('mahasiswa') ||
+        n.contains('pegawai') ||
+        n.contains('pejuang') ||
+        n.contains('dosen') ||
+        n.contains('guru');
+  }
+
+  bool get _wajibHpEfektif {
+    final t = _tipeTerpilih;
+    if (t != null && t.wajibHp != null) return t.wajibHp!;
+    if (t == null) return true;
+    final n = t.nama.trim().toLowerCase();
+    if (n.contains('siswa') || n.contains('santri') || n.contains('mahasiswa')) {
+      return false;
+    }
+    return true;
+  }
 
   @override
   void dispose() {
@@ -4478,9 +4621,15 @@ class _DialogTambahMemberCepatState extends State<_DialogTambahMemberCepat> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _menyimpan = true);
     try {
-      final body = {
+      final body = <String, dynamic>{
         'nama': _nama.text.trim(),
         'hp': _hp.text.trim(),
+        if (_tipeId != null && _tipeId! > 0)
+          'tipe_anggota_koperasi_id': _tipeId,
+        if (_jenisId != null && _jenisId! > 0)
+          'jenis_anggota_koperasi_id': _jenisId,
+        if (Sesi.instance.idTokoTerpilih != null)
+          'toko_id': Sesi.instance.idTokoTerpilih,
       };
       // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster) -- dialog
       // proses tampil di atas dialog tambah-member kasir (memang diinginkan).
@@ -4509,7 +4658,7 @@ class _DialogTambahMemberCepatState extends State<_DialogTambahMemberCepat> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(sudahAda
             ? 'Nomor sudah terdaftar. Member ${anggota.nama} dipilih; tidak dibuat duplikat.'
-            : 'Member ${anggota.nama} berhasil ditambahkan.'),
+            : 'Member ${anggota.nama} (${anggota.tipeNama.isNotEmpty && anggota.tipeNama != '-' ? anggota.tipeNama : 'Umum'}) berhasil ditambahkan.'),
       ));
       Navigator.of(context).pop(anggota);
     } catch (e) {
@@ -4524,57 +4673,144 @@ class _DialogTambahMemberCepatState extends State<_DialogTambahMemberCepat> {
 
   @override
   Widget build(BuildContext context) {
+    final wajibHp = _wajibHpEfektif;
     return AlertDialog(
       title: const Text('Tambah Member Baru'),
       content: SizedBox(
-        width: 380,
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Nomor telepon menjadi identitas unik. Jika nomor sudah terdaftar, aplikasi otomatis memilih member lama dan tidak membuat data ganda.',
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _nama,
-                autofocus: true,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Nama Member *',
-                  prefixIcon: Icon(Icons.person_outline),
+        width: 420,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Pilih kategori member dan isi identitas dasar. Jika nomor telepon sudah terdaftar, aplikasi otomatis memilih member lama agar tidak terjadi data ganda.',
                 ),
-                validator: (v) => v == null || v.trim().isEmpty
-                    ? 'Nama member wajib diisi.'
-                    : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _hp,
-                keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9+() -]')),
+                const SizedBox(height: 16),
+                if (_memuatKategori)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: LinearProgressIndicator(minHeight: 2),
+                  ),
+                DropdownButtonFormField<int?>(
+                  value: _daftarTipe.any((t) => t.id == _tipeId) ? _tipeId : null,
+                  decoration: const InputDecoration(
+                    labelText: 'Kategori / Tipe Member *',
+                    prefixIcon: Icon(Icons.category_outlined),
+                  ),
+                  items: _daftarTipe.isEmpty
+                      ? const [
+                          DropdownMenuItem<int?>(
+                            value: null,
+                            child: Text('Umum (Otomatis)'),
+                          ),
+                        ]
+                      : _daftarTipe
+                          .map((t) => DropdownMenuItem<int?>(
+                                value: t.id,
+                                child: Text(t.nama),
+                              ))
+                          .toList(),
+                  onChanged: _menyimpan
+                      ? null
+                      : (v) => setStateIfMounted(() => _tipeId = v),
+                ),
+                if (_adalahKategoriSivitas) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: Colors.amber.shade700.withValues(alpha: 0.45)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline,
+                            size: 18, color: Colors.amber.shade900),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Catatan Alur Divisi: Pendaftaran resmi Santri/Siswa dianjurkan melalui Divisi Sekolah/Pondok, Mahasiswa melalui Akademik, dan Pejuang/Pegawai melalui Divisi SDM agar otomatis tersinkron. Untuk pelanggan toko biasa, pilih kategori Umum.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              height: 1.35,
+                              color: AppColors.textPrimaryOf(context),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
-                decoration: const InputDecoration(
-                  labelText: 'Nomor Telepon / WhatsApp *',
-                  hintText: 'Contoh: 081234567890',
-                  prefixIcon: Icon(Icons.phone_outlined),
+                if (_daftarJenis.length > 1) ...[
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int?>(
+                    value:
+                        _daftarJenis.any((j) => j.id == _jenisId) ? _jenisId : null,
+                    decoration: const InputDecoration(
+                      labelText: 'Jenis Keanggotaan',
+                      prefixIcon: Icon(Icons.card_membership_outlined),
+                    ),
+                    items: _daftarJenis
+                        .map((j) => DropdownMenuItem<int?>(
+                              value: j.id,
+                              child: Text(j.nama),
+                            ))
+                        .toList(),
+                    onChanged: _menyimpan
+                        ? null
+                        : (v) => setStateIfMounted(() => _jenisId = v),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _nama,
+                  autofocus: _nama.text.isEmpty,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Nama Member *',
+                    prefixIcon: Icon(Icons.person_outline),
+                  ),
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? 'Nama member wajib diisi.'
+                      : null,
                 ),
-                validator: (v) {
-                  final digit = (v ?? '').replaceAll(RegExp(r'[^0-9]'), '');
-                  if (digit.isEmpty) return 'Nomor telepon wajib diisi.';
-                  if (digit.length < 9 || digit.length > 16) {
-                    return 'Nomor telepon belum valid.';
-                  }
-                  return null;
-                },
-                onFieldSubmitted: (_) {
-                  if (!_menyimpan) _simpan();
-                },
-              ),
-            ],
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _hp,
+                  autofocus: _nama.text.isNotEmpty && _hp.text.isEmpty,
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9+() -]')),
+                  ],
+                  decoration: InputDecoration(
+                    labelText: wajibHp
+                        ? 'Nomor Telepon / WhatsApp *'
+                        : 'Nomor Telepon / WhatsApp (opsional untuk kategori ini)',
+                    hintText: 'Contoh: 081234567890',
+                    prefixIcon: const Icon(Icons.phone_outlined),
+                  ),
+                  validator: (v) {
+                    final digit = (v ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+                    if (digit.isEmpty) {
+                      return wajibHp ? 'Nomor telepon wajib diisi.' : null;
+                    }
+                    if (digit.length < 9 || digit.length > 16) {
+                      return 'Nomor telepon belum valid.';
+                    }
+                    return null;
+                  },
+                  onFieldSubmitted: (_) {
+                    if (!_menyimpan) _simpan();
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),

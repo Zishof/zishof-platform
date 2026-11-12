@@ -396,13 +396,33 @@ class Kategori {
   final bool? wajibHp;
   final bool? wajibEmail;
 
-  Kategori(
-      {required this.id, required this.nama, this.wajibHp, this.wajibEmail});
+  /// Penanda default kategori pendaftaran member cepat di Kasir (`Umum`) serta
+  /// penanda kategori sivitas (`Siswa`/`Santri`, `Mahasiswa`, `Pegawai`,
+  /// `Dosen`, `Guru`) untuk menampilkan pengingat alur pendaftaran divisi.
+  final bool defaultKasir;
+  final bool kategoriSivitas;
+
+  /// Penanda bawaan untuk `JenisAnggotaKoperasi` (`dipilih == true`, mis. `Biasa`).
+  final bool dipilih;
+
+  Kategori({
+    required this.id,
+    required this.nama,
+    this.wajibHp,
+    this.wajibEmail,
+    this.defaultKasir = false,
+    this.kategoriSivitas = false,
+    this.dipilih = false,
+  });
+
   factory Kategori.fromJson(Map<String, dynamic> j) => Kategori(
-        id: j['id'] as int,
-        nama: (j['nama'] ?? '') as String,
+        id: (j['id'] as num?)?.toInt() ?? 0,
+        nama: '${j['nama'] ?? ''}',
         wajibHp: j['wajibHp'] is bool ? j['wajibHp'] as bool : null,
         wajibEmail: j['wajibEmail'] is bool ? j['wajibEmail'] as bool : null,
+        defaultKasir: j['defaultKasir'] == true,
+        kategoriSivitas: j['kategoriSivitas'] == true,
+        dipilih: j['dipilih'] == true,
       );
 }
 
