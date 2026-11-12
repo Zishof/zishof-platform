@@ -826,7 +826,7 @@ class AppDrawer extends StatelessWidget {
                             builder: (_) => const RiwayatPenjualanScreen(),
                           ),
                         ),
-                      if (Sesi.instance.bolehMenu('piutang_pelanggan'))
+                      if (Sesi.instance.bolehMenu('anggota') || Sesi.instance.bolehMenu('piutang_pelanggan'))
                         _ItemMenu(
                           icon: Icons.payments_outlined,
                           label: 'Pelunasan Piutang',

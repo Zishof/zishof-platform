@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../api_client.dart';
+import '../sesi.dart';
 import '../services/simple_xlsx.dart';
 import '../widgets/app_components.dart';
 import '../services/master_offline.dart';
@@ -434,11 +435,14 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
   Map<String, bool> _hakPenyesuaian = const {};
   Map<String, bool> _hakTutupBuku = const {};
 
-  bool _bolehSaldoAwal(String aksi) => _hakSaldoAwal[aksi] != false;
+  bool _bolehSaldoAwal(String aksi) =>
+      Sesi.instance.bolehKelola || _hakSaldoAwal[aksi] != false;
 
-  bool _bolehPenyesuaian(String aksi) => _hakPenyesuaian[aksi] != false;
+  bool _bolehPenyesuaian(String aksi) =>
+      Sesi.instance.bolehKelola || _hakPenyesuaian[aksi] != false;
 
-  bool _bolehTutupBuku(String aksi) => _hakTutupBuku[aksi] != false;
+  bool _bolehTutupBuku(String aksi) =>
+      Sesi.instance.bolehKelola || _hakTutupBuku[aksi] != false;
 
   Future<void> _postingSaldo() async {
     var d = _drafSaldoAwal;

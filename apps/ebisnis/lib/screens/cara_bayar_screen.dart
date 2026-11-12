@@ -13,6 +13,7 @@ import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
 import '../widgets/aksi_baris_menu.dart';
+import 'anggota/tab_mutasi_hutang.dart';
 
 /// Layar "Cara Pembayaran" (padanan `cara_bayar/index.jsp`) -- CRUD penuh
 /// metode pembayaran koperasi, termasuk toggle "Memotong Deposit" dan
@@ -29,10 +30,12 @@ class CaraBayarScreen extends StatefulWidget {
 
 class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
   static const _pageSize = 15;
+  static const _cacheKey = 'master:cara_bayar_v2';
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _daftar = [];
   List<Map<String, dynamic>> _kanalPembayaranList = [];
+  Map<int, String> _petaAkunLabel = {};
   int _halaman = 1;
   int _total = 0;
   String _kataKunci = '';
@@ -46,7 +49,51 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
   @override
   void initState() {
     super.initState();
+    _muatPetaAkun();
     _muatDaftar();
+  }
+
+  /// Memuat peta ID akun -> "kode - nama" sebagai jaring pengaman (fallback)
+  /// pada kolom Akun tabel Cara Pembayaran jika baris dari cache lokal atau
+  /// setelah penyimpanan optimistis hanya menyimpan `akunId` tanpa `akunLabel`.
+  Future<void> _muatPetaAkun() async {
+    try {
+      final hasil = await MasterOffline.daftarDenganCache(
+          'akun_list', {'limit': 5000}, 'master:akun_list');
+      final data =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      final peta = <int, String>{};
+      for (final a in data) {
+        final id = (a['id'] as num?)?.toInt();
+        if (id == null || id <= 0) continue;
+        final kode = '${a['kode'] ?? ''}'.trim();
+        final nama = '${a['nama'] ?? ''}'.trim();
+        final label = [kode, nama].where((s) => s.isNotEmpty).join(' - ');
+        if (label.isNotEmpty) peta[id] = label;
+      }
+      if (mounted && peta.isNotEmpty) {
+        setStateIfMounted(() => _petaAkunLabel = peta);
+      }
+    } catch (_) {}
+  }
+
+  /// Menyelesaikan teks tampilan kolom "Akun" untuk satu metode pembayaran.
+  String _resolusiLabelAkun(Map<String, dynamic> c) {
+    final langsung = '${c['akunLabel'] ?? ''}'.trim();
+    if (langsung.isNotEmpty) return langsung;
+    final kode = '${c['akunKode'] ?? ''}'.trim();
+    final nama = '${c['akunNama'] ?? ''}'.trim();
+    if (kode.isNotEmpty || nama.isNotEmpty) {
+      return [kode, nama].where((s) => s.isNotEmpty).join(' - ');
+    }
+    final akunId = (c['akunId'] as num?)?.toInt() ??
+        (c['akun'] as num?)?.toInt() ??
+        int.tryParse('${c['akunId'] ?? c['akun'] ?? ''}');
+    if (akunId != null && akunId > 0) {
+      final dariPeta = _petaAkunLabel[akunId];
+      if (dariPeta != null && dariPeta.isNotEmpty) return dariPeta;
+    }
+    return '-';
   }
 
   Future<void> _muatDaftar() async {
@@ -64,7 +111,7 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
             'page': _halaman,
             'page_size': _pageSize,
           },
-          'master:cara_bayar', onData: (hasil) {
+          _cacheKey, onData: (hasil) {
         if (!mounted) return;
         final data =
             ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
@@ -149,7 +196,7 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
         aksi: 'cara_bayar_hapus',
         body: {'id': cara['id']},
         kunci: 'cara_bayar:${cara['id']}',
-        cacheKey: 'master:cara_bayar',
+        cacheKey: _cacheKey,
         rowLokal: {'id': cara['id']},
         hapusLokal: true,
       );
@@ -159,6 +206,24 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
         snackbarGalat(context, e);
       }
     }
+  }
+
+  void _bukaPelunasanPiutang() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => const AppShell(
+          menuAktif: MenuEBisnis.piutangPelanggan,
+          judul: 'Pelunasan Piutang',
+          subjudul:
+              'Daftar piutang pelanggan & pelunasan beberapa faktur penjualan sekaligus',
+          scrollable: false,
+          body: Padding(
+            padding: EdgeInsets.only(bottom: 16),
+            child: AnggotaTabMutasiHutang(),
+          ),
+        ),
+      ),
+    );
   }
 
   int get _totalHalaman => (_total / _pageSize).ceil().clamp(1, 999999);
@@ -172,10 +237,25 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
       scrollable: false,
       actionsAppBar: [
         const IndikatorSinkronMaster(),
+        IconButton(
+          icon: const Icon(Icons.payments_outlined),
+          tooltip: 'Pelunasan Piutang Pelanggan',
+          onPressed: _bukaPelunasanPiutang,
+        ),
         IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar)
       ],
-      aksiHeader:
+      aksiHeader: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          OutlinedButton.icon(
+            onPressed: _bukaPelunasanPiutang,
+            icon: const Icon(Icons.payments_outlined, size: 18),
+            label: const Text('Pelunasan Piutang'),
+          ),
+          const SizedBox(width: 8),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar),
+        ],
+      ),
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -293,9 +373,7 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
                               // dengan AppTableColumn('Akun', flex: 2) agar kode dan nama
                               // akun yang sudah dipetakan tampil pada kolom Akun).
                               AppTableCell.text(
-                                (c['akunLabel'] as String?)?.trim().isNotEmpty == true
-                                    ? '${c['akunLabel']}'
-                                    : '-',
+                                _resolusiLabelAkun(c),
                                 flex: 2,
                               ),
                               AppTableCell(
@@ -515,6 +593,15 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
     });
     try {
       // (daftar akun dimuat terpisah, lihat _muatAkun)
+      String akunLabel = '';
+      for (final a in _akun) {
+        if ((a['id'] as num?)?.toInt() == _akunId) {
+          final kd = '${a['kode'] ?? ''}'.trim();
+          final nm = '${a['nama'] ?? ''}'.trim();
+          akunLabel = [kd, nm].where((s) => s.isNotEmpty).join(' - ');
+          break;
+        }
+      }
       final body = {
         if (widget.cara != null) 'id': widget.cara!['id'],
         'kode': _kode.text.trim(),
@@ -526,6 +613,7 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
         'masukSebagaiHutang': _metodeKasbon ? true : _masukSebagaiHutang,
         'wajibPilihMember': _metodeKasbon ? true : _wajibPilihMember,
         'akunId': _akunId ?? 0,
+        'akunLabel': akunLabel,
         'kanalPembayaranId': _kanalPembayaranId ?? 0,
         'adaKembalian': _adaKembalian,
         'aktif': _aktif,
@@ -538,7 +626,7 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
         kunci: widget.cara != null
             ? 'cara_bayar:${widget.cara!['id']}'
             : 'cara_bayar:baru:${DateTime.now().microsecondsSinceEpoch}',
-        cacheKey: 'master:cara_bayar',
+        cacheKey: _CaraBayarScreenState._cacheKey,
         rowLokal: body,
       );
       if (mounted) Navigator.of(context).pop(true);
