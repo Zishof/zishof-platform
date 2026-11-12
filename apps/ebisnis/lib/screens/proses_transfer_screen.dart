@@ -314,6 +314,9 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
     DateTime? tanggal =
         DateTime.tryParse('${baris?['tanggalPembuatan'] ?? ''}');
     final terpilih = <int, double>{};
+    final plafonBaris = <int, double>{};
+    final inputNominalCtrl = <int, TextEditingController>{};
+    final itemAwalMap = <int, Map<String, dynamic>>{};
     List<Map<String, dynamic>> kandidat = [];
     final kategoriAktif = <String>{};
     final cariKandidat = TextEditingController();
@@ -322,6 +325,13 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
     bool sudahMuat = false;
     int halamanKandidat = 1;
 
+    TextEditingController ambilCtrlNominal(int idInduk, double nilaiAwal) {
+      return inputNominalCtrl.putIfAbsent(
+        idInduk,
+        () => TextEditingController(text: nilaiAwal.round().toString()),
+      );
+    }
+
     if (ubah) {
       try {
         final d = await ApiClient.instance
@@ -329,8 +339,29 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
         caraId = ((d['header'] as Map?)?['caraPembayaranId'] as num?)?.toInt();
         for (final e
             in ((d['item'] as List?) ?? []).cast<Map<String, dynamic>>()) {
-          terpilih[(e['id'] as num).toInt()] =
-              (e['nominal'] as num?)?.toDouble() ?? 0;
+          final idInduk =
+              ((e['indukDptId'] ?? e['id']) as num?)?.toInt() ?? 0;
+          if (idInduk <= 0) continue;
+          final nom = (e['nominal'] as num?)?.toDouble() ?? 0;
+          final maks = (e['maksNominal'] as num?)?.toDouble() ?? nom;
+          terpilih[idInduk] = nom;
+          plafonBaris[idInduk] = maks > 0 ? maks : nom;
+          ambilCtrlNominal(idInduk, nom);
+          itemAwalMap[idInduk] = {
+            ...e,
+            'id': idInduk,
+            'indukDptId': idInduk,
+            'sisaNominal': maks > 0 ? maks : nom,
+            'maksNominal': maks > 0 ? maks : nom,
+            'nominalTotalTagihan':
+                (e['nominalTotalTagihan'] as num?)?.toDouble() ?? nom,
+            'sudahDiproses':
+                (e['sudahDiprosesLain'] as num?)?.toDouble() ?? 0.0,
+            'sudahDibayar':
+                (e['sudahDibayarLain'] as num?)?.toDouble() ?? 0.0,
+            'belumLunasSebagian':
+                ((e['sudahDiprosesLain'] as num?)?.toDouble() ?? 0.0) > 0.01,
+          };
         }
       } catch (e) {
         _pesan('$e');
@@ -352,6 +383,18 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
       if (terpilih.isEmpty) {
         throw Exception('Pilih minimal satu baris DPC yang akan ditransfer.');
       }
+      for (final entry in terpilih.entries) {
+        final nom = entry.value;
+        final maks = plafonBaris[entry.key] ?? nom;
+        if (nom <= 0.01) {
+          throw Exception(
+              'Nominal transfer pada baris DPC harus lebih besar dari Rp 0.');
+        }
+        if (maks > 0.01 && nom > maks + 0.01) {
+          throw Exception(
+              'Nominal angsuran (Rp ${_rupiah(nom)}) tidak boleh melebihi sisa tagihan (Rp ${_rupiah(maks)}).');
+        }
+      }
       final idBaru = ubah ? null : MasterOffline.idSementaraBaru();
       return _kirimLokalDulu(
         'proses_transfer_simpan',
@@ -362,6 +405,10 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
           if (caraId != null) 'caraPembayaranId': caraId,
           if (tanggal != null) 'tanggalPembuatan': _fmt.format(tanggal!),
           'dptIds': terpilih.keys.toList(),
+          'items': [
+            for (final entry in terpilih.entries)
+              {'dptId': entry.key, 'nominal': entry.value},
+          ],
         },
         kunci: 'proses_transfer:${ubah ? baris['id'] : idBaru}',
         idLokal: ubah ? null : idBaru,
@@ -387,14 +434,40 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
             try {
               final res =
                   await ApiClient.instance.aksi('proses_transfer_kandidat', {
+                if (ubah && baris['id'] != null)
+                  'prosesTransferId': baris['id'],
                 if (cariKandidat.text.trim().isNotEmpty)
                   'cari': cariKandidat.text.trim(),
                 if (satkerId != null) 'satuanKerjaId': satkerId,
                 if (kategoriAktif.isNotEmpty)
                   'kategori': kategoriAktif.toList(),
               });
-              kandidat =
+              final dariServer =
                   ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+              final adaIds = <int>{};
+              for (final r in dariServer) {
+                final idInduk =
+                    ((r['indukDptId'] ?? r['id']) as num?)?.toInt() ?? 0;
+                if (idInduk > 0) {
+                  adaIds.add(idInduk);
+                  final maks = (r['maksNominal'] ??
+                          r['sisaNominal'] ??
+                          r['nominal']) as num?;
+                  if (maks != null && maks.toDouble() > 0) {
+                    plafonBaris[idInduk] = maks.toDouble();
+                  }
+                }
+              }
+              final gabungan = <Map<String, dynamic>>[];
+              if (cariKandidat.text.trim().isEmpty && kategoriAktif.isEmpty) {
+                for (final entry in itemAwalMap.entries) {
+                  if (!adaIds.contains(entry.key)) {
+                    gabungan.add(entry.value);
+                  }
+                }
+              }
+              gabungan.addAll(dariServer);
+              kandidat = gabungan;
               halamanKandidat = 1;
             } catch (e) {
               _pesan('$e');
@@ -592,26 +665,205 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                               itemCount: kandidatHalaman.length,
                               itemBuilder: (_, i) {
                                 final b = kandidatHalaman[i];
-                                final id = (b['id'] as num).toInt();
-                                return CheckboxListTile(
-                                  dense: true,
-                                  value: terpilih.containsKey(id),
-                                  title: Text(
-                                      '${b['kode'] ?? ''} — ${b['nama'] ?? ''}',
-                                      style: const TextStyle(fontSize: 12.5)),
-                                  subtitle: Text(
-                                      '${b['sumber'] ?? ''} · ${b['satuanKerja'] ?? '-'} · '
-                                      'Rp ${_rupiah(b['nominal'])}',
-                                      style: const TextStyle(fontSize: 11.5)),
-                                  onChanged: (v) => setDialog(() {
-                                    if (v == true) {
-                                      terpilih[id] =
-                                          (b['nominal'] as num?)?.toDouble() ??
-                                              0;
-                                    } else {
-                                      terpilih.remove(id);
-                                    }
-                                  }),
+                                final id =
+                                    ((b['indukDptId'] ?? b['id']) as num)
+                                        .toInt();
+                                final maksNominal = ((b['maksNominal'] ??
+                                            b['sisaNominal'] ??
+                                            b['nominal']) as num?)
+                                        ?.toDouble() ??
+                                    0.0;
+                                final totalTagihan =
+                                    ((b['nominalTotalTagihan'] ?? b['nominal'])
+                                                as num?)
+                                            ?.toDouble() ??
+                                        maksNominal;
+                                final sudahDiproses =
+                                    (b['sudahDiproses'] as num?)?.toDouble() ??
+                                        0.0;
+                                final belumLunasSebagian =
+                                    b['belumLunasSebagian'] == true ||
+                                        sudahDiproses > 0.01;
+                                plafonBaris[id] = maksNominal;
+                                final dicentang = terpilih.containsKey(id);
+                                final nilaiDipilih =
+                                    terpilih[id] ?? maksNominal;
+                                final sisaSetelahIni = (maksNominal -
+                                        (dicentang ? nilaiDipilih : 0.0))
+                                    .clamp(0.0, totalTagihan);
+                                return Container(
+                                  margin:
+                                      const EdgeInsets.symmetric(vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: dicentang
+                                        ? Theme.of(c)
+                                            .colorScheme
+                                            .primaryContainer
+                                            .withValues(alpha: 0.22)
+                                        : null,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: dicentang
+                                          ? Theme.of(c)
+                                              .colorScheme
+                                              .primary
+                                              .withValues(alpha: 0.35)
+                                          : Colors.transparent,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      CheckboxListTile(
+                                        dense: true,
+                                        value: dicentang,
+                                        title: Text(
+                                            '${b['kode'] ?? ''} — ${b['nama'] ?? ''}',
+                                            style: const TextStyle(
+                                                fontSize: 12.5,
+                                                fontWeight: FontWeight.w500)),
+                                        subtitle: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '${b['sumber'] ?? ''} · ${b['satuanKerja'] ?? '-'} · '
+                                              '${belumLunasSebagian ? 'Sisa Tagihan Rp ${_rupiah(maksNominal)}' : 'Rp ${_rupiah(maksNominal)}'}',
+                                              style: const TextStyle(
+                                                  fontSize: 11.5),
+                                            ),
+                                            if (belumLunasSebagian)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                    top: 2),
+                                                child: Text(
+                                                  'Belum Lunas (Angsuran) · Total Tagihan Rp ${_rupiah(totalTagihan)} · '
+                                                  'Sudah Diproses Rp ${_rupiah(sudahDiproses)} · Sisa Rp ${_rupiah(maksNominal)}',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Colors
+                                                        .amber.shade900,
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                        onChanged: (v) => setDialog(() {
+                                          if (v == true) {
+                                            final ctrl = ambilCtrlNominal(
+                                                id, maksNominal);
+                                            final parsed = double.tryParse(ctrl
+                                                    .text
+                                                    .replaceAll('.', '')
+                                                    .replaceAll(',', '.')) ??
+                                                maksNominal;
+                                            final pakai = (parsed > 0.01 &&
+                                                    parsed <=
+                                                        maksNominal + 0.01)
+                                                ? parsed
+                                                : maksNominal;
+                                            ctrl.text =
+                                                pakai.round().toString();
+                                            terpilih[id] = pakai;
+                                          } else {
+                                            terpilih.remove(id);
+                                          }
+                                        }),
+                                      ),
+                                      if (dicentang)
+                                        Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                              16, 0, 16, 8),
+                                          child: Row(
+                                            children: [
+                                              SizedBox(
+                                                width: 220,
+                                                child: TextField(
+                                                  controller: ambilCtrlNominal(
+                                                      id, nilaiDipilih),
+                                                  keyboardType:
+                                                      const TextInputType
+                                                          .numberWithOptions(
+                                                          decimal: false),
+                                                  style: const TextStyle(
+                                                      fontSize: 12.5,
+                                                      fontWeight:
+                                                          FontWeight.w600),
+                                                  decoration: InputDecoration(
+                                                    labelText:
+                                                        'Nominal Ditransfer (Bisa Mengangsur)',
+                                                    prefixText: 'Rp ',
+                                                    isDense: true,
+                                                    border:
+                                                        const OutlineInputBorder(),
+                                                    contentPadding:
+                                                        const EdgeInsets
+                                                            .symmetric(
+                                                            horizontal: 10,
+                                                            vertical: 8),
+                                                  ),
+                                                  onChanged: (txt) {
+                                                    final bersih = txt
+                                                        .replaceAll('.', '')
+                                                        .replaceAll(',', '')
+                                                        .trim();
+                                                    final val = double.tryParse(
+                                                            bersih) ??
+                                                        0.0;
+                                                    setDialog(() {
+                                                      terpilih[id] = val;
+                                                    });
+                                                  },
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              ActionChip(
+                                                visualDensity:
+                                                    VisualDensity.compact,
+                                                label: Text(
+                                                  'Penuh Rp ${_rupiah(maksNominal)}',
+                                                  style: const TextStyle(
+                                                      fontSize: 11),
+                                                ),
+                                                onPressed: () => setDialog(() {
+                                                  final ctrl = ambilCtrlNominal(
+                                                      id, maksNominal);
+                                                  ctrl.text = maksNominal
+                                                      .round()
+                                                      .toString();
+                                                  terpilih[id] = maksNominal;
+                                                }),
+                                              ),
+                                              const SizedBox(width: 10),
+                                              Expanded(
+                                                child: Text(
+                                                  nilaiDipilih >
+                                                          maksNominal + 0.01
+                                                      ? 'Melebihi sisa tagihan (maks Rp ${_rupiah(maksNominal)})'
+                                                      : (sisaSetelahIni > 0.01
+                                                          ? 'Mengangsur · Sisa belum lunas Rp ${_rupiah(sisaSetelahIni)} tetap tampil di daftar belum selesai'
+                                                          : 'Pelunasan penuh (Sisa Rp 0)'),
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w500,
+                                                    color: nilaiDipilih >
+                                                            maksNominal + 0.01
+                                                        ? AppColors.danger
+                                                        : (sisaSetelahIni > 0.01
+                                                            ? Colors.amber
+                                                                .shade900
+                                                            : Colors.green
+                                                                .shade800),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                                 );
                               },
                             ),
@@ -647,6 +899,12 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
         },
       ),
     );
+    for (final ctrl in inputNominalCtrl.values) {
+      ctrl.dispose();
+    }
+    cariKandidat.dispose();
+    nama.dispose();
+    keterangan.dispose();
   }
 
   // ------------------------------------------------------------- detail
@@ -724,7 +982,8 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                                   style: const TextStyle(fontSize: 12.5)),
                               subtitle: Text(
                                   '${b['sumber'] ?? ''} · ${b['satuanKerja'] ?? '-'} · '
-                                  'Rp ${_rupiah(b['nominal'])}',
+                                  'Rp ${_rupiah(b['nominal'])}'
+                                  '${b['adalahAngsuran'] == true ? ' (Angsuran ke-${b['angsuranKe'] ?? 1} dari Rp ${_rupiah(b['nominalTotalTagihan'])} · Sisa Rp ${_rupiah(b['sisaSetelahIni'])})' : ''}',
                                   style: const TextStyle(fontSize: 11.5)),
                               trailing: bolehTandai
                                   ? SegmentedButton<String>(

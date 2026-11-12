@@ -762,6 +762,26 @@ Widget? _bangunLayarMenuTarget(String target) {
 
 const String _kunciCacheShortcut = 'master:shortcut_menu_utama_v1';
 const String _kunciCacheShortcutAdmin = 'master:shortcut_menu_admin_v1';
+const String kTargetRoleShortcutDefault = '__DEFAULT__';
+
+/// Menghasilkan kunci cache SQLite per-role (`Tbmrole.roleId`, ATURAN MUTLAK 4A)
+/// agar saat perangkat berpindah akun dengan role berbeda, daftar shortcut tidak
+/// saling bocor dari cache pengguna sebelumnya.
+String _kunciCacheShortcutAktif() {
+  final rid = Sesi.instance.userRoleId.trim();
+  return rid.isEmpty
+      ? _kunciCacheShortcut
+      : 'master:shortcut_menu_utama_v2:$rid';
+}
+
+String _kunciCacheShortcutAdminUntukRole(String targetRoleId) {
+  final norm = targetRoleId.trim().isEmpty
+      ? kTargetRoleShortcutDefault
+      : targetRoleId.trim();
+  return norm == kTargetRoleShortcutDefault
+      ? _kunciCacheShortcutAdmin
+      : 'master:shortcut_menu_admin_v2:$norm';
+}
 const String kPesanShortcutBelumTersimpan =
     'Perubahan belum tersimpan. Pastikan koneksi tersedia, lalu coba simpan kembali.';
 
@@ -859,8 +879,8 @@ class _RingkasanTabShortcutState extends State<RingkasanTabShortcut>
       _terapkanDaftar(Sesi.instance.shortcutMenu);
     } else {
       try {
-        final rawLokal =
-            await CoreDb.instance.ambilCacheReferensi(_kunciCacheShortcut);
+        final rawLokal = await CoreDb.instance
+            .ambilCacheReferensi(_kunciCacheShortcutAktif());
         if (rawLokal != null && rawLokal.isNotEmpty) {
           final decoded = jsonDecode(rawLokal);
           if (decoded is List && decoded.isNotEmpty) {
@@ -898,6 +918,14 @@ class _RingkasanTabShortcutState extends State<RingkasanTabShortcut>
     try {
       final res = await ApiClient.instance.aksi('shortcut_menu_list');
       final dataServer = _daftarShortcutDariRespons(res['data']);
+      final roleIdRes = '${res['userRoleId'] ?? ''}'.trim();
+      final roleNameRes = '${res['userRoleName'] ?? ''}'.trim();
+      if (roleIdRes.isNotEmpty) {
+        Sesi.instance.userRoleId = roleIdRes;
+      }
+      if (roleNameRes.isNotEmpty) {
+        Sesi.instance.userRoleName = roleNameRes;
+      }
       if (res.containsKey('bolehKelolaShortcut')) {
         Sesi.instance.bolehKelolaShortcut =
             res['bolehKelolaShortcut'] == true ||
@@ -908,7 +936,7 @@ class _RingkasanTabShortcutState extends State<RingkasanTabShortcut>
         Sesi.instance.shortcutMenu = dataServer;
         try {
           await CoreDb.instance.simpanCacheReferensi(
-            _kunciCacheShortcut,
+            _kunciCacheShortcutAktif(),
             jsonEncode(dataServer),
           );
         } catch (_) {}
@@ -1344,6 +1372,16 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
   bool _menyimpan = false;
   String? _pesanError;
   List<Map<String, dynamic>> _daftar = [];
+  String _targetRoleId = kTargetRoleShortcutDefault;
+  bool _punyaKonfigurasiKhusus = true;
+  bool _menggunakanFallbackDefault = false;
+  List<Map<String, dynamic>> _daftarRole = const [
+    {
+      'roleId': kTargetRoleShortcutDefault,
+      'roleName': 'Default Global (Semua Role Tanpa Pengaturan Khusus)',
+      'punyaKonfigurasiKhusus': true,
+    },
+  ];
 
   static const List<Map<String, String>> _pilihanTargetSiapPakai = [
     {
@@ -1536,15 +1574,20 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
     _muatDaftar();
   }
 
-  Future<void> _muatDaftar() async {
+  Future<void> _muatDaftar({String? targetRoleBaru}) async {
+    final roleDiminta = targetRoleBaru?.trim();
     setStateIfMounted(() {
       _memuat = true;
       _pesanError = null;
+      if (roleDiminta != null && roleDiminta.isNotEmpty) {
+        _targetRoleId = roleDiminta;
+      }
     });
-    // Cache admin dipisahkan dari daftar pengguna yang sudah disaring haknya.
+    final kunciAdminLokal = _kunciCacheShortcutAdminUntukRole(_targetRoleId);
+    // Cache admin dipisahkan per targetRoleId dari daftar pengguna yang sudah disaring haknya.
     try {
       final rawLokal =
-          await CoreDb.instance.ambilCacheReferensi(_kunciCacheShortcutAdmin);
+          await CoreDb.instance.ambilCacheReferensi(kunciAdminLokal);
       if (rawLokal != null && rawLokal.isNotEmpty) {
         final decoded = jsonDecode(rawLokal);
         if (decoded is List && decoded.isNotEmpty) {
@@ -1559,14 +1602,38 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
     } catch (_) {}
 
     try {
-      final res = await ApiClient.instance.aksi('shortcut_menu_list');
+      final payloadList = <String, dynamic>{
+        if (roleDiminta != null && roleDiminta.isNotEmpty)
+          'targetRoleId': roleDiminta,
+      };
+      final res = await ApiClient.instance.aksi(
+        'shortcut_menu_list',
+        payloadList.isEmpty ? null : payloadList,
+      );
+      final roleEfektif = '${res['targetRoleId'] ?? _targetRoleId}'.trim();
+      final daftarRoleRes = (res['daftarRole'] as List?)
+          ?.whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
       final sumber = _daftarShortcutDariRespons(res['semuaShortcut']);
       if (sumber.isNotEmpty) {
         sumber.sort((a, b) => ((a['urutan'] as num?)?.toInt() ?? 999)
             .compareTo((b['urutan'] as num?)?.toInt() ?? 999));
-        setStateIfMounted(() => _daftar = sumber);
-        await CoreDb.instance
-            .simpanCacheReferensi(_kunciCacheShortcutAdmin, jsonEncode(sumber));
+        setStateIfMounted(() {
+          _targetRoleId = roleEfektif.isEmpty
+              ? kTargetRoleShortcutDefault
+              : roleEfektif;
+          _punyaKonfigurasiKhusus = res['punyaKonfigurasiKhusus'] == true;
+          _menggunakanFallbackDefault =
+              res['menggunakanFallbackDefault'] == true;
+          if (daftarRoleRes != null && daftarRoleRes.isNotEmpty) {
+            _daftarRole = daftarRoleRes;
+          }
+          _daftar = sumber;
+        });
+        await CoreDb.instance.simpanCacheReferensi(
+            _kunciCacheShortcutAdminUntukRole(_targetRoleId),
+            jsonEncode(sumber));
       } else if (_daftar.isEmpty) {
         setStateIfMounted(() => _daftar = buatDaftarShortcutDefaultLokal());
       }
@@ -1598,17 +1665,32 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
       // offline karena replay dapat menimpa perubahan admin lain.
       final res = await jalankanAksiShortcutOnlineOnly(
         aksi: 'shortcut_menu_simpan',
-        payload: {'items': siapkanShortcutUntukDisimpan(_daftar)},
+        payload: {
+          'targetRoleId': _targetRoleId,
+          'items': siapkanShortcutUntukDisimpan(_daftar),
+        },
         kirim: ApiClient.instance.aksi,
         setelahDikonfirmasi: (konfirmasi) async {
           final admin = _daftarShortcutDariRespons(konfirmasi['semuaShortcut']);
           final daftarAktif = _daftarShortcutDariRespons(konfirmasi['data']);
-          setStateIfMounted(() => _daftar = admin);
+          final daftarRoleRes = (konfirmasi['daftarRole'] as List?)
+              ?.whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          setStateIfMounted(() {
+            _daftar = admin;
+            _punyaKonfigurasiKhusus = true;
+            _menggunakanFallbackDefault = false;
+            if (daftarRoleRes != null && daftarRoleRes.isNotEmpty) {
+              _daftarRole = daftarRoleRes;
+            }
+          });
           Sesi.instance.shortcutMenu = daftarAktif;
           await CoreDb.instance.simpanCacheReferensi(
-              _kunciCacheShortcutAdmin, jsonEncode(admin));
+              _kunciCacheShortcutAdminUntukRole(_targetRoleId),
+              jsonEncode(admin));
           await CoreDb.instance.simpanCacheReferensi(
-              _kunciCacheShortcut, jsonEncode(daftarAktif));
+              _kunciCacheShortcutAktif(), jsonEncode(daftarAktif));
         },
       );
       final dariServer = _daftarShortcutDariRespons(res['semuaShortcut']);
@@ -1641,12 +1723,17 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
   }
 
   Future<void> _resetKeDefault() async {
+    final modeDefaultGlobal = _targetRoleId == kTargetRoleShortcutDefault;
     final konfirmasi = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Reset Shortcut ke Default?'),
-        content: const Text(
-          'Daftar shortcut akan dikembalikan ke 21 pintasan vital bawaan sistem (termasuk 5 laporan utama). Lanjutkan?',
+        title: Text(modeDefaultGlobal
+            ? 'Reset Shortcut Default ke Bawaan?'
+            : 'Kembalikan Role Ini ke Shortcut Default?'),
+        content: Text(
+          modeDefaultGlobal
+              ? 'Daftar shortcut Default Global akan dikembalikan ke pintasan vital bawaan sistem (termasuk 5 laporan utama). Lanjutkan?'
+              : 'Pengaturan khusus pada jenis pengguna ini akan dihapus sehingga kembali mengikuti daftar Shortcut Default Global. Lanjutkan?',
         ),
         actions: [
           AksiBarisMenu(aksi: [
@@ -1656,7 +1743,7 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
                 onTap: () => Navigator.of(ctx).pop(false)),
             AksiBaris(
                 ikon: Icons.restore,
-                label: 'Ya, Reset ke Default',
+                label: 'Ya, Reset',
                 onTap: () => Navigator.of(ctx).pop(true)),
           ]),
         ],
@@ -1668,17 +1755,31 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
     try {
       final res = await jalankanAksiShortcutOnlineOnly(
         aksi: 'shortcut_menu_reset',
-        payload: const {},
+        payload: {'targetRoleId': _targetRoleId},
         kirim: ApiClient.instance.aksi,
         setelahDikonfirmasi: (konfirmasi) async {
           final semua = _daftarShortcutDariRespons(konfirmasi['semuaShortcut']);
           final aktif = _daftarShortcutDariRespons(konfirmasi['data']);
-          setStateIfMounted(() => _daftar = semua);
+          final daftarRoleRes = (konfirmasi['daftarRole'] as List?)
+              ?.whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          setStateIfMounted(() {
+            _daftar = semua;
+            _punyaKonfigurasiKhusus =
+                konfirmasi['punyaKonfigurasiKhusus'] == true;
+            _menggunakanFallbackDefault =
+                konfirmasi['menggunakanFallbackDefault'] == true;
+            if (daftarRoleRes != null && daftarRoleRes.isNotEmpty) {
+              _daftarRole = daftarRoleRes;
+            }
+          });
           Sesi.instance.shortcutMenu = aktif;
           await CoreDb.instance.simpanCacheReferensi(
-              _kunciCacheShortcutAdmin, jsonEncode(semua));
-          await CoreDb.instance
-              .simpanCacheReferensi(_kunciCacheShortcut, jsonEncode(aktif));
+              _kunciCacheShortcutAdminUntukRole(_targetRoleId),
+              jsonEncode(semua));
+          await CoreDb.instance.simpanCacheReferensi(
+              _kunciCacheShortcutAktif(), jsonEncode(aktif));
         },
       );
       final semua = _daftarShortcutDariRespons(res['semuaShortcut']);
@@ -1998,10 +2099,89 @@ class _KelolaShortcutScreenState extends State<KelolaShortcutScreen>
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Shortcut yang aktif akan otomatis ditampilkan pada tab "Menu Utama Shortcut" di halaman Dashboard Bisnis, dan disaring secara otomatis mengikuti hak akses menu/tab/laporan masing-masing pengguna.',
+                        'Shortcut dapat diatur berbeda-beda untuk setiap Jenis Pengguna (Role / Tbmrole). Bila suatu Role belum diatur secara khusus, maka otomatis mengikuti daftar Shortcut Default Global.',
                         style: TextStyle(
                           fontSize: 12.5,
                           color: AppColors.textSecondaryOf(context),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 380,
+                      child: DropdownButtonFormField<String>(
+                        value: _daftarRole.any(
+                                (r) => '${r['roleId']}' == _targetRoleId)
+                            ? _targetRoleId
+                            : (_daftarRole.isNotEmpty
+                                ? '${_daftarRole.first['roleId']}'
+                                : kTargetRoleShortcutDefault),
+                        decoration: const InputDecoration(
+                          labelText: 'Pilih Jenis Pengguna (Role)',
+                          prefixIcon: Icon(Icons.admin_panel_settings_outlined,
+                              size: 18),
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        items: _daftarRole.map((r) {
+                          final rid =
+                              '${r['roleId'] ?? kTargetRoleShortcutDefault}';
+                          final rname = '${r['roleName'] ?? rid}';
+                          final kustom = rid != kTargetRoleShortcutDefault &&
+                              r['punyaKonfigurasiKhusus'] == true;
+                          return DropdownMenuItem<String>(
+                            value: rid,
+                            child: Text(
+                              kustom ? '$rname ★ Kustom' : rname,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (_memuat || _menyimpan)
+                            ? null
+                            : (val) {
+                                if (val != null && val != _targetRoleId) {
+                                  _muatDaftar(targetRoleBaru: val);
+                                }
+                              },
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.latarLembut(
+                          _targetRoleId == kTargetRoleShortcutDefault
+                              ? AppColors.primary
+                              : (_punyaKonfigurasiKhusus
+                                  ? AppColors.success
+                                  : AppColors.warning),
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        _targetRoleId == kTargetRoleShortcutDefault
+                            ? 'Pengaturan Default Global'
+                            : (_punyaKonfigurasiKhusus
+                                ? 'Pengaturan Khusus Role Ini'
+                                : (_menggunakanFallbackDefault
+                                    ? 'Belum Diatur Khusus (Mengikuti Default)'
+                                    : 'Mengikuti Default')),
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: _targetRoleId == kTargetRoleShortcutDefault
+                              ? AppColors.primary
+                              : (_punyaKonfigurasiKhusus
+                                  ? AppColors.success
+                                  : AppColors.warning),
                         ),
                       ),
                     ),

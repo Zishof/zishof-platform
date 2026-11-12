@@ -32,6 +32,8 @@ import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
 import '../widgets/rincian_intip_dialog.dart';
 import 'tab_so_grand.dart';
+import 'tab_riwayat_so_grand.dart';
+import 'proses_stok_opname_dialog.dart';
 import 'tab_pkm_screen.dart';
 
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
@@ -65,7 +67,7 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 8, vsync: this, initialIndex: widget.tabAwal.clamp(0, 7));
+    _tab = TabController(length: 9, vsync: this, initialIndex: widget.tabAwal.clamp(0, 8));
     _tab.addListener(_saatTabBerubah);
     _muatDaftarRakToko();
   }
@@ -201,7 +203,10 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
         return;
       }
       final bytes = hasilPilih.files.first.bytes!;
-      final payload = <String, dynamic>{'file_base64': base64Encode(bytes)};
+      final payload = <String, dynamic>{
+        'file_base64': base64Encode(bytes),
+        'mode_draft': true,
+      };
       final tokoId = Sesi.instance.idTokoTerpilih;
       if (tokoId != null && tokoId > 0) {
         payload['toko_id'] = tokoId;
@@ -283,7 +288,13 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
       } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(
-                'Tersimpan $disimpan baris${dilewati > 0 ? ', dilewati $dilewati baris (tidak lengkap/gagal)' : ''}.')));
+                'Tersimpan $disimpan baris ke Draft Opname${dilewati > 0 ? ', dilewati $dilewati baris' : ''}. Lanjutkan ke Cetak Selisih & Adjustment.')));
+      }
+      if (mounted && hasil['dokumen'] is Map) {
+        final dokId = ((hasil['dokumen'] as Map)['id'] as num?)?.toInt();
+        if (dokId != null && dokId > 0) {
+          await ProsesStokOpnameDialog.buka(context, dokumenId: dokId);
+        }
       }
       setStateIfMounted(() {});
     } catch (e) {
@@ -382,6 +393,10 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
             label: 'Unggah Excel',
             onTap: _unggahExcel),
       AksiBaris(
+          ikon: Icons.fact_check_outlined,
+          label: 'Proses SO, BA & Adjustment',
+          onTap: () => DaftarDokumenOpnameSheet.buka(context)),
+      AksiBaris(
           ikon: Icons.picture_as_pdf_outlined,
           label: 'Cetak PDF',
           onTap: _cetakPdf),
@@ -418,6 +433,7 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
               Tab(text: 'Monitor Keluar/Masuk'),
               Tab(text: 'SO Harian'),
               Tab(text: 'SO Grand'),
+              Tab(text: 'Riwayat Entry SO Grand'),
               Tab(text: 'PKM & Saran PO'),
               Tab(text: 'Input Opname'),
               Tab(text: 'SO by Scan'),
@@ -546,6 +562,15 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
                   });
                 },
               ),
+              TabRiwayatSoGrand(
+                onPilihRakUntukEntry: (rakId, rakNama) {
+                  setStateIfMounted(() {
+                    _rakTerpilihId = rakId;
+                    _rakTerpilihNama = rakNama;
+                  });
+                  _tab.animateTo(4);
+                },
+              ),
               const TabPkmKuantitasMaksimum(),
               _TabInputOpname(
                 rakAktifId: _rakTerpilihId,
@@ -553,7 +578,7 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
                 daftarRak: _daftarRakToko,
               ),
               _TabSoByScan(
-                aktif: _tab.index == 7,
+                aktif: _tab.index == 8,
                 rakAktifId: _rakTerpilihId,
                 rakAktifNama: _rakTerpilihNama,
                 daftarRak: _daftarRakToko,
@@ -1367,6 +1392,7 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
       });
       if (!mounted) return;
       await _ubahChecklist(produkId, true);
+      if (!mounted) return;
       setStateIfMounted(() {
         r['stokSistem'] = fisik;
       });
@@ -2061,6 +2087,8 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
   Map<String, dynamic>? _produkDitemukan;
   List<Map<String, dynamic>> _riwayatHariIni = [];
   DateTime _tanggalRiwayat = DateTime.now();
+  int? _dokumenDraftAktifId;
+  String _dokumenDraftAktifKode = '';
   String get _tanggalRiwayatTeks =>
       DateFormat('yyyy-MM-dd').format(_tanggalRiwayat);
   // Diff emisi baca lokal-dulu (daftarCacheDulu) -- menggerakkan kilau baris
@@ -2201,37 +2229,36 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
       _pesanError = null;
     });
     try {
-      /* LOKAL DULU. Opname kerap dikerjakan di gudang yang tidak bersinyal,
-       * jadi hitungannya harus tetap tercatat. Selisih biasanya datang dari
-       * server; saat offline dihitung sendiri dari stok sistem yang memang
-       * sudah ada di layar, lalu ditegaskan ulang begitu tersinkron. */
+      // Tahap 1 Alur Stok Opname Terpadu: simpan ke Draft Dokumen Opname terlebih dahulu
+      // (mode_draft: true) agar kuantitas masih bisa diedit & wajib Cetak Daftar Selisih
+      // serta Berita Acara sebelum Adjustment stok disetujui secara permanen.
       final hasil = await MasterOffline.simpanAtauAntre(
         'so_simpan',
         {
           'produk_id': p['produkId'],
           'stok_fisik': stokFisik,
+          'mode_draft': true,
+          'jenis_so': 'INPUT_MANUAL',
+          'tanggal_opname': _tanggalRiwayatTeks,
           'keterangan': _keteranganController.text.trim(),
           if (widget.rakAktifId != null) 'rak_id': widget.rakAktifId,
           if (widget.rakAktifId != null) 'rakId': widget.rakAktifId,
         },
-        // Opname adalah catatan kejadian append-only, bukan edit atas satu
-        // record per produk. Tanpa kunci coalesce, dua hasil hitung produk
-        // yang sama saat offline tetap menjadi dua baris audit di antrean.
       );
       final offline = hasil['offline'] == true;
       final selisih = (hasil['selisih'] as num?)?.toDouble() ??
           (stokFisik - ((p['stokSistem'] as num?)?.toDouble() ?? 0));
-      if (offline) {
-        await CoreDb.instance
-            .produkCachePerbaruiStok((p['produkId'] as num).toInt(), stokFisik);
-        MasterOffline.revisiBaris.value++;
+      if (hasil['dokumen'] is Map) {
+        final dokMap = Map<String, dynamic>.from(hasil['dokumen'] as Map);
+        _dokumenDraftAktifId = (dokMap['id'] as num?)?.toInt();
+        _dokumenDraftAktifKode = '${dokMap['kode'] ?? ''}';
       }
       unawaited(SinkronStokOpname.jalankan());
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-              'Tersimpan${offline ? ' di perangkat, menunggu kirim' : ''}. '
-              'Selisih: ${selisih > 0 ? "+" : ""}${_formatAngka.format(selisih)}'),
+              'Tersimpan di Draft Opname${_dokumenDraftAktifKode.isEmpty ? '' : ' ($_dokumenDraftAktifKode)'}${offline ? ' [menunggu sinkron]' : ''}. '
+              'Selisih sementara: ${selisih > 0 ? "+" : ""}${_formatAngka.format(selisih)}. Lanjutkan ke Proses SO untuk Cetak Selisih & Adjustment.'),
         ));
       }
       setStateIfMounted(() {
@@ -2298,6 +2325,8 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
             : (selisih > 0 ? AppColors.success : AppColors.danger);
         final dibatalkan = k['dibatalkan'] == true;
         final jurnalPembatalan = k['jurnalPembatalan'] == true;
+        final terkunciPermanen = k['terkunciPermanen'] == true;
+        final dokSoId = (k['dokumenSoId'] as num?)?.toInt();
         return AppTableRowData(
           cells: [
             AppTableCell(
@@ -2345,26 +2374,51 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
             AppTableCell.text('${k['keterangan'] ?? ''}', flex: 2, maxLines: 2),
             AppTableCell(
               flex: 2,
-              child: dibatalkan || jurnalPembatalan
-                  ? Text(
-                      jurnalPembatalan ? 'Jurnal pembatalan' : 'Dibatalkan',
-                      style: TextStyle(
-                          color: jurnalPembatalan
-                              ? AppColors.warning
-                              : AppColors.textSecondaryOf(context),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12),
+              child: terkunciPermanen
+                  ? InkWell(
+                      onTap: (dokSoId != null && dokSoId > 0)
+                          ? () => ProsesStokOpnameDialog.buka(
+                                context,
+                                dokumenId: dokSoId,
+                              )
+                          : null,
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.lock, size: 15, color: AppColors.success),
+                          SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'Disetujui (Terkunci · BA)',
+                              style: TextStyle(
+                                  color: AppColors.success,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 11.5),
+                            ),
+                          ),
+                        ],
+                      ),
                     )
-                  : AksiBarisMenu(aksi: [
-                      AksiBaris(
-                          ikon: Icons.undo,
-                          label: 'Batalkan',
-                          onTap: (Sesi.instance.bolehKelola ||
-                                  Sesi.instance.bolehAksiPos('stokopname', 'delete'))
-                              ? () => _batalkanOpname(k)
-                              : null,
-                          merusak: true),
-                    ]),
+                  : (dibatalkan || jurnalPembatalan)
+                      ? Text(
+                          jurnalPembatalan ? 'Jurnal pembatalan' : 'Dibatalkan',
+                          style: TextStyle(
+                              color: jurnalPembatalan
+                                  ? AppColors.warning
+                                  : AppColors.textSecondaryOf(context),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12),
+                        )
+                      : AksiBarisMenu(aksi: [
+                          AksiBaris(
+                              ikon: Icons.undo,
+                              label: 'Batalkan',
+                              onTap: (Sesi.instance.bolehKelola ||
+                                      Sesi.instance.bolehAksiPos('stokopname', 'delete'))
+                                  ? () => _batalkanOpname(k)
+                                  : null,
+                              merusak: true),
+                        ]),
             ),
           ],
         );
@@ -2505,6 +2559,66 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: AppColors.latarLembut(AppColors.primary),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+          ),
+          child: Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                'Alur Input Opname Manual: 1) Simpan Draft Hitung Fisik -> 2) Edit Qty & Cetak Selisih + Berita Acara -> 3) Adjustment Permanen'
+                '${_dokumenDraftAktifKode.isEmpty ? '' : ' · Aktif: $_dokumenDraftAktifKode'}',
+                style: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+              Wrap(
+                spacing: 8,
+                children: [
+                  if (_dokumenDraftAktifId != null && _dokumenDraftAktifId! > 0)
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: () async {
+                        final berubah = await ProsesStokOpnameDialog.buka(
+                          context,
+                          dokumenId: _dokumenDraftAktifId!,
+                        );
+                        if (berubah) await _muatRiwayat();
+                      },
+                      icon: const Icon(Icons.fact_check_outlined, size: 16),
+                      label: const Text(
+                          'Proses SO, Cetak Selisih/BA & Adjustment'),
+                    ),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    onPressed: () async {
+                      final berubah = await DaftarDokumenOpnameSheet.buka(
+                        context,
+                        filterJenisSo: 'INPUT_MANUAL',
+                      );
+                      if (berubah) await _muatRiwayat();
+                    },
+                    icon: const Icon(Icons.folder_open_outlined, size: 16),
+                    label: const Text('Daftar Dokumen & Berita Acara'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
         Row(
           children: [
             Expanded(
@@ -2658,6 +2772,8 @@ class _TabSoByScanState extends State<_TabSoByScan>
   bool _mengirim = false;
   String? _pesanError;
   final List<_AntreanSo> _antrean = [];
+  int? _dokumenScanAktifId;
+  String _dokumenScanAktifKode = '';
 
   @override
   void initState() {
@@ -2747,50 +2863,97 @@ class _TabSoByScanState extends State<_TabSoByScan>
   Future<void> _simpanSemua() async {
     final belumDikirim = _antrean.where((a) => a.statusKirim != 'ok').toList();
     if (belumDikirim.isEmpty) return;
-    setStateIfMounted(() => _mengirim = true);
-    var berhasil = 0;
+
+    final batchItems = <Map<String, dynamic>>[];
+    final validRows = <_AntreanSo>[];
     for (final a in belumDikirim) {
       final stok =
-          double.tryParse(a.stokFisik.text.replaceAll(RegExp('[^0-9.]'), ''));
+          double.tryParse(a.stokFisik.text.replaceAll(',', '.').replaceAll(RegExp('[^0-9.]'), ''));
       if (stok == null) {
         setStateIfMounted(() => a.statusKirim = 'Stok fisik wajib diisi');
         continue;
       }
-      try {
-        final r = await MasterOffline.simpanAtauAntre(
-          'so_simpan',
-          {
-            'produk_id': a.produk['produkId'],
-            'stok_fisik': stok,
-            'keterangan': a.keterangan.text.trim(),
-            if (widget.rakAktifId != null) 'rak_id': widget.rakAktifId,
-            if (widget.rakAktifId != null) 'rakId': widget.rakAktifId,
-          },
-          // Setiap hasil hitung adalah kejadian tersendiri. Jangan gabungkan
-          // antrean per produk karena dapat menghilangkan audit opname awal.
-        );
-        if (r['offline'] == true) {
-          await CoreDb.instance.produkCachePerbaruiStok(
-              (a.produk['produkId'] as num).toInt(), stok);
-          MasterOffline.revisiBaris.value++;
-        }
-        // Baris yang baru mengantre TIDAK diakui "ok" -- statusnya dibedakan
-        // supaya petugas tahu mana yang benar-benar sudah sampai server.
-        setStateIfMounted(
-            () => a.statusKirim = r['offline'] == true ? 'antre' : 'ok');
-        berhasil++;
-      } catch (e) {
-        setStateIfMounted(() => a.statusKirim = e.toString());
-      }
+      batchItems.add({
+        'produk_id': a.produk['produkId'],
+        'produkId': a.produk['produkId'],
+        'stok_fisik': stok,
+        'stokFisik': stok,
+        'keterangan': a.keterangan.text.trim(),
+        if (widget.rakAktifId != null && widget.rakAktifId! > 0)
+          'rak_id': widget.rakAktifId,
+      });
+      validRows.add(a);
     }
-    setStateIfMounted(() => _mengirim = false);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content:
-              Text('$berhasil dari ${belumDikirim.length} baris tersimpan.')));
-      setStateIfMounted(
-          () => _antrean.removeWhere((a) => a.statusKirim == 'ok'));
-      _fokusBarcode();
+    if (batchItems.isEmpty) return;
+
+    setStateIfMounted(() => _mengirim = true);
+    int? dokIdBaru;
+    try {
+      // Kirim dalam 1 transaksi dokumen draft SO_SCAN agar seluruh hasil scan
+      // berkumpul dalam satu Dokumen Stok Opname untuk Cetak Selisih, Berita Acara, & Adjustment.
+      final res = await ApiClient.instance.aksi('so_dokumen_simpan_draft', {
+        if (Sesi.instance.idTokoTerpilih != null)
+          'toko_id': Sesi.instance.idTokoTerpilih,
+        if (_dokumenScanAktifId != null && _dokumenScanAktifId! > 0)
+          'dokumen_id': _dokumenScanAktifId,
+        if (widget.rakAktifId != null && widget.rakAktifId! > 0)
+          'rak_id': widget.rakAktifId,
+        'jenis_so': 'SO_SCAN',
+        'items': batchItems,
+        'keterangan': 'Hasil SO by Scan',
+      });
+      if (res['dokumen'] is Map) {
+        final dokMap = Map<String, dynamic>.from(res['dokumen'] as Map);
+        dokIdBaru = (dokMap['id'] as num?)?.toInt();
+        _dokumenScanAktifId = dokIdBaru;
+        _dokumenScanAktifKode = '${dokMap['kode'] ?? ''}';
+      }
+      for (final a in validRows) {
+        a.statusKirim = 'ok';
+      }
+      if (mounted) {
+        setStateIfMounted(() {
+          _mengirim = false;
+          _antrean.removeWhere((a) => a.statusKirim == 'ok');
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              '${validRows.length} item hasil scan disimpan ke Draft $_dokumenScanAktifKode. Membuka Proses SO untuk Cetak Selisih, Berita Acara & Adjustment...'),
+        ));
+        if (dokIdBaru != null && dokIdBaru > 0) {
+          await ProsesStokOpnameDialog.buka(context, dokumenId: dokIdBaru);
+        }
+        _fokusBarcode();
+      }
+      return;
+    } catch (_) {
+      // Fallback antrean offline bila sedang tanpa koneksi internet
+      var berhasil = 0;
+      for (var i = 0; i < validRows.length; i++) {
+        final a = validRows[i];
+        final it = batchItems[i];
+        try {
+          final r = await MasterOffline.simpanAtauAntre('so_simpan', {
+            ...it,
+            'mode_draft': true,
+            'jenis_so': 'SO_SCAN',
+          });
+          setStateIfMounted(
+              () => a.statusKirim = r['offline'] == true ? 'antre' : 'ok');
+          berhasil++;
+        } catch (e) {
+          setStateIfMounted(() => a.statusKirim = e.toString());
+        }
+      }
+      setStateIfMounted(() => _mengirim = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                '$berhasil dari ${validRows.length} baris disimpan ke antrean perangkat.')));
+        setStateIfMounted(
+            () => _antrean.removeWhere((a) => a.statusKirim == 'ok'));
+        _fokusBarcode();
+      }
     }
   }
 
@@ -2808,6 +2971,60 @@ class _TabSoByScanState extends State<_TabSoByScan>
     }
     return Column(
       children: [
+        Container(
+          margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.latarLembut(AppColors.primary),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+          ),
+          child: Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                'Alur SO by Scan: 1) Scan & Simpan Draft -> 2) Edit Qty & Cetak Daftar Selisih + Berita Acara -> 3) Setujui Adjustment Permanen'
+                '${_dokumenScanAktifKode.isEmpty ? '' : ' · Aktif: $_dokumenScanAktifKode'}',
+                style: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+              Wrap(
+                spacing: 8,
+                children: [
+                  if (_dokumenScanAktifId != null && _dokumenScanAktifId! > 0)
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: () => ProsesStokOpnameDialog.buka(
+                        context,
+                        dokumenId: _dokumenScanAktifId!,
+                      ),
+                      icon: const Icon(Icons.fact_check_outlined, size: 16),
+                      label: const Text(
+                          'Proses SO, Cetak Selisih/BA & Adjustment'),
+                    ),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    onPressed: () => DaftarDokumenOpnameSheet.buka(
+                      context,
+                      filterJenisSo: 'SO_SCAN',
+                    ),
+                    icon: const Icon(Icons.folder_open_outlined, size: 16),
+                    label: const Text('Dokumen & Berita Acara Scan'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
         Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -2924,7 +3141,7 @@ class _TabSoByScanState extends State<_TabSoByScan>
                 child: AksiBarisMenu(aksi: [
                   AksiBaris(
                       ikon: Icons.save_outlined,
-                      label: 'Simpan Semua (${_antrean.length})',
+                      label: 'Simpan Draft & Lanjut Proses SO (${_antrean.length})',
                       onTap: _mengirim ? null : _simpanSemua),
                 ]),
               ),

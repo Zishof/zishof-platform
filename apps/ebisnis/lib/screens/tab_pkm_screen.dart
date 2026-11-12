@@ -57,11 +57,13 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
   List<String> _daftarKategori = [];
   String _filterStatus = 'SEMUA'; // SEMUA, REORDER, AMAN, KOSONG
 
-  int _totalPerluOrder = 0;
-  double _totalEstBiayaPo = 0;
-  int _totalFastMoving = 0;
-  int _totalSlowMoving = 0;
-  int _totalDeadStock = 0;
+  String _periodeAwal = '';
+  String _periodeAkhir = '';
+
+  bool get _sedangDifilter =>
+      _cariController.text.trim().isNotEmpty ||
+      _kategoriTerpilih.isNotEmpty ||
+      _filterStatus != 'SEMUA';
 
   @override
   void initState() {
@@ -111,11 +113,8 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
       setStateIfMounted(() {
         _semuaProduk = list;
         _daftarKategori = katList;
-        _totalPerluOrder = (res['totalPerluOrder'] as num?)?.toInt() ?? 0;
-        _totalEstBiayaPo = (res['totalEstBiayaPo'] as num?)?.toDouble() ?? 0.0;
-        _totalFastMoving = (res['totalFastMoving'] as num?)?.toInt() ?? 0;
-        _totalSlowMoving = (res['totalSlowMoving'] as num?)?.toInt() ?? 0;
-        _totalDeadStock = (res['totalDeadStock'] as num?)?.toInt() ?? 0;
+        _periodeAwal = (res['periodeAwal'] ?? '').toString();
+        _periodeAkhir = (res['periodeAkhir'] ?? '').toString();
         _memuat = false;
       });
       _terapkanFilter();
@@ -156,16 +155,25 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
     });
   }
 
+  /// Mengunduh berkas Excel PKM resmi (`format PKM (1).xlsx`) dengan menyertakan
+  /// seluruh filter aktif (`keyword`, `kategori`, `statusFilter`) serta membangun
+  /// fallback Excel lokal berformat identik apabila server belum memiliki versi terbaru.
   Future<void> _unduhExcel() async {
     setStateIfMounted(() => _mengunduh = true);
     try {
+      // Pastikan filter terkini sudah diterapkan sebelum ekspor
+      _terapkanFilter();
       final tokoId = Sesi.instance.idTokoTerpilih;
+      final keyword = _cariController.text.trim();
       final payload = <String, dynamic>{
         if (tokoId != null && tokoId > 0) 'toko_id': tokoId,
         'leadTime': double.tryParse(_ltController.text) ?? 3.0,
         'safetyStock': double.tryParse(_ssController.text) ?? 2.0,
         'minimumOrder': double.tryParse(_minorController.text) ?? 1.0,
         'hariKerja': int.tryParse(_hariKerjaController.text) ?? 69,
+        if (keyword.isNotEmpty) 'keyword': keyword,
+        if (_kategoriTerpilih.isNotEmpty) 'kategori': _kategoriTerpilih,
+        if (_filterStatus != 'SEMUA') 'statusFilter': _filterStatus,
       };
 
       final res = await ApiClient.instance.aksi('pkm_download_excel', payload);
@@ -173,7 +181,7 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
       if (base64Str.isEmpty) {
         throw Exception('Server tidak mengembalikan berkas Excel PKM.');
       }
-      final namaFile = res['namaFile'] as String? ?? 'Format-PKM-TokoQu.xlsx';
+      final namaFile = res['namaFile'] as String? ?? 'format-PKM.xlsx';
       final bytes = base64Decode(base64Str);
 
       final result = await FilePicker.platform.saveFile(
@@ -188,9 +196,12 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
         final file = File(result);
         await file.writeAsBytes(bytes);
         if (mounted) {
+          final ketFilter = _ringkasanFilterAktif();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Format PKM berhasil disimpan di $result'),
+              content: Text(
+                'Format PKM (${_filteredProduk.length} produk${ketFilter.isEmpty ? '' : ' · $ketFilter'}) disimpan di $result',
+              ),
               backgroundColor: Colors.green.shade700,
             ),
           );
@@ -207,34 +218,56 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
     }
   }
 
+  String _ringkasanFilterAktif() {
+    final parts = <String>[];
+    final q = _cariController.text.trim();
+    if (q.isNotEmpty) parts.add('Cari: "$q"');
+    if (_kategoriTerpilih.isNotEmpty) parts.add('Kategori: $_kategoriTerpilih');
+    if (_filterStatus != 'SEMUA') parts.add('Status: $_filterStatus');
+    return parts.join(' | ');
+  }
+
   Future<void> _cetakPdf() async {
+    _terapkanFilter();
     final doc = pw.Document();
-    final items = _filteredProduk;
+    final items = List<Map<String, dynamic>>.from(_filteredProduk);
     final tokoNama = Sesi.instance.tokoNama.isNotEmpty
         ? Sesi.instance.tokoNama
         : 'Toko Al-Bahjah';
+    final infoFilter = _ringkasanFilterAktif();
+    final teksPeriode = (_periodeAwal.isNotEmpty && _periodeAkhir.isNotEmpty)
+        ? '$_periodeAwal s/d $_periodeAkhir'
+        : '3 Bulan Terakhir';
 
     doc.addPage(pw.MultiPage(
       pageFormat: PdfPageFormat.a4.landscape,
-      margin: const pw.EdgeInsets.all(24),
+      margin: const pw.EdgeInsets.all(20),
       header: (ctx) => pw.Container(
-        margin: const pw.EdgeInsets.only(bottom: 12),
+        margin: const pw.EdgeInsets.only(bottom: 10),
         child: pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text('ANALISIS PKM & REKOMENDASI PURCHASE ORDER (PO)',
+                pw.Text('Ekonomi Syariah — FORMAT PKM (AVG SALES) & REKOMENDASI PO',
                     style: pw.TextStyle(
-                        fontSize: 14, fontWeight: pw.FontWeight.bold)),
-                pw.Text('Toko: $tokoNama · Rumus: PKM = AVG*(LT+SS)+Minor | PO = PKM - Stok',
-                    style: const pw.TextStyle(fontSize: 9)),
+                        fontSize: 13, fontWeight: pw.FontWeight.bold)),
+                pw.Text(
+                    'Toko: $tokoNama · Periode: $teksPeriode · Rumus: PKM = AVG*(LT+SS)+Minor | PO = PKM - Stok',
+                    style: const pw.TextStyle(fontSize: 8.5)),
+                pw.Text(
+                    infoFilter.isEmpty
+                        ? 'Filter: Semua Produk (${items.length} item)'
+                        : 'Filter Aktif: $infoFilter (${items.length} item)',
+                    style: pw.TextStyle(
+                        fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
               ],
             ),
             pw.Text(
                 'Tanggal Cetak: ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}',
-                style: const pw.TextStyle(fontSize: 9)),
+                style: const pw.TextStyle(fontSize: 8.5)),
           ],
         ),
       ),
@@ -243,15 +276,18 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
           headers: [
             'NO',
             'KODE',
-            'NAMA BARANG',
+            'NAMA PRODUK',
             'KATEGORI',
-            'TOTAL JUAL (3 BLN)',
-            'AVG SALES/HARI',
+            'JUAL H',
+            'JUAL H-1',
+            'JUAL H-2',
+            'TOTAL JUAL',
+            'STOCK OUT',
+            'AVG SALES',
             'STOK TOKO',
             'PKM (MAX)',
             'SARAN PO',
             'EST. BIAYA PO',
-            'STATUS',
           ],
           data: items.asMap().entries.map((entry) {
             final idx = entry.key + 1;
@@ -263,17 +299,20 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
               (p['kode'] ?? '').toString(),
               (p['nama'] ?? '').toString(),
               (p['kategori'] ?? '').toString(),
+              _formatAngka.format(p['jualH'] ?? 0),
+              _formatAngka.format(p['jualH1'] ?? 0),
+              _formatAngka.format(p['jualH2'] ?? 0),
               _formatAngka.format(p['totalJual'] ?? 0),
+              _formatAngka.format(p['totalStockOut'] ?? 0),
               _formatAngka.format(p['avgSales'] ?? 0),
               _formatAngka.format(p['stokSistem'] ?? 0),
               _formatAngka.format(p['pkm'] ?? 0),
-              po > 0 ? _formatAngka.format(po) : '-',
+              po > 0 ? _formatAngka.format(po) : '0',
               biaya > 0 ? _formatRupiah.format(biaya) : '-',
-              (p['statusStok'] ?? '').toString(),
             ];
           }).toList(),
-          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
-          cellStyle: const pw.TextStyle(fontSize: 7.5),
+          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7.5),
+          cellStyle: const pw.TextStyle(fontSize: 7),
           headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
           cellAlignment: pw.Alignment.centerLeft,
           cellAlignments: {
@@ -284,7 +323,10 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
             7: pw.Alignment.centerRight,
             8: pw.Alignment.centerRight,
             9: pw.Alignment.centerRight,
-            10: pw.Alignment.center,
+            10: pw.Alignment.centerRight,
+            11: pw.Alignment.centerRight,
+            12: pw.Alignment.centerRight,
+            13: pw.Alignment.centerRight,
           },
         ),
       ],
@@ -530,94 +572,110 @@ class _TabPkmKuantitasMaksimumState extends State<TabPkmKuantitasMaksimum> {
         ),
         const SizedBox(height: 12),
 
-        // Ringkasan Kartu (Klik untuk rincian + Excel & PDF)
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            SizedBox(
-              width: 240,
-              child: _kartuInfo(
-                judul: 'Total Produk Dianalisis',
-                nilai: _formatAngka.format(_semuaProduk.length),
-                sub: 'Klik rincian katalog ($tokoNama)',
-                warna: Colors.blue.shade700,
-                latar: Colors.blue.shade50,
-                ikon: Icons.inventory_2_outlined,
-                onTap: () => _intipProdukPkm('Semua Produk Analisis PKM', _semuaProduk),
-              ),
-            ),
-            SizedBox(
-              width: 240,
-              child: _kartuInfo(
-                judul: 'Wajib Reorder (PO > 0)',
-                nilai: '$_totalPerluOrder Item',
-                sub: 'Stok di bawah batas PKM',
-                warna: Colors.orange.shade800,
-                latar: Colors.orange.shade50,
-                ikon: Icons.warning_amber_rounded,
-                onTap: () => _intipProdukPkm(
-                  'Produk Wajib Reorder (PO > 0)',
-                  _semuaProduk
-                      .where((p) => ((p['rekomendasiPo'] as num?) ?? 0) > 0)
-                      .toList(),
+        // Ringkasan Kartu (selalu selaras dengan hasil filter aktif di tabel, Excel, & PDF)
+        Builder(
+          builder: (context) {
+            final sumberKartu = _filteredProduk;
+            final perluOrderList = sumberKartu
+                .where((p) => ((p['rekomendasiPo'] as num?) ?? 0) > 0)
+                .toList();
+            final estBiayaList = sumberKartu
+                .where((p) => ((p['estimasiBiayaPo'] as num?) ?? 0) > 0)
+                .toList();
+            final totalEstBiayaAktif = sumberKartu.fold<double>(
+              0.0,
+              (acc, p) => acc + (((p['estimasiBiayaPo'] as num?) ?? 0).toDouble()),
+            );
+            final fastMovingList = sumberKartu
+                .where((p) => '${p['klasifikasiAbc'] ?? ''}'.startsWith('A'))
+                .toList();
+            final slowDeadList = sumberKartu
+                .where((p) =>
+                    '${p['klasifikasiAbc'] ?? ''}'.startsWith('C') ||
+                    '${p['klasifikasiAbc'] ?? ''}'.startsWith('D'))
+                .toList();
+
+            return Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                SizedBox(
+                  width: 240,
+                  child: _kartuInfo(
+                    judul: _sedangDifilter ? 'Produk Sesuai Filter' : 'Total Produk Dianalisis',
+                    nilai: _formatAngka.format(sumberKartu.length),
+                    sub: _sedangDifilter
+                        ? 'Dari ${_formatAngka.format(_semuaProduk.length)} katalog ($tokoNama)'
+                        : 'Klik rincian katalog ($tokoNama)',
+                    warna: Colors.blue.shade700,
+                    latar: Colors.blue.shade50,
+                    ikon: Icons.inventory_2_outlined,
+                    onTap: () => _intipProdukPkm('Daftar Produk Analisis PKM', sumberKartu),
+                  ),
                 ),
-              ),
-            ),
-            SizedBox(
-              width: 260,
-              child: _kartuInfo(
-                judul: 'Estimasi Kebutuhan Biaya PO',
-                nilai: _formatRupiah.format(_totalEstBiayaPo),
-                sub: 'Total modal kerja kulakan',
-                warna: Colors.green.shade800,
-                latar: Colors.green.shade50,
-                ikon: Icons.payments_outlined,
-                onTap: () => _intipProdukPkm(
-                  'Rincian Estimasi Biaya PO',
-                  _semuaProduk
-                      .where((p) => ((p['estimasiBiayaPo'] as num?) ?? 0) > 0)
-                      .toList(),
+                SizedBox(
+                  width: 240,
+                  child: _kartuInfo(
+                    judul: 'Wajib Reorder (PO > 0)',
+                    nilai: '${perluOrderList.length} Item',
+                    sub: 'Stok di bawah batas PKM',
+                    warna: Colors.orange.shade800,
+                    latar: Colors.orange.shade50,
+                    ikon: Icons.warning_amber_rounded,
+                    onTap: () => _intipProdukPkm(
+                      'Produk Wajib Reorder (PO > 0)',
+                      perluOrderList,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            SizedBox(
-              width: 220,
-              child: _kartuInfo(
-                judul: 'Fast Moving (Kelas A)',
-                nilai: '$_totalFastMoving Item',
-                sub: 'Kontribusi penjualan 80% teratas',
-                warna: Colors.teal.shade800,
-                latar: Colors.teal.shade50,
-                ikon: Icons.bolt_outlined,
-                onTap: () => _intipProdukPkm(
-                  'Produk Fast Moving (Kelas A)',
-                  _semuaProduk
-                      .where((p) => '${p['klasifikasiAbc'] ?? ''}'.startsWith('A'))
-                      .toList(),
+                SizedBox(
+                  width: 260,
+                  child: _kartuInfo(
+                    judul: 'Estimasi Kebutuhan Biaya PO',
+                    nilai: _formatRupiah.format(totalEstBiayaAktif),
+                    sub: 'Total modal kerja kulakan',
+                    warna: Colors.green.shade800,
+                    latar: Colors.green.shade50,
+                    ikon: Icons.payments_outlined,
+                    onTap: () => _intipProdukPkm(
+                      'Rincian Estimasi Biaya PO',
+                      estBiayaList,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            SizedBox(
-              width: 220,
-              child: _kartuInfo(
-                judul: 'Slow / Dead Stock (C & D)',
-                nilai: '${_totalSlowMoving + _totalDeadStock} Item',
-                sub: 'Perlu evaluasi / retur supplier',
-                warna: Colors.purple.shade800,
-                latar: Colors.purple.shade50,
-                ikon: Icons.hourglass_bottom_outlined,
-                onTap: () => _intipProdukPkm(
-                  'Produk Slow Moving & Dead Stock (Kelas C & D)',
-                  _semuaProduk
-                      .where((p) =>
-                          '${p['klasifikasiAbc'] ?? ''}'.startsWith('C') ||
-                          '${p['klasifikasiAbc'] ?? ''}'.startsWith('D'))
-                      .toList(),
+                SizedBox(
+                  width: 220,
+                  child: _kartuInfo(
+                    judul: 'Fast Moving (Kelas A)',
+                    nilai: '${fastMovingList.length} Item',
+                    sub: 'Kontribusi penjualan 80% teratas',
+                    warna: Colors.teal.shade800,
+                    latar: Colors.teal.shade50,
+                    ikon: Icons.bolt_outlined,
+                    onTap: () => _intipProdukPkm(
+                      'Produk Fast Moving (Kelas A)',
+                      fastMovingList,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ],
+                SizedBox(
+                  width: 220,
+                  child: _kartuInfo(
+                    judul: 'Slow / Dead Stock (C & D)',
+                    nilai: '${slowDeadList.length} Item',
+                    sub: 'Perlu evaluasi / retur supplier',
+                    warna: Colors.purple.shade800,
+                    latar: Colors.purple.shade50,
+                    ikon: Icons.hourglass_bottom_outlined,
+                    onTap: () => _intipProdukPkm(
+                      'Produk Slow Moving & Dead Stock (Kelas C & D)',
+                      slowDeadList,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
         const SizedBox(height: 16),
 

@@ -20,6 +20,7 @@ import '../widgets/aksi_baris_menu.dart';
 import '../widgets/app_components.dart';
 import '../widgets/rincian_intip_dialog.dart';
 import '../widgets/safe_state.dart';
+import 'proses_stok_opname_dialog.dart';
 
 /// Tab SO Grand (Grand Stock Opname) — Audit Total Seluruh Fisik Barang Toko per Rak.
 ///
@@ -53,8 +54,6 @@ class TabSoGrand extends StatefulWidget {
 
 class _TabSoGrandState extends State<TabSoGrand> {
   final _formatAngka = NumberFormat('#,##0.##', 'id_ID');
-  final _formatRupiah =
-      NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
   bool _memuat = true;
   bool _menyimpan = false;
@@ -85,8 +84,14 @@ class _TabSoGrandState extends State<TabSoGrand> {
   String _rakFilterTerpilih = ''; // '' = Semua Rak, '0' = Rak Belum Ditentukan, atau ID rak
   List<String> _daftarKategori = [];
 
-  double _totalStokSistem = 0;
-  double _totalNilaiAset = 0;
+  DateTime _tanggalOpname = DateTime.now();
+  int? _aktifDokumenId;
+  String _aktifDokumenKode = '';
+  String _aktifDokumenStatus = '';
+  bool _aktifSudahCetakSelisih = false;
+
+  String get _tanggalOpnameTeks =>
+      DateFormat('yyyy-MM-dd').format(_tanggalOpname);
 
   String get _kunciChecklist =>
       'so_grand_cek_v2_${Sesi.instance.idTokoTerpilih ?? 0}';
@@ -161,7 +166,9 @@ class _TabSoGrandState extends State<TabSoGrand> {
 
     try {
       await _muatChecklist();
-      final payload = <String, dynamic>{};
+      final payload = <String, dynamic>{
+        'tanggal_opname': _tanggalOpnameTeks,
+      };
       final tokoId = Sesi.instance.idTokoTerpilih;
       if (tokoId != null && tokoId > 0) {
         payload['toko_id'] = tokoId;
@@ -185,8 +192,10 @@ class _TabSoGrandState extends State<TabSoGrand> {
           teks: 'Mengambil daftar produk per Rak dari server (45%)...');
 
       List<Map<String, dynamic>> list = [];
-      double totalStok = 0;
-      double totalAset = 0;
+      int? dokAktifId;
+      String dokAktifKode = '';
+      String dokAktifStatus = '';
+      bool dokAktifCetakSelisih = false;
 
       try {
         final res = await ApiClient.instance.aksi('so_grand_daftar', payload);
@@ -195,8 +204,10 @@ class _TabSoGrandState extends State<TabSoGrand> {
             .whereType<Map>()
             .map((m) => Map<String, dynamic>.from(m))
             .toList();
-        totalStok = (res['totalStokSistem'] as num?)?.toDouble() ?? 0;
-        totalAset = (res['totalNilaiAset'] as num?)?.toDouble() ?? 0;
+        dokAktifId = (res['aktifDokumenId'] as num?)?.toInt();
+        dokAktifKode = '${res['aktifDokumenKode'] ?? ''}';
+        dokAktifStatus = '${res['aktifDokumenStatus'] ?? ''}';
+        dokAktifCetakSelisih = res['aktifSudahCetakSelisih'] == true;
       } catch (_) {
         try {
           final resKat = await ApiClient.instance.aksi('katalog', payload);
@@ -237,8 +248,6 @@ class _TabSoGrandState extends State<TabSoGrand> {
                     (r['stokRak'] as num?)?.toDouble() ??
                     0;
                 final nilai = stokRak * hb;
-                totalStok += stokRak;
-                totalAset += nilai;
                 list.add({
                   'produkId': pId,
                   'kode': '${m['kode'] ?? '-'}',
@@ -263,8 +272,6 @@ class _TabSoGrandState extends State<TabSoGrand> {
                   (m['stok'] as num?)?.toDouble() ??
                   0;
               final nilai = stok * hb;
-              totalStok += stok;
-              totalAset += nilai;
               list.add({
                 'produkId': pId,
                 'kode': '${m['kode'] ?? '-'}',
@@ -297,8 +304,6 @@ class _TabSoGrandState extends State<TabSoGrand> {
             final hj = (p['harga_jual'] as num?)?.toDouble() ?? 0;
             final hbEfektif = hb > 0 ? hb : hj;
             final nilai = stok * hbEfektif;
-            totalStok += stok;
-            totalAset += nilai;
             list.add({
               'produkId': pId,
               'kode': '${p['kode'] ?? '-'}',
@@ -369,6 +374,21 @@ class _TabSoGrandState extends State<TabSoGrand> {
         if (!_controllersKet.containsKey(kBaris)) {
           _controllersKet[kBaris] = TextEditingController();
         }
+        if (item['stokFisikDraft'] != null) {
+          final df = (item['stokFisikDraft'] as num?)?.toDouble();
+          if (df != null) {
+            final teksDf = (df - df.roundToDouble()).abs() < 0.000001
+                ? df.round().toString()
+                : df.toString();
+            _controllersFisik[kBaris]!.text = teksDf;
+            _statusSimpanBaris[kBaris] = 'saved';
+            _checklistSelesai.add(kBaris);
+          }
+        }
+        if (('${item['keteranganDraft'] ?? ''}').trim().isNotEmpty &&
+            _controllersKet[kBaris]!.text.trim().isEmpty) {
+          _controllersKet[kBaris]!.text = '${item['keteranganDraft']}'.trim();
+        }
       }
       if (rakById.isNotEmpty) {
         final mergedRak = rakById.values.toList()
@@ -388,8 +408,10 @@ class _TabSoGrandState extends State<TabSoGrand> {
       if (!mounted) return;
       setStateIfMounted(() {
         _semuaProduk = list;
-        _totalStokSistem = totalStok;
-        _totalNilaiAset = totalAset;
+        _aktifDokumenId = dokAktifId;
+        _aktifDokumenKode = dokAktifKode;
+        _aktifDokumenStatus = dokAktifStatus;
+        _aktifSudahCetakSelisih = dokAktifCetakSelisih;
         _daftarKategori = kategoriSet.toList()..sort();
         _terapkanFilter();
       });
@@ -466,7 +488,60 @@ class _TabSoGrandState extends State<TabSoGrand> {
     }
   }
 
+  Future<void> _pilihTanggalOpname() async {
+    final pilihan = await showDatePicker(
+      context: context,
+      initialDate: _tanggalOpname,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      helpText: 'Pilih Tanggal Acuan SO Grand',
+    );
+    if (pilihan == null || !mounted) return;
+    setStateIfMounted(() {
+      _tanggalOpname = pilihan;
+      for (final c in _controllersFisik.values) {
+        c.clear();
+      }
+      for (final c in _controllersKet.values) {
+        c.clear();
+      }
+      _statusSimpanBaris.clear();
+    });
+    await _muatData();
+  }
+
+  Future<void> _bukaProsesStokOpname() async {
+    int? targetDokId = _aktifDokumenId;
+    if (_rakFilterTerpilih.isNotEmpty && _rakFilterTerpilih != '0') {
+      for (final p in _filteredProduk) {
+        final did = (p['dokumenId'] as num?)?.toInt();
+        if (did != null && did > 0) {
+          targetDokId = did;
+          break;
+        }
+      }
+    }
+    if (targetDokId != null && targetDokId > 0) {
+      final berubah = await ProsesStokOpnameDialog.buka(
+        context,
+        dokumenId: targetDokId,
+      );
+      if (berubah) await _muatData();
+    } else {
+      final rId = (_rakFilterTerpilih.isNotEmpty && _rakFilterTerpilih != '0')
+          ? int.tryParse(_rakFilterTerpilih)
+          : null;
+      final berubah = await DaftarDokumenOpnameSheet.buka(
+        context,
+        filterJenisSo: 'SO_GRAND',
+        filterRakId: rId,
+      );
+      if (berubah) await _muatData();
+    }
+  }
+
   Future<void> _simpanSatuBarisOtomatis(Map<String, dynamic> p) async {
+    if (p['terkunciPermanen'] == true) return;
     final kBaris = _kunciBaris(p);
     final pId = (p['produkId'] as num?)?.toInt() ?? 0;
     if (pId <= 0) return;
@@ -489,6 +564,7 @@ class _TabSoGrandState extends State<TabSoGrand> {
         'produkId': pId,
         'stok_fisik': fisik,
         'stokFisik': fisik,
+        'tanggal_opname': _tanggalOpnameTeks,
         'keterangan': ket.isEmpty ? 'Auto-Save SO Grand' : ket,
         if (rId != null && rId > 0) 'rak_id': rId,
         if (rId != null && rId > 0) 'rakId': rId,
@@ -497,14 +573,20 @@ class _TabSoGrandState extends State<TabSoGrand> {
       };
       final res =
           await ApiClient.instance.aksi('so_grand_simpan_baris', payload);
-      final stokBaru = (res['stokFisik'] as num?)?.toDouble() ?? fisik;
-      final stokTotalBaru =
-          (res['stokTotalProduk'] as num?)?.toDouble() ?? stokBaru;
       if (!mounted) return;
       setStateIfMounted(() {
-        p['stokRak'] = stokBaru;
-        p['stokSistem'] = stokBaru;
-        p['stokTotalProduk'] = stokTotalBaru;
+        p['stokFisikDraft'] = fisik;
+        if (res['dokumen'] is Map) {
+          final dok = Map<String, dynamic>.from(res['dokumen'] as Map);
+          final did = (dok['id'] as num?)?.toInt();
+          p['dokumenId'] = did;
+          p['dokumenKode'] = '${dok['kode'] ?? ''}';
+          p['dokumenStatus'] = '${dok['status'] ?? ''}';
+          _aktifDokumenId = did;
+          _aktifDokumenKode = '${dok['kode'] ?? ''}';
+          _aktifDokumenStatus = '${dok['status'] ?? ''}';
+          _aktifSudahCetakSelisih = dok['sudahCetakSelisih'] == true;
+        }
         if (res['rakId'] != null) p['rakId'] = res['rakId'];
         if (res['rakNama'] != null && '${res['rakNama']}'.isNotEmpty) {
           p['rakNama'] = '${res['rakNama']}';
@@ -525,6 +607,7 @@ class _TabSoGrandState extends State<TabSoGrand> {
   Future<void> _simpanBatchEntry() async {
     final items = <Map<String, dynamic>>[];
     for (final p in _filteredProduk) {
+      if (p['terkunciPermanen'] == true) continue;
       final kBaris = _kunciBaris(p);
       final pId = (p['produkId'] as num).toInt();
       final rId = (p['rakId'] as num?)?.toInt();
@@ -556,9 +639,10 @@ class _TabSoGrandState extends State<TabSoGrand> {
     final konfirmasi = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Simpan Entri SO Grand?'),
+        title: const Text('Simpan Draft Entry Fisik SO Grand (Tahap 1)?'),
         content: Text(
-            'Akan menyimpan penyesuaian stok per Rak untuk ${items.length} baris yang telah diisi fisik.\n\nStok per Rak dan stok total produk akan langsung diselaraskan.'),
+            'Akan menyimpan hasil hitung fisik untuk ${items.length} baris ke Draft Dokumen Stok Opname (tanpa mengubah stok berjalan terlebih dahulu).\n\n'
+            'Selanjutnya Anda dapat menekan "Proses Stok Opname & Adjustment" untuk membandingkan selisih, mencetak Daftar Selisih & Berita Acara, lalu menyetujui Adjustment.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -567,7 +651,7 @@ class _TabSoGrandState extends State<TabSoGrand> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Ya, Simpan Penyesuaian',
+            child: const Text('Ya, Simpan Draft Entry',
                 style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -596,6 +680,9 @@ class _TabSoGrandState extends State<TabSoGrand> {
 
         final payload = <String, dynamic>{
           'items': chunk,
+          'tanggal_opname': _tanggalOpnameTeks,
+          if (_rakFilterTerpilih.isNotEmpty && _rakFilterTerpilih != '0')
+            'rak_id': int.tryParse(_rakFilterTerpilih),
           'keterangan': 'Entry Cepat SO Grand per Rak',
         };
         final tokoId = Sesi.instance.idTokoTerpilih;
@@ -670,6 +757,8 @@ class _TabSoGrandState extends State<TabSoGrand> {
             nilai: 0.70,
             teks:
                 'Menyusun berkas Excel lokal (${_filteredProduk.length} baris) (70%)...');
+        // Hitung buta (blind count): jangan sertakan kolom Stok Sistem pada Excel
+        // supaya petugas penghitung fisik mencatat jumlah riil secara objektif.
         final headersXls = <String>[
           'No',
           'Produk ID',
@@ -679,10 +768,7 @@ class _TabSoGrandState extends State<TabSoGrand> {
           'Rak',
           'Kategori',
           'Satuan',
-          'Stok Rak Sistem',
           'Stok Fisik (Isi Hasil Hitung)',
-          'Harga Beli',
-          'Harga Jual',
           'Keterangan',
         ];
         final rowsXls = <List<Object?>>[];
@@ -701,14 +787,9 @@ class _TabSoGrandState extends State<TabSoGrand> {
             '${p['rakNama'] ?? 'Rak Belum Ditentukan'}',
             '${p['kategori'] ?? ''}',
             '${p['satuan'] ?? 'PCS'}',
-            (p['stokRak'] as num?)?.toDouble() ??
-                (p['stokSistem'] as num?)?.toDouble() ??
-                0,
             teksFisik.isNotEmpty
                 ? (double.tryParse(teksFisik) ?? teksFisik)
                 : '',
-            (p['hargaBeli'] as num?)?.toDouble() ?? 0,
-            (p['hargaJual'] as num?)?.toDouble() ?? 0,
             teksKet,
           ]);
         }
@@ -768,6 +849,7 @@ class _TabSoGrandState extends State<TabSoGrand> {
     try {
       final payload = <String, dynamic>{
         'file_base64': base64Encode(bytes),
+        'tanggal_opname': _tanggalOpnameTeks,
         'keterangan': 'Unggah Excel SO Grand per Rak',
       };
       final tokoId = Sesi.instance.idTokoTerpilih;
@@ -893,29 +975,38 @@ class _TabSoGrandState extends State<TabSoGrand> {
         // Beri kesempatan event loop UI merender progress bar
         await Future<void>.delayed(const Duration(milliseconds: 16));
 
+        // KKSO wajib A4 PORTRAIT (permintaan toko). Kolom RAK, KATEGORI,
+        // STOK RAK, dan SELISIH dihapus: identitas rak dipindah ke kepala
+        // halaman, sedangkan stok sistem/selisih tidak boleh terlihat oleh
+        // penghitung (hitung buta). Selisih hanya muncul saat Proses SO.
+        final rakKepala = potongan
+            .map((r) => '${r['rakNama'] ?? 'Rak Belum Ditentukan'}')
+            .toSet()
+            .join(', ');
         doc.addPage(pw.MultiPage(
-          pageFormat: PdfPageFormat.a4.landscape,
+          pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.all(24),
           header: (ctx) => pw.Container(
             margin: const pw.EdgeInsets.only(bottom: 10),
-            child: pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(
-                        'KERTAS KERJA STOK OPNAME (KKSO) - SO GRAND PER RAK',
-                        style: pw.TextStyle(
-                            fontSize: 13, fontWeight: pw.FontWeight.bold)),
-                    pw.Text(
-                        'Toko: $tokoNama · Baris ${awal + 1}–$akhir dari $total Item',
-                        style: const pw.TextStyle(fontSize: 9)),
-                  ],
-                ),
-                pw.Text(
-                    'Tanggal Cetak: ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}',
+                pw.Text('KERTAS KERJA STOK OPNAME (KKSO) - SO GRAND PER RAK',
+                    style: pw.TextStyle(
+                        fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                pw.SizedBox(height: 2),
+                pw.Text('Toko: $tokoNama',
                     style: const pw.TextStyle(fontSize: 9)),
+                pw.Text('Rak: $rakKepala',
+                    style: pw.TextStyle(
+                        fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                pw.Text(
+                    'Baris ${awal + 1}–$akhir dari $total Item · Tanggal Cetak: ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}',
+                    style: const pw.TextStyle(fontSize: 8)),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                    'Penghitung: ______________________     Pengawas: ______________________',
+                    style: const pw.TextStyle(fontSize: 8)),
               ],
             ),
           ),
@@ -923,34 +1014,31 @@ class _TabSoGrandState extends State<TabSoGrand> {
             pw.TableHelper.fromTextArray(
               headers: [
                 'NO',
-                'KODE',
-                'BARCODE',
+                'KODE / BARCODE',
                 'NAMA BARANG',
-                'RAK',
-                'KATEGORI',
                 'SATUAN',
-                'STOK RAK',
                 'STOK FISIK',
-                'SELISIH',
                 'PARAF',
                 'CATATAN'
               ],
+              columnWidths: const {
+                0: pw.FixedColumnWidth(22),
+                1: pw.FixedColumnWidth(80),
+                2: pw.FlexColumnWidth(3),
+                3: pw.FixedColumnWidth(38),
+                4: pw.FixedColumnWidth(52),
+                5: pw.FixedColumnWidth(36),
+                6: pw.FlexColumnWidth(1.4),
+              },
               data: List.generate(potongan.length, (i) {
                 final idx = awal + i + 1;
                 final r = potongan[i];
-                final stokRak = (r['stokRak'] as num?)?.toDouble() ??
-                    (r['stokSistem'] as num?)?.toDouble() ??
-                    0;
+                final barcode = '${r['barcode'] ?? ''}';
                 return [
                   '$idx',
-                  '${r['kode'] ?? ''}',
-                  '${r['barcode'] ?? ''}',
+                  '${r['kode'] ?? ''}${barcode.isEmpty ? '' : '\n$barcode'}',
                   '${r['nama'] ?? ''}',
-                  '${r['rakNama'] ?? 'Rak Belum Ditentukan'}',
-                  '${r['kategori'] ?? '-'}',
                   '${r['satuan'] ?? '-'}',
-                  _formatAngka.format(stokRak),
-                  '',
                   '',
                   '',
                   '',
@@ -1161,7 +1249,7 @@ class _TabSoGrandState extends State<TabSoGrand> {
             ),
           ),
 
-        // Banner Penjelasan SO Grand per Rak & Auto-Save Centang Hijau
+        // Bar Alur 3 Tahap Stok Opname: (1) Entry Fisik -> (2) Proses SO & Cetak Selisih/BA -> (3) Adjustment & Kunci Permanen
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -1172,26 +1260,78 @@ class _TabSoGrandState extends State<TabSoGrand> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Icon(Icons.inventory_2_outlined,
-                      color: Color(0xFF15803D), size: 20),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'SO Grand per Produk & Rak — Auto-Save Instan dengan Indikator Centang Hijau',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF15803D)),
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.inventory_2_outlined,
+                          color: Color(0xFF15803D), size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Alur 3 Tahap SO Grand (Blind Count)${_aktifDokumenKode.isEmpty ? '' : ' · $_aktifDokumenKode [${_aktifDokumenStatus.isEmpty ? 'DRAFT' : _aktifDokumenStatus}]'}',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF15803D)),
+                      ),
+                    ],
+                  ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: _pilihTanggalOpname,
+                        icon: const Icon(Icons.calendar_today, size: 15),
+                        label: Text(
+                            'Tgl SO: ${DateFormat('dd MMM yyyy', 'id_ID').format(_tanggalOpname)}'),
+                      ),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: () async {
+                          final berubah = await DaftarDokumenOpnameSheet.buka(
+                            context,
+                            filterJenisSo: 'SO_GRAND',
+                          );
+                          if (berubah) await _muatData();
+                        },
+                        icon: const Icon(Icons.folder_open_outlined, size: 16),
+                        label: const Text('Daftar Dokumen & BA'),
+                      ),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF15803D),
+                          foregroundColor: Colors.white,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: _bukaProsesStokOpname,
+                        icon: Icon(
+                          _aktifSudahCetakSelisih
+                              ? Icons.verified_outlined
+                              : Icons.fact_check_outlined,
+                          size: 16,
+                        ),
+                        label: const Text(
+                            '2. Proses SO, Cetak Selisih/BA & Adjustment'),
+                      ),
+                    ],
                   ),
                 ],
               ),
               const SizedBox(height: 6),
               Text(
-                'Menampilkan jumlah stok produk per Rak (bukan sekadar total gabungan). '
-                'Saat Anda mengisi kolom Input Stok Fisik, sistem otomatis menyimpan ke server dan menampilkan tanda centang hijau (✓) saat berhasil, '
-                'serta menyelaraskan stok Rak dengan total stok produk secara otomatis.',
+                '1) Entry Stok Fisik disimpan otomatis sebagai Draft (tanda ✓ hijau) tanpa mengubah stok berjalan; kolom Stok Rak disembunyikan agar penghitungan objektif. '
+                '2) Tekan "Proses SO, Cetak Selisih/BA & Adjustment" untuk membandingkan selisih, mengedit kuantitas bila perlu, dan mencetak Daftar Selisih (wajib) serta Berita Acara. '
+                '3) Setujui Adjustment untuk menyesuaikan stok (menjadi Saldo Awal H+1) dan mengunci data secara permanen.',
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade800),
               ),
             ],
@@ -1199,7 +1339,7 @@ class _TabSoGrandState extends State<TabSoGrand> {
         ),
         const SizedBox(height: 12),
 
-        // Kartu Ringkasan & Progres (Klik untuk rincian + Excel & PDF)
+        // Kartu Ringkasan & Progres (Blind Count — angka stok sistem disembunyikan selama penghitungan)
         Row(
           children: [
             Expanded(
@@ -1220,7 +1360,7 @@ class _TabSoGrandState extends State<TabSoGrand> {
                       'Rak',
                       'Kategori',
                       'Satuan',
-                      'Stok Rak',
+                      'Input Fisik',
                       'Status Cek',
                     ],
                     baris: _semuaProduk
@@ -1231,8 +1371,15 @@ class _TabSoGrandState extends State<TabSoGrand> {
                               p['rakNama'] ?? 'Rak Belum Ditentukan',
                               p['kategori'] ?? '-',
                               p['satuan'] ?? '-',
-                              _formatAngka.format(
-                                  p['stokRak'] ?? p['stokSistem'] ?? 0),
+                              _controllersFisik[_kunciBaris(p)]
+                                          ?.text
+                                          .trim()
+                                          .isNotEmpty ==
+                                      true
+                                  ? _controllersFisik[_kunciBaris(p)]!
+                                      .text
+                                      .trim()
+                                  : '-',
                               _checklistSelesai.contains(_kunciBaris(p))
                                   ? 'Sudah Dicek'
                                   : 'Belum Dicek',
@@ -1270,53 +1417,25 @@ class _TabSoGrandState extends State<TabSoGrand> {
                 color: AppColors.latarLembut(AppColors.warning),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(10),
-                  onTap: () => tampilkanRincianKlikDialog(
-                    context,
-                    judul: 'Rincian Stok Rak & Nilai Aset SO Grand',
-                    subjudul:
-                        'Total Stok: ${_formatAngka.format(_totalStokSistem)} | Nilai Aset: ${_formatRupiah.format(_totalNilaiAset)}',
-                    kolom: const [
-                      'Kode',
-                      'Nama Produk',
-                      'Rak',
-                      'Kategori',
-                      'Stok Rak',
-                      'Harga Beli',
-                      'Nilai Persediaan',
-                    ],
-                    baris: _semuaProduk.map((p) {
-                      final stok = (p['stokRak'] as num?)?.toDouble() ??
-                          (p['stokSistem'] as num?)?.toDouble() ??
-                          0;
-                      final hb = (p['hargaBeli'] as num?)?.toDouble() ?? 0;
-                      return <Object?>[
-                        p['kode'] ?? '-',
-                        p['nama'] ?? '-',
-                        p['rakNama'] ?? 'Rak Belum Ditentukan',
-                        p['kategori'] ?? '-',
-                        _formatAngka.format(stok),
-                        _formatRupiah.format(hb),
-                        _formatRupiah.format(stok * hb),
-                      ];
-                    }).toList(),
-                  ),
+                  onTap: _bukaProsesStokOpname,
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Total Stok Sistem (Seluruh Rak)',
+                        const Text('Mode Hitung Buta (Blind Count)',
                             style: TextStyle(fontSize: 12)),
                         const SizedBox(height: 4),
                         Text(
-                          _formatAngka.format(_totalStokSistem),
+                          _aktifDokumenKode.isEmpty
+                              ? 'Stok Rak Disembunyikan'
+                              : _aktifDokumenKode,
                           style: const TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
+                              fontSize: 16, fontWeight: FontWeight.bold),
                         ),
-                        Text(
-                          'Estimasi Nilai: ${_formatRupiah.format(_totalNilaiAset)}',
-                          style:
-                              const TextStyle(fontSize: 11, color: Colors.grey),
+                        const Text(
+                          'Klik untuk buka Perbandingan Selisih & Berita Acara',
+                          style: TextStyle(fontSize: 11, color: Colors.grey),
                         ),
                       ],
                     ),
@@ -1345,7 +1464,7 @@ class _TabSoGrandState extends State<TabSoGrand> {
                         'Nama Produk',
                         'Rak',
                         'Kategori',
-                        'Stok Rak',
+                        'Input Fisik',
                         'Status',
                       ],
                       baris: sudah
@@ -1354,8 +1473,15 @@ class _TabSoGrandState extends State<TabSoGrand> {
                                 p['nama'] ?? '-',
                                 p['rakNama'] ?? 'Rak Belum Ditentukan',
                                 p['kategori'] ?? '-',
-                                _formatAngka.format(
-                                    p['stokRak'] ?? p['stokSistem'] ?? 0),
+                                _controllersFisik[_kunciBaris(p)]
+                                            ?.text
+                                            .trim()
+                                            .isNotEmpty ==
+                                        true
+                                    ? _controllersFisik[_kunciBaris(p)]!
+                                        .text
+                                        .trim()
+                                    : '-',
                                 'Sudah Dicek',
                               ])
                           .toList(),
@@ -1448,7 +1574,10 @@ class _TabSoGrandState extends State<TabSoGrand> {
               AppTableColumn('Rak', flex: 2),
               AppTableColumn('Kategori', flex: 2),
               AppTableColumn('Satuan', flex: 1),
-              AppTableColumn('Stok Rak', flex: 2, align: TextAlign.right),
+              // Kolom "Stok Rak" SENGAJA disembunyikan (hitung buta / blind count):
+              // petugas penghitung tidak boleh melihat angka stok sistem agar hasil
+              // hitung fisik jujur. Angka sistem & selisih baru tampil pada tahap
+              // "Proses Stok Opname" (perbandingan) sebelum Adjustment disetujui.
               AppTableColumn('Input Stok Fisik',
                   flex: 2, align: TextAlign.center),
               AppTableColumn('Catatan / Keterangan', flex: 3),
@@ -1460,14 +1589,12 @@ class _TabSoGrandState extends State<TabSoGrand> {
                   kBaris, () => TextEditingController());
               final ctrlKet = _controllersKet.putIfAbsent(
                   kBaris, () => TextEditingController());
-              final stokRak = (p['stokRak'] as num?)?.toDouble() ??
-                  (p['stokSistem'] as num?)?.toDouble() ??
-                  0.0;
               final rakNama =
                   '${p['rakNama'] ?? 'Rak Belum Ditentukan'}'.trim();
               final belumAdaRak =
                   rakNama.isEmpty || rakNama.toLowerCase().contains('belum');
               final statusBaris = _statusSimpanBaris[kBaris];
+              final terkunciBaris = p['terkunciPermanen'] == true;
 
               return AppTableRowData(cells: [
                 AppTableCell(
@@ -1508,12 +1635,6 @@ class _TabSoGrandState extends State<TabSoGrand> {
                 ),
                 AppTableCell.text('${p['kategori'] ?? '-'}', flex: 2),
                 AppTableCell.text('${p['satuan'] ?? '-'}', flex: 1),
-                AppTableCell.text(
-                  _formatAngka.format(stokRak),
-                  flex: 2,
-                  align: TextAlign.right,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
                 AppTableCell(
                   flex: 2,
                   child: Padding(
@@ -1523,6 +1644,7 @@ class _TabSoGrandState extends State<TabSoGrand> {
                         Expanded(
                           child: TextField(
                             controller: ctrlFisik,
+                            readOnly: terkunciBaris,
                             keyboardType:
                                 const TextInputType.numberWithOptions(
                                     decimal: true),
@@ -1562,10 +1684,17 @@ class _TabSoGrandState extends State<TabSoGrand> {
                             height: 16,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           ),
+                        ] else if (terkunciBaris) ...[
+                          const SizedBox(width: 6),
+                          const Tooltip(
+                            message: 'Sudah Disetujui (Adjustment Final & Terkunci Permanen)',
+                            child: Icon(Icons.lock,
+                                color: Colors.green, size: 19),
+                          ),
                         ] else if (statusBaris == 'saved') ...[
                           const SizedBox(width: 6),
                           const Tooltip(
-                            message: 'Tersimpan otomatis ke server',
+                            message: 'Tersimpan di Draft SO Grand',
                             child: Icon(Icons.check_circle,
                                 color: Colors.green, size: 20),
                           ),
@@ -1588,6 +1717,7 @@ class _TabSoGrandState extends State<TabSoGrand> {
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: TextField(
                       controller: ctrlKet,
+                      readOnly: terkunciBaris,
                       decoration: InputDecoration(
                         hintText: 'Alasan / paraf...',
                         isDense: true,

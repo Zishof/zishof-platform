@@ -165,6 +165,12 @@ class Sesi {
   /// Hak mengelola daftar shortcut menu utama (Admin / Supervisor).
   bool bolehKelolaShortcut = false;
 
+  /// Identifier role utama pengguna (`Tbmrole.roleId`, primary key String sesuai
+  /// ATURAN MUTLAK 4A) dan nama tampilannya (`Tbmrole.roleName`) untuk isolasi
+  /// cache serta tampilan Menu Utama Shortcut per jenis pengguna.
+  String userRoleId = '';
+  String userRoleName = '';
+
   /// Terapkan balasan aksi `konfigurasi` ke sesi ini -- SATU titik pemetaan
   /// (dulu inline di `KasirScreen._terapkanKonfig`; dipindah ke sini saat
   /// varian Inventory & Sales butuh memuat konfigurasi dari landing sendiri
@@ -234,7 +240,12 @@ class Sesi {
         .toList();
     bolehKelolaShortcut =
         konfig['bolehKelolaShortcut'] == true || isAdmin || supervisorPedagang;
+    userRoleId = '${konfig['userRoleId'] ?? ''}'.trim();
+    userRoleName = '${konfig['userRoleName'] ?? ''}'.trim();
     _terapkanAktor(konfig['aktorInventorySales']);
+    if (userRoleId.isEmpty && activeRoleId.isNotEmpty) {
+      userRoleId = activeRoleId;
+    }
   }
 
   void _terapkanAktor(dynamic aktorRaw) {

@@ -20,6 +20,7 @@ import '../widgets/safe_state.dart';
 import '../widgets/aksi_baris_menu.dart';
 import '../services/kompresi_gambar.dart';
 import '../widgets/pemilih_anggaran.dart';
+import 'foto_produk_camera_screen.dart';
 
 /// Layar "Terima Tagihan Vendor" -- tahap 4 modul Pengadaan POS.
 ///
@@ -1178,14 +1179,11 @@ class _PapanLampiranState extends State<_PapanLampiran> {
     // berat dan akan menjank UI bila berjalan di isolate utama.
     Uint8List bytes;
     try {
-      // Ambang DOKUMEN (2 MB), bukan 500 KB milik foto produk: lampiran di sini
-      // adalah faktur vendor yang dibaca ANGKANYA -- nomor faktur dan nominal --
-      // dan kini dapat diunduh kembali dari daftar ini untuk diperiksa. Mutu yang
-      // hilang saat dikecilkan bersifat permanen; tidak ada salinan aslinya.
+      // Selaraskan dengan PenjagaLampiranGambar.MAKS_GAMBAR_BYTES (500 KB) di
+      // server: berkas gambar dikompres otomatis ke bawah 500 KB agar tidak
+      // ditolak server, sedangkan PDF dilewatkan utuh pada slot non-gambar.
       bytes = await compute(
-          harusGambar
-              ? siapkanLampiranDokumenGambar
-              : siapkanLampiranDokumenCampuran,
+          harusGambar ? siapkanLampiranGambar : siapkanLampiranCampuran,
           bytesAsal);
     } on FormatException catch (e) {
       if (!mounted) return;
@@ -1195,13 +1193,45 @@ class _PapanLampiranState extends State<_PapanLampiran> {
       return;
     }
     if (!mounted) return;
+    await _kirimLampiranKeServer(slot, berkas.name, bytes);
+  }
 
+  /// Mengambil foto dokumen tagihan (Invoice, Faktur Pajak, Surat Jalan,
+  /// Kwitansi, atau Dokumen Lain) secara langsung lewat kamera HP / webcam
+  /// komputer, mengecilkannya otomatis ke bawah 500 KB di isolate latar, lalu
+  /// mengunggahnya ke slot yang dipilih.
+  Future<void> _ambilFotoKamera(Map<String, dynamic> slot) async {
+    final labelSlot = '${slot['nama'] ?? 'Dokumen'}';
+    final xfile = await FotoProdukCameraScreen.ambil(
+      context,
+      judul: 'Foto $labelSlot',
+    );
+    if (xfile == null || !mounted) return;
+    Uint8List bytes;
+    try {
+      final bytesAsal = await xfile.readAsBytes();
+      bytes = await compute(kompresGambarKeBawah500Kb, bytesAsal);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Gagal memproses foto kamera: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error));
+      return;
+    }
+    if (!mounted) return;
+    final kunci = '${slot['kunci'] ?? 'dokumen'}'.toLowerCase();
+    final stamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    await _kirimLampiranKeServer(slot, '${kunci}_kamera_$stamp.jpg', bytes);
+  }
+
+  Future<void> _kirimLampiranKeServer(
+      Map<String, dynamic> slot, String namaBerkas, Uint8List bytes) async {
     setStateIfMounted(() => _sibuk = '${slot['kunci']}');
     try {
       final r = await ApiClient.instance.aksi('pengadaan_lampiran_unggah', {
         'bast_id': widget.bastId,
         'kunci': slot['kunci'],
-        'nama_file': berkas.name,
+        'nama_file': namaBerkas,
         'file_base64': base64Encode(bytes),
       });
       if (!mounted) return;
@@ -1359,7 +1389,14 @@ class _PapanLampiranState extends State<_PapanLampiran> {
                 onPressed: () => _unduh(slot),
                 icon: const Icon(Icons.download_outlined)),
           IconButton(
-              tooltip: ada ? 'Ganti berkas' : 'Unggah',
+              tooltip: ada
+                  ? 'Foto ulang via kamera / webcam'
+                  : 'Ambil foto via kamera / webcam',
+              iconSize: 18,
+              onPressed: () => _ambilFotoKamera(slot),
+              icon: const Icon(Icons.photo_camera_outlined)),
+          IconButton(
+              tooltip: ada ? 'Ganti berkas' : 'Unggah berkas',
               iconSize: 18,
               onPressed: () => _unggah(slot),
               icon: const Icon(Icons.file_upload)),

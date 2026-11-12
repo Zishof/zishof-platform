@@ -1079,6 +1079,7 @@ class _DialogDetailPergerakanStokState
   Map<String, dynamic>? _ringkasan;
   List<Map<String, dynamic>> _mutasi = [];
   Map<String, dynamic>? _analisisProduk;
+  String _filterKartuAktif = 'SEMUA';
 
   @override
   void initState() {
@@ -1328,32 +1329,277 @@ class _DialogDetailPergerakanStokState
     );
   }
 
-  Widget _buildSummaryCard(String title, num val, Color color) {
+  static final NumberFormat _fmtRupiah =
+      NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+
+  bool _cocokFilterKartu(Map<String, dynamic> m) {
+    if (_filterKartuAktif == 'SEMUA') return true;
+    final kode = '${m['kodeMutasi'] ?? ''}';
+    final masuk = (m['masuk'] as num?)?.toDouble() ?? 0;
+    final keluar = (m['keluar'] as num?)?.toDouble() ?? 0;
+    switch (_filterKartuAktif) {
+      case 'MASUK':
+        return (kode == '101' || kode == '102' || kode == '105') && masuk > 0;
+      case 'RETUR':
+        return kode == '103';
+      case 'PENJUALAN':
+        return kode == '200';
+      case 'KELUAR':
+        return (kode == '201' || kode == '202' || kode == '203' || kode == '105') &&
+            keluar > 0;
+      case 'OPNAME_PLUS':
+        return kode == '104' && masuk > 0;
+      case 'OPNAME_MINUS':
+        return kode == '104' && keluar > 0;
+      default:
+        return true;
+    }
+  }
+
+  /// Membuka rincian faktur pembelian, faktur penjualan kasir POS, bukti stok
+  /// opname, retur, maupun transfer antar outlet saat salah satu angka / baris
+  /// pada Rincian Mutasi diklik pengguna.
+  Future<void> _bukaBuktiMutasi(Map<String, dynamic> m) async {
+    final kode = '${m['kodeMutasi'] ?? ''}';
+    final sumberId = (m['sumberId'] as num?)?.toInt() ?? 0;
+    final dokumenId = (m['dokumenId'] as num?)?.toInt() ?? 0;
+    final ref = '${m['referensi'] ?? m['noFaktur'] ?? ''}'.trim();
+    final tokoId = Sesi.instance.idTokoTerpilih;
+
+    try {
+      // 1. Faktur Penjualan Kasir POS (kode 200)
+      if (kode == '200' && (dokumenId > 0 || ref.isNotEmpty)) {
+        final res = await ApiClient.instance.aksi('detail_transaksi', {
+          if (tokoId != null && tokoId > 0) 'toko_id': tokoId,
+          if (dokumenId > 0) 'id': dokumenId,
+          if (ref.isNotEmpty) 'kode': ref,
+        });
+        if (!mounted) return;
+        final items = ((res['item'] as List?) ?? [])
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        if (items.isNotEmpty) {
+          final kodeNota = '${res['kode'] ?? ref}';
+          final waktu = '${res['waktu'] ?? m['tanggal'] ?? ''}';
+          final kasir = '${res['kasirNama'] ?? res['kasirUserId'] ?? '-'}';
+          final caraBayar = '${res['caraBayarNama'] ?? '-'}';
+          final totalBiaya = (res['totalBiaya'] as num?)?.toDouble() ?? 0;
+          await tampilkanRincianKlikDialog(
+            context,
+            judul: 'Faktur Penjualan Kasir · $kodeNota',
+            subjudul:
+                'Waktu: $waktu | Kasir: $kasir | Pembayaran: $caraBayar | Pelanggan: ${m['namaPelanggan'] ?? 'Umum'}',
+            ringkasanTeks:
+                'Total Nota: ${_fmtRupiah.format(totalBiaya)} · Bayar Tunai: ${_fmtRupiah.format((res['bayarTunai'] as num?) ?? 0)} · Non-Tunai: ${_fmtRupiah.format((res['bayarNonTunai'] as num?) ?? 0)}',
+            kolom: const [
+              'No',
+              'Nama Barang',
+              'Rak',
+              'Qty',
+              'Harga Satuan',
+              'Diskon',
+              'Subtotal',
+            ],
+            baris: [
+              for (var i = 0; i < items.length; i++)
+                [
+                  i + 1,
+                  items[i]['nama'] ?? '-',
+                  items[i]['rakNama'] ?? '-',
+                  _formatAngka.format((items[i]['qty'] as num?) ?? 0),
+                  _fmtRupiah.format((items[i]['harga'] as num?) ?? 0),
+                  _fmtRupiah.format((items[i]['diskon'] as num?) ?? 0),
+                  _fmtRupiah.format(
+                    (((items[i]['qty'] as num?)?.toDouble() ?? 0) *
+                            ((items[i]['harga'] as num?)?.toDouble() ?? 0)) -
+                        ((items[i]['diskon'] as num?)?.toDouble() ?? 0),
+                  ),
+                ],
+            ],
+          );
+          return;
+        }
+      }
+
+      // 2. Faktur Pembelian / Pengadaan / BAST (kode 101 atau acuan retur beli 201)
+      if ((kode == '101' || kode == '201') && dokumenId > 0) {
+        final res = await ApiClient.instance.aksi('kulakan_faktur_detail', {
+          if (tokoId != null && tokoId > 0) 'toko_id': tokoId,
+          'faktur_id': dokumenId,
+        });
+        if (!mounted) return;
+        final header = (res['header'] as Map?)?.cast<String, dynamic>() ?? {};
+        final items = ((res['items'] as List?) ?? [])
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        if (items.isNotEmpty) {
+          final noFak = '${header['nomorFaktur'] ?? ref}';
+          await tampilkanRincianKlikDialog(
+            context,
+            judul: 'Faktur Pembelian / Pengadaan · $noFak',
+            subjudul:
+                'Tanggal: ${header['tanggalFaktur'] ?? m['tanggal'] ?? '-'} | Supplier: ${header['namaSupplier'] ?? m['namaPelanggan'] ?? '-'} | Status: ${header['jenisPembayaran'] ?? '-'}',
+            ringkasanTeks:
+                'Total Bersih Faktur: ${_fmtRupiah.format((header['totalBersih'] as num?) ?? 0)}',
+            kolom: const [
+              'No',
+              'Nama Barang',
+              'Qty Masuk',
+              'Harga Beli',
+              'Diskon',
+              'Subtotal',
+            ],
+            baris: [
+              for (var i = 0; i < items.length; i++)
+                [
+                  i + 1,
+                  items[i]['namaProduk'] ?? items[i]['nama'] ?? '-',
+                  _formatAngka.format((items[i]['qty'] as num?) ?? 0),
+                  _fmtRupiah.format((items[i]['hargaBeli'] as num?) ?? 0),
+                  _fmtRupiah.format((items[i]['diskon'] as num?) ?? 0),
+                  _fmtRupiah.format((items[i]['subtotal'] as num?) ?? 0),
+                ],
+            ],
+          );
+          return;
+        }
+      }
+
+      // 3. Bukti Stok Opname (104), Retur (103/201), Transfer (102/203), Bahan/Produksi (202/105), atau Pengadaan legacy
+      if (sumberId > 0 && kode.isNotEmpty && kode != '100') {
+        final res = await ApiClient.instance.aksi('stok_mutasi_bukti_detail', {
+          if (tokoId != null && tokoId > 0) 'toko_id': tokoId,
+          'kodeMutasi': kode,
+          'sumberId': sumberId,
+        });
+        if (!mounted) return;
+        final barisServer = ((res['baris'] as List?) ?? [])
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        if (barisServer.isNotEmpty) {
+          await tampilkanRincianKlikDialog(
+            context,
+            judul: '${res['judul'] ?? 'Bukti Transaksi'} · ${widget.namaProduk}',
+            subjudul:
+                'Kode Produk: ${widget.kodeProduk} | Referensi: ${ref.isEmpty ? '-' : ref}',
+            kolom: const ['Informasi', 'Rincian Bukti Tercatat'],
+            baris: [
+              for (final b in barisServer) [b['label'] ?? '-', b['nilai'] ?? '-'],
+              ['Stok Sebelum Transaksi', _formatAngka.format((m['awal'] as num?) ?? 0)],
+              ['Perubahan Masuk', _formatAngka.format((m['masuk'] as num?) ?? 0)],
+              ['Perubahan Keluar', _formatAngka.format((m['keluar'] as num?) ?? 0)],
+              ['Saldo Stok Sesudah', _formatAngka.format((m['sisa'] as num?) ?? 0)],
+            ],
+          );
+          return;
+        }
+      }
+    } catch (_) {
+      // Jatuh ke ringkasan lokal di bawah bila offline atau endpoint belum tersedia
+    }
+
+    if (!mounted) return;
+    await tampilkanRincianKlikDialog(
+      context,
+      judul: '${m['tipe'] ?? 'Rincian Mutasi'} · ${widget.namaProduk}',
+      subjudul: 'Waktu: ${m['tanggal'] ?? '-'} | Referensi: ${ref.isEmpty ? '-' : ref}',
+      kolom: const ['Informasi', 'Nilai'],
+      baris: [
+        ['Jenis Transaksi', '${m['tipe'] ?? '-'} (Kode $kode)'],
+        ['Nomor Referensi / Faktur', ref.isEmpty ? '-' : ref],
+        ['Pelanggan / Supplier / Petugas', m['namaPelanggan'] ?? m['oleh'] ?? '-'],
+        ['Saldo Sebelum', _formatAngka.format((m['awal'] as num?) ?? 0)],
+        ['Masuk (+)', _formatAngka.format((m['masuk'] as num?) ?? 0)],
+        ['Keluar (-)', _formatAngka.format((m['keluar'] as num?) ?? 0)],
+        ['Saldo Akhir', _formatAngka.format((m['sisa'] as num?) ?? 0)],
+        ['Keterangan Audit', m['keterangan'] ?? '-'],
+      ],
+    );
+  }
+
+  void _klikKartuRingkasan(String kunciFilter, String judul, num nilai) {
+    if (kunciFilter == 'SALDO_AWAL' || kunciFilter == 'SALDO_AKHIR') {
+      final awal = (_ringkasan?['awal'] as num?)?.toDouble() ?? 0;
+      final masuk = (_ringkasan?['masuk'] as num?)?.toDouble() ?? 0;
+      final retur = (_ringkasan?['retur'] as num?)?.toDouble() ?? 0;
+      final penjualan = (_ringkasan?['penjualan'] as num?)?.toDouble() ?? 0;
+      final keluar = (_ringkasan?['keluar'] as num?)?.toDouble() ?? 0;
+      final opPlus = (_ringkasan?['opnameMasuk'] as num?)?.toDouble() ?? 0;
+      final opMin = (_ringkasan?['opnameKeluar'] as num?)?.toDouble() ?? 0;
+      final sisa = (_ringkasan?['sisa'] as num?)?.toDouble() ?? 0;
+      tampilkanRincianKlikDialog(
+        context,
+        judul: '$judul · ${widget.namaProduk}',
+        subjudul:
+            'Periode ${_formatTglTampilan(widget.tglMulai)} s/d ${_formatTglTampilan(widget.tglSampai)}',
+        kolom: const ['Komponen Perhitungan Stok', 'Kuantitas'],
+        baris: [
+          ['Saldo Awal Periode (${_formatTglTampilan(widget.tglMulai)} 00:00)', _formatAngka.format(awal)],
+          ['(+) Pengadaan / Masuk', '+${_formatAngka.format(masuk)}'],
+          ['(+) Pengembalian (Retur Penjualan)', '+${_formatAngka.format(retur)}'],
+          ['(-) Penjualan Kasir POS', '-${_formatAngka.format(penjualan)}'],
+          ['(-) Pengeluaran Lain (Retur Beli / Transfer / Bahan)', '-${_formatAngka.format(keluar)}'],
+          ['(+) Penyesuaian Stok Opname (+)', '+${_formatAngka.format(opPlus)}'],
+          ['(-) Penyesuaian Stok Opname (-)', '-${_formatAngka.format(opMin)}'],
+          ['(=) Saldo Akhir Periode', _formatAngka.format(sisa)],
+        ],
+      );
+      return;
+    }
+    setStateIfMounted(() {
+      _filterKartuAktif =
+          _filterKartuAktif == kunciFilter ? 'SEMUA' : kunciFilter;
+    });
+  }
+
+  Widget _buildSummaryCard(
+      String title, num val, Color color, String kunciFilter) {
+    final aktif = _filterKartuAktif == kunciFilter;
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Material(
+          color: color.withValues(alpha: aktif ? 0.18 : 0.08),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Column(
-          children: [
-            Text(
-              title,
-              style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey.shade700,
-                  fontWeight: FontWeight.w600),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => _klikKartuRingkasan(kunciFilter, title, val),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: aktif ? color : color.withValues(alpha: 0.3),
+                  width: aktif ? 2.0 : 1.0,
+                ),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatAngka.format(val),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                      decoration: TextDecoration.underline,
+                      decorationColor: color.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              _formatAngka.format(val),
-              style: TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.bold, color: color),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -1449,20 +1695,39 @@ class _DialogDetailPergerakanStokState
               ),
               const SizedBox(height: 16),
 
-              // 8 Summary Cards (termasuk Opname + dan Opname -)
+              // 8 Summary Cards (semua angka dapat diklik untuk filter / rincian)
               Row(
                 children: [
-                  _buildSummaryCard('Saldo Awal', awal, Colors.blueGrey),
-                  _buildSummaryCard('Masuk', masuk, Colors.green),
-                  _buildSummaryCard('Pengembalian', retur, Colors.blue),
-                  _buildSummaryCard('Penjualan', penjualan, Colors.orange),
-                  _buildSummaryCard('Keluar', keluar, Colors.red),
-                  _buildSummaryCard('Opname (+)', opnameMasuk, Colors.purple),
-                  _buildSummaryCard('Opname (-)', opnameKeluar, Colors.pink),
-                  _buildSummaryCard('Saldo Akhir', sisa, Colors.indigo),
+                  _buildSummaryCard(
+                      'Saldo Awal', awal, Colors.blueGrey, 'SALDO_AWAL'),
+                  _buildSummaryCard('Masuk', masuk, Colors.green, 'MASUK'),
+                  _buildSummaryCard(
+                      'Pengembalian', retur, Colors.blue, 'RETUR'),
+                  _buildSummaryCard(
+                      'Penjualan', penjualan, Colors.orange, 'PENJUALAN'),
+                  _buildSummaryCard('Keluar', keluar, Colors.red, 'KELUAR'),
+                  _buildSummaryCard(
+                      'Opname (+)', opnameMasuk, Colors.purple, 'OPNAME_PLUS'),
+                  _buildSummaryCard(
+                      'Opname (-)', opnameKeluar, Colors.pink, 'OPNAME_MINUS'),
+                  _buildSummaryCard(
+                      'Saldo Akhir', sisa, Colors.indigo, 'SALDO_AKHIR'),
                 ],
               ),
-              const SizedBox(height: 16),
+              if (_filterKartuAktif != 'SEMUA') ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: InputChip(
+                    label: Text('Filter aktif: $_filterKartuAktif (Klik untuk tampilkan semua)'),
+                    onDeleted: () =>
+                        setStateIfMounted(() => _filterKartuAktif = 'SEMUA'),
+                    onPressed: () =>
+                        setStateIfMounted(() => _filterKartuAktif = 'SEMUA'),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
 
               // Tabel Rincian Buku Besar Mutasi
               Expanded(
@@ -1558,8 +1823,11 @@ class _DialogDetailPergerakanStokState
                                                           FontWeight.bold))),
                                         ],
                                         rows: [
-                                          _barisSaldoAwal(awal),
+                                          if (_filterKartuAktif == 'SEMUA')
+                                            _barisSaldoAwal(awal),
                                           ..._mutasi
+                                              .where(_cocokFilterKartu)
+                                              .toList()
                                               .asMap()
                                               .entries
                                               .map((entry) {
@@ -1630,65 +1898,126 @@ class _DialogDetailPergerakanStokState
 
                                             return DataRow(
                                               cells: [
-                                                DataCell(Text('$idx')),
-                                                DataCell(Text(
-                                                    (m['tanggal'] as String?) ??
-                                                        '-')),
-                                                DataCell(Text(
-                                                    ref.isEmpty ? '-' : ref)),
-                                                DataCell(Container(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                      horizontal: 6,
-                                                      vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color:
-                                                        badgeColor.withValues(
-                                                            alpha: 0.12),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            4),
-                                                  ),
-                                                  child: Text(
-                                                    kodeMutasi,
+                                                DataCell(Text('$idx'),
+                                                    onTap: () =>
+                                                        _bukaBuktiMutasi(m)),
+                                                DataCell(
+                                                    Text(
+                                                        (m['tanggal']
+                                                                as String?) ??
+                                                            '-'),
+                                                    onTap: () =>
+                                                        _bukaBuktiMutasi(m)),
+                                                DataCell(
+                                                  Text(
+                                                    ref.isEmpty ? '-' : ref,
                                                     style: TextStyle(
-                                                      fontSize: 11,
+                                                      color: Colors.blue.shade800,
                                                       fontWeight:
-                                                          FontWeight.bold,
-                                                      color: badgeColor,
+                                                          FontWeight.w600,
+                                                      decoration: TextDecoration
+                                                          .underline,
                                                     ),
                                                   ),
-                                                )),
-                                                DataCell(Text(idPel.isEmpty
-                                                    ? '-'
-                                                    : idPel)),
-                                                DataCell(Text(pelaku)),
-                                                DataCell(Text(_formatAngka
-                                                    .format(tAwal))),
-                                                DataCell(Text(
-                                                  tMasuk > 0
-                                                      ? '+${_formatAngka.format(tMasuk)}'
-                                                      : '-',
-                                                  style: const TextStyle(
+                                                  onTap: () =>
+                                                      _bukaBuktiMutasi(m),
+                                                ),
+                                                DataCell(
+                                                  Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color:
+                                                          badgeColor.withValues(
+                                                              alpha: 0.12),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              4),
+                                                    ),
+                                                    child: Text(
+                                                      kodeMutasi,
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: badgeColor,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  onTap: () =>
+                                                      _bukaBuktiMutasi(m),
+                                                ),
+                                                DataCell(
+                                                    Text(idPel.isEmpty
+                                                        ? '-'
+                                                        : idPel),
+                                                    onTap: () =>
+                                                        _bukaBuktiMutasi(m)),
+                                                DataCell(Text(pelaku),
+                                                    onTap: () =>
+                                                        _bukaBuktiMutasi(m)),
+                                                DataCell(
+                                                  Text(
+                                                    _formatAngka.format(tAwal),
+                                                    style: const TextStyle(
+                                                      decoration: TextDecoration
+                                                          .underline,
+                                                    ),
+                                                  ),
+                                                  onTap: () =>
+                                                      _bukaBuktiMutasi(m),
+                                                ),
+                                                DataCell(
+                                                  Text(
+                                                    tMasuk > 0
+                                                        ? '+${_formatAngka.format(tMasuk)}'
+                                                        : '-',
+                                                    style: TextStyle(
                                                       color: Colors.green,
                                                       fontWeight:
-                                                          FontWeight.w600),
-                                                )),
-                                                DataCell(Text(
-                                                  tKeluar > 0
-                                                      ? '-${_formatAngka.format(tKeluar)}'
-                                                      : '-',
-                                                  style: const TextStyle(
+                                                          FontWeight.w600,
+                                                      decoration: tMasuk > 0
+                                                          ? TextDecoration
+                                                              .underline
+                                                          : null,
+                                                    ),
+                                                  ),
+                                                  onTap: () =>
+                                                      _bukaBuktiMutasi(m),
+                                                ),
+                                                DataCell(
+                                                  Text(
+                                                    tKeluar > 0
+                                                        ? '-${_formatAngka.format(tKeluar)}'
+                                                        : '-',
+                                                    style: TextStyle(
                                                       color: Colors.red,
                                                       fontWeight:
-                                                          FontWeight.w600),
-                                                )),
-                                                DataCell(Text(
-                                                  _formatAngka.format(tSisa),
-                                                  style: const TextStyle(
+                                                          FontWeight.w600,
+                                                      decoration: tKeluar > 0
+                                                          ? TextDecoration
+                                                              .underline
+                                                          : null,
+                                                    ),
+                                                  ),
+                                                  onTap: () =>
+                                                      _bukaBuktiMutasi(m),
+                                                ),
+                                                DataCell(
+                                                  Text(
+                                                    _formatAngka.format(tSisa),
+                                                    style: const TextStyle(
                                                       fontWeight:
-                                                          FontWeight.bold),
-                                                )),
+                                                          FontWeight.bold,
+                                                      decoration: TextDecoration
+                                                          .underline,
+                                                    ),
+                                                  ),
+                                                  onTap: () =>
+                                                      _bukaBuktiMutasi(m),
+                                                ),
                                                 DataCell(
                                                   ConstrainedBox(
                                                     constraints:
@@ -1703,6 +2032,9 @@ class _DialogDetailPergerakanStokState
                                                       maxLines: 2,
                                                       style: TextStyle(
                                                         fontSize: 11,
+                                                        decoration:
+                                                            TextDecoration
+                                                                .underline,
                                                         color: tipe.contains(
                                                                 'Opname')
                                                             ? Colors
@@ -1712,6 +2044,8 @@ class _DialogDetailPergerakanStokState
                                                       ),
                                                     ),
                                                   ),
+                                                  onTap: () =>
+                                                      _bukaBuktiMutasi(m),
                                                 ),
                                               ],
                                             );
