@@ -581,11 +581,14 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
           awal.skip(1).fold<double>(0, (jumlah, slot) => jumlah + slot.nominal);
       if (tambahan <= total) awal.first.nominal = total - tambahan;
     }
+    final daftarMetodeSplit = _metodeTersedia.isNotEmpty
+        ? _metodeTersedia
+        : Sesi.instance.caraBayar;
     final hasil = await showModalBottomSheet<List<SlotBayar>>(
       context: context,
       isScrollControlled: true,
       builder: (_) => PemilihMetodeSplit(
-        daftarMetode: Sesi.instance.caraBayar,
+        daftarMetode: daftarMetodeSplit,
         terpilihAwal: awal,
         total: total,
       ),
@@ -826,13 +829,18 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
           return;
         }
       }
-      if (caraSaatIni.isNotEmpty) {
+      // Hanya blokir dengan peringatan PIN/biometrik pada modeTambahBaru atau ketika
+      // metode pembayaran diubah ke metode baru yang mewajibkan PIN/biometrik.
+      // Jika transaksi lama (modeBaru == false) sudah sah dan hanya dikoreksi qty/barang/kasir
+      // tanpa mengubah metode pembayaran ke metode ber-PIN baru, koreksi supervisor tetap diizinkan.
+      if (caraSaatIni.isNotEmpty && (widget.modeBaru || caraBayarDiubahEfektif)) {
         final cara = caraSaatIni.first;
         final member = _memberPemulihan;
         if (cara.wajibPin ||
-            member?.wajibPin == true ||
-            member?.wajibBiometricWajah == true ||
-            member?.wajibBiometricFingerprint == true) {
+            (cara.wajibPilihMember &&
+                (member?.wajibPin == true ||
+                    member?.wajibBiometricWajah == true ||
+                    member?.wajibBiometricFingerprint == true))) {
           setState(() => _pesan =
               'Member/metode ini memerlukan PIN atau biometrik. Form pemulihan belum mendukung verifikasi tersebut. Hubungi admin; jangan mengubah kebijakan keamanan.');
           return;
@@ -2229,14 +2237,21 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
 
   Anggota? _anggotaKoreksiDariDetail(
       Map<String, dynamic> detail, Map<String, dynamic> row) {
-    final id = _idMemberDariMap(detail) ?? _idMemberDariMap(row);
+    final payloadLokal = row['payloadLokal'];
+    final id = _idMemberDariMap(detail) ??
+        _idMemberDariMap(row) ??
+        (payloadLokal is Map
+            ? _idMemberDariPayload(Map<String, dynamic>.from(payloadLokal))
+            : null);
     if (id == null) return null;
     final nama =
-        '${detail['pembeli'] ?? detail['nama_member'] ?? detail['namaMember'] ?? detail['memberNama'] ?? row['pembeli'] ?? ''}'
+        '${detail['pembeli'] ?? detail['nama_member'] ?? detail['namaMember'] ?? detail['memberNama'] ?? row['pembeli'] ?? (payloadLokal is Map ? payloadLokal['nama_member'] : '') ?? ''}'
             .trim();
     return Anggota.fromJson({
       'id': id,
       'nama': nama.isEmpty || nama == 'Umum' ? 'Member #$id' : nama,
+      if ((detail['kodeMember'] ?? row['kodeMember']) != null)
+        'kode': '${detail['kodeMember'] ?? row['kodeMember']}',
     });
   }
 

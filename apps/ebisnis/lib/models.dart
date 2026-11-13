@@ -471,8 +471,13 @@ class CaraBayar {
   /// Getter ini sengaja menjadi sumber tunggal untuk POS Desktop dan Android.
   /// Menebak hanya dari nama "saldo/deposit" pernah membuat metode seperti
   /// Voucher Pejuang lolos ke antrean offline lalu ditolak berulang oleh server.
+  ///
+  /// Catatan penting: metode yang secara eksplisit bertanda [memotongDeposit]
+  /// wajib tetap dianggap memotong deposit meskipun flag [online] di database
+  /// sempat tercentang secara tidak sengaja.
   bool get memotongDepositEfektif =>
-      !masukSebagaiHutang && !online && !onlineBmt && (!manual || memotongDeposit);
+      !masukSebagaiHutang &&
+      (memotongDeposit || (!online && !onlineBmt && !manual));
   CaraBayar({
     required this.id,
     required this.nama,
@@ -489,7 +494,8 @@ class CaraBayar {
                 nama.toLowerCase().contains('cash')),
         wajibPilihMember = wajibPilihMember ??
             (masukSebagaiHutang ||
-                (!masukSebagaiHutang && !online && !onlineBmt && (!manual || memotongDeposit)));
+                memotongDeposit ||
+                (!masukSebagaiHutang && !online && !onlineBmt && !manual));
   factory CaraBayar.fromJson(Map<String, dynamic> j) {
     final nama = (j['nama'] ?? '') as String;
     final namaLower = nama.toLowerCase();
@@ -501,11 +507,37 @@ class CaraBayar {
     // wajib mempunyai member/PIC, termasuk respons server lama yang masih
     // membawa kedua flag dalam keadaan false.
     final metodeKasbon = identitasRingkas.contains('kasbon');
+    // Pengaman lintas versi untuk metode berbasis saldo/voucher member
+    // (mis. Voucher Pejuang, Voucher Santri, Deposit, Saldo, Tabungan, Uang Saku):
+    // metode ini WAJIB memotong deposit dan memilih member walaupun endpoint
+    // konfigurasi lama belum mengirim flag memotongDeposit atau kolom online
+    // di database sempat tercentang secara tidak sengaja.
+    final metodeSaldoAtauVoucher = !metodeKasbon &&
+        (identitasRingkas.contains('voucher') ||
+            namaLower.contains('deposit') ||
+            namaLower.contains('saldo') ||
+            namaLower.contains('tabungan') ||
+            identitasRingkas.contains('uangsaku'));
+    final explicitHutang = metodeKasbon ||
+        j['masukSebagaiHutang'] == true ||
+        j['masuk_sebagai_hutang'] == true;
+    final rawExplicitDeposit = j['memotongDeposit'] ??
+        j['memotong_deposit'] ??
+        j['potongSaldo'] ??
+        j['potong_saldo'] ??
+        j['memotongSaldo'] ??
+        j['memotong_saldo'];
+    final potongDepositEfektif = !explicitHutang &&
+        (rawExplicitDeposit == true ||
+            (rawExplicitDeposit == null && metodeSaldoAtauVoucher));
+    final rawWajibMember = j['wajibPilihMember'] ?? j['wajib_pilih_member'];
     // Online BMT hanya untuk pengisian saldo dan biaya sekolah, bukan checkout
     // POS. Abaikan flag lama/cache kanal BMT agar QRIS/EDC toko tidak dialihkan
-    // ke tagihan BMT. Status online metode toko tetap mengikuti flag umumnya.
+    // ke tagihan BMT. Status online metode toko tetap mengikuti flag umumnya,
+    // kecuali metode tersebut adalah metode potong saldo / hutang member.
     const onlineBmt = false;
-    final online = j['online'] == true;
+    final online =
+        j['online'] == true && !potongDepositEfektif && !explicitHutang;
     final rawAdaKembalian = j['adaKembalian'] ?? j['ada_kembalian'];
     return CaraBayar(
       id: j['id'] as int,
@@ -517,35 +549,16 @@ class CaraBayar {
           ? rawAdaKembalian
           : (namaLower.contains('tunai') || namaLower.contains('cash')),
       wajibPin: j['wajibPin'] == true || j['wajib_pin'] == true,
-      masukSebagaiHutang: metodeKasbon ||
-          j['masukSebagaiHutang'] == true ||
-          j['masuk_sebagai_hutang'] == true,
+      masukSebagaiHutang: explicitHutang,
       // Server lama tidak mengirim kunci ini sama sekali; null di sini membuat
       // konstruktor jatuh ke aturan bawaan (hutang / potong saldo), sehingga
       // klien baru + server lama tetap berperilaku seperti sebelumnya.
-      wajibPilihMember: metodeKasbon
+      wajibPilihMember: (explicitHutang || potongDepositEfektif)
           ? true
-          : online
-              ? false
-              : (j['wajibPilihMember'] ?? j['wajib_pilih_member']) == null
-                  ? null
-                  : (j['wajibPilihMember'] == true ||
-                      j['wajib_pilih_member'] == true),
-      memotongDeposit: () {
-        if (online) return false;
-        final explicit = j['memotongDeposit'] ??
-            j['memotong_deposit'] ??
-            j['potongSaldo'] ??
-            j['potong_saldo'] ??
-            j['memotongSaldo'] ??
-            j['memotong_saldo'];
-        if (explicit != null) {
-          return explicit == true;
-        }
-        return namaLower.contains('deposit') ||
-            namaLower.contains('saldo') ||
-            namaLower.contains('tabungan');
-      }(),
+          : rawWajibMember != null
+              ? (rawWajibMember == true)
+              : (online ? false : null),
+      memotongDeposit: potongDepositEfektif,
     );
   }
 }
