@@ -15,7 +15,9 @@ import '../widgets/pulihkan_terhapus.dart';
 import '../widgets/pemilih_akun.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/aksi_baris_menu.dart';
+import '../widgets/dialog_mutasi_saldo_akun.dart';
 import '../services/simpan_berkas_helper.dart';
+import '../theme/app_colors.dart';
 
 String _normalisasiNamaGrupAkun(String nama) =>
     nama.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
@@ -667,7 +669,8 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     }
     final hasil = <Map<String, dynamic>>[];
     void telusuri(Map<String, dynamic> node, int level) {
-      hasil.add({...node, '_level': level});
+      final listAnak = anakDari['${node['id']}'] ?? const [];
+      hasil.add({...node, '_level': level, '_punyaAnak': listAnak.isNotEmpty});
       for (final anak in (anakDari['${node['id']}'] ?? const [])) {
         telusuri(anak, level + 1);
       }
@@ -1210,9 +1213,27 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
   }
 
   /// Empat tombol aksi pada pohon akun -- urutannya mengikuti layar ZK.
+  Set<String> get _idIndukSet {
+    final s = <String>{};
+    for (final a in _akun) {
+      final p = a['parentId'];
+      if (p != null) s.add('$p');
+    }
+    return s;
+  }
+
+  Future<void> _bukaMutasiSaldo(Map<String, dynamic> a) {
+    final punyaAnak = a['_punyaAnak'] == true || _idIndukSet.contains('${a['id']}');
+    return bukaDialogMutasiSaldoAkun(context, {...a, 'punyaAnak': punyaAnak});
+  }
+
   AppTableCell _aksiAkun(Map<String, dynamic> a) => AppTableCell(
       width: 64,
       child: AksiBarisMenu(aksi: [
+        AksiBaris(
+            ikon: Icons.menu_book_outlined,
+            label: 'Rincian mutasi saldo',
+            onTap: () => _bukaMutasiSaldo(a)),
         AksiBaris(
             ikon: Icons.playlist_add,
             label: 'Tambah akun anak',
@@ -1339,10 +1360,58 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                 AppTableCell.text('${a['posisi'] ?? ''}', flex: 2),
                 AppTableCell.text('${a['keterangan'] ?? ''}', flex: 3),
                 AppTableCell.text('${a['grupAkun'] ?? ''}', flex: 3),
-                AppTableCell.text(
-                    _fmtSaldoAkun.format((a['saldo'] as num?)?.toDouble() ?? 0),
-                    flex: 2,
-                    align: TextAlign.right),
+                AppTableCell(
+                  flex: 2,
+                  align: TextAlign.right,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Tooltip(
+                      message:
+                          'Klik untuk melihat Saldo Awal, Mutasi (Debet/Kredit) & Saldo Akhir',
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () => _bukaMutasiSaldo(a),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          child: Builder(
+                            builder: (ctx) {
+                              final nilai =
+                                  (a['saldo'] as num?)?.toDouble() ?? 0;
+                              final warna = nilai < -0.005
+                                  ? AppColors.danger
+                                  : (nilai.abs() < 0.005
+                                      ? AppColors.textPrimaryOf(ctx)
+                                      : AppColors.primary);
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      _fmtSaldoAkun.format(nilai),
+                                      textAlign: TextAlign.right,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: warna,
+                                        decoration: TextDecoration.underline,
+                                        decorationColor:
+                                            warna.withValues(alpha: 0.65),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Icon(Icons.open_in_new_rounded,
+                                      size: 13,
+                                      color: warna.withValues(alpha: 0.75)),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
                 _aksiAkun(a),
               ]))
           .toList(),
