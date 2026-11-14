@@ -558,6 +558,13 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
     }
   }
 
+  Future<void> _pilihProdukDariKode(_BulkRow row, String kode) async {
+    final nilai = kode.trim();
+    if (nilai.isEmpty) return;
+    row.kode.text = nilai;
+    await _cariProduk(row, paksaIsiNamaMaster: true);
+  }
+
   Future<void> _pilihProdukDariNama(_BulkRow row, String kode) async {
     final nilai = kode.trim();
     if (nilai.isEmpty) return;
@@ -1462,8 +1469,25 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
                               width: 170,
                               child: Row(children: [
                                 Expanded(
-                                    child: _field(row.kode,
-                                        hint: 'scan/ketik kode')),
+                                  child: PencarianProdukBanbox(
+                                    controller: row.kode,
+                                    label: 'Kode / Barcode',
+                                    icon: Icons.qr_code,
+                                    tampilkanScanner: false,
+                                    textStyle: const TextStyle(fontSize: 12.5),
+                                    onChanged: (_) => setStateIfMounted(() {}),
+                                    onPilih: (kode) =>
+                                        _pilihProdukDariKode(row, kode),
+                                    decorationBuilder: (context) =>
+                                        const InputDecoration(
+                                      hintText: 'scan/ketik kode',
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 9),
+                                      border: OutlineInputBorder(),
+                                    ),
+                                  ),
+                                ),
                                 const SizedBox(width: 4),
                                 IconButton(
                                   visualDensity: VisualDensity.compact,

@@ -68,6 +68,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
   final _controllerProduk = TextEditingController();
   final _controllerPelanggan = TextEditingController();
   bool _perToko = false;
+  bool _tampilkanMemberNol = false;
   String _modeLaporan = '';
   final _controllerKop = TextEditingController();
 
@@ -105,6 +106,10 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
   bool get _adaFilterKategoriProduk => widget.item['kategoriProduk'] == true;
   bool get _adaFilterPelanggan => widget.item['pelanggan'] == true;
   bool get _adaFilterPerToko => widget.item['perToko'] == true;
+  bool get _adalahLaporanKategoriMember =>
+      widget.item['id'] == 'pnj_per_kategori_member' ||
+      (widget.item['id'] == 'pnj_per_kategori_pelanggan' &&
+          _modeLaporan == 'member');
 
   /// Laporan berbasis JURNAL akuntansi bergantung pada Satuan Kerja: satu
   /// instalasi melayani banyak unit usaha (sekolah, mart, katering, laundry)
@@ -209,6 +214,8 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
         'qPelanggan': _controllerPelanggan.text.trim(),
       if (_adaFilterPerToko && _modeLaporan.isEmpty && _perToko)
         'perToko': 'true',
+      if (_adalahLaporanKategoriMember && _tampilkanMemberNol)
+        'tampilkanMemberNol': 'true',
       if (_adaFilterSatker && _satkerId != null) 'satkerId': '$_satkerId',
     };
   }
@@ -236,6 +243,35 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
   }
 
   void _filterBerubah() => setStateIfMounted(_hapusHasil);
+
+  /// Menyaring baris konsumen/member yang nilai transaksi belanjanya Rp 0 pada
+  /// laporan Penjualan per Kategori & Member ketika opsi [_tampilkanMemberNol]
+  /// tidak dicentang, sehingga aplikasi desktop langsung menyembunyikan baris
+  /// Rp 0 meskipun server belum di-redeploy.
+  Map<String, dynamic> _saringHasilMemberNol(Map<String, dynamic> asal) {
+    if (!_adalahLaporanKategoriMember || _tampilkanMemberNol) return asal;
+    final barisAsal = (asal['baris'] as List?) ?? const [];
+    final barisSaring = <List<dynamic>>[];
+    var noUrut = 1;
+    for (final b in barisAsal) {
+      if (b is! List || b.isEmpty) continue;
+      final nilaiRaw = b.last;
+      final nilai = nilaiRaw is num
+          ? nilaiRaw.toDouble()
+          : double.tryParse('$nilaiRaw'.replaceAll(',', '.')) ?? 0.0;
+      if (nilai <= 0) continue;
+      final salinan = List<dynamic>.from(b);
+      if (salinan.isNotEmpty) salinan[0] = noUrut++;
+      barisSaring.add(salinan);
+    }
+    return <String, dynamic>{
+      ...asal,
+      'baris': barisSaring,
+      'catatan':
+          'Menampilkan konsumen/member yang memiliki nilai transaksi belanja pada periode terpilih. Centang "Tampilkan juga anggota tanpa transaksi belanja (Rp 0)" bila ingin melihat seluruh anggota.',
+    };
+  }
+
 
   Future<void> _tampilkan() async {
     setStateIfMounted(() {
@@ -269,7 +305,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
         final stempel =
             DateTime.tryParse('${hasilLokal['_disimpanPada'] ?? ''}');
         setStateIfMounted(() {
-          _hasil = hasilLokal;
+          _hasil = _saringHasilMemberNol(hasilLokal);
           _dariCache = true;
           _cacheDisimpanPada = stempel;
         });
@@ -288,7 +324,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
         return;
       }
       setStateIfMounted(() {
-        _hasil = hasil;
+        _hasil = _saringHasilMemberNol(hasil);
         // Angka server sudah terpasang -> penanda salinan tersimpan padam.
         _dariCache = false;
         _cacheDisimpanPada = null;
@@ -610,6 +646,17 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
                               _perToko = v ?? false;
                             }),
                         title: const Text('Tampilkan per Toko'),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true),
+                  if (_adalahLaporanKategoriMember)
+                    CheckboxListTile(
+                        value: _tampilkanMemberNol,
+                        onChanged: (v) => setStateIfMounted(() {
+                              _hapusHasil();
+                              _tampilkanMemberNol = v ?? false;
+                            }),
+                        title: const Text(
+                            'Tampilkan juga anggota tanpa transaksi belanja (Rp 0)'),
                         contentPadding: EdgeInsets.zero,
                         dense: true),
                   const SizedBox(height: 12),

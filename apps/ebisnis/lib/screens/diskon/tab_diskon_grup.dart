@@ -217,7 +217,9 @@ class _TabDiskonGrupState extends State<TabDiskonGrup> with JejakGalat {
                               ]),
                             ))),
                         DataCell(Text(periode)),
-                        DataCell(Text('${e['jumlahProduk'] ?? 0}')),
+                        DataCell(Text(e['berlakuSemuaProduk'] == true
+                            ? 'Semua Produk'
+                            : '${e['jumlahProduk'] ?? 0}')),
                         DataCell(Text(nilai,
                             style:
                                 const TextStyle(fontWeight: FontWeight.w700))),
@@ -298,6 +300,7 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> with JejakGalat {
   bool _langsung = true,
       _aktif = true,
       _khususMember = false,
+      _berlakuSemuaProduk = false,
       _dapatDigabung = false,
       _saving = false,
       _loadingKriteria = true;
@@ -322,6 +325,7 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> with JejakGalat {
     _langsung = a?['potonganLangsung'] ?? true;
     _aktif = a?['aktif'] ?? true;
     _khususMember = a?['khususMember'] ?? false;
+    _berlakuSemuaProduk = a?['berlakuSemuaProduk'] == true;
     _dapatDigabung = a?['dapatDigabung'] ?? false;
     _dasarPerhitungan = '${a?['dasarPerhitungan'] ?? 'SETELAH_DISKON'}';
     for (final x in (a?['jenisMemberJson'] as List?) ?? const []) {
@@ -515,8 +519,9 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> with JejakGalat {
 
   Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
-    if (_produk.isEmpty) {
-      setStateIfMounted(() => _error = 'Tambahkan minimal satu produk.');
+    if (!_berlakuSemuaProduk && _produk.isEmpty) {
+      setStateIfMounted(() => _error =
+          'Tambahkan minimal satu produk, atau aktifkan "Berlaku untuk semua produk".');
       return;
     }
     setStateIfMounted(() {
@@ -542,6 +547,7 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> with JejakGalat {
         'tanggal_selesai': _iso(_selesai),
         'berlaku_semua_member': !_khususMember,
         'khusus_member': _khususMember,
+        'berlaku_semua_produk': _berlakuSemuaProduk,
         'jenis_member_ids': _jenisTerpilih.toList(),
         'tipe_member_ids': _tipeTerpilih.toList(),
         'aktif': _aktif,
@@ -749,6 +755,15 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> with JejakGalat {
                     value: _aktif,
                     onChanged: (v) => setStateIfMounted(() => _aktif = v)),
                 const Divider(),
+                SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Berlaku untuk semua produk'),
+                    subtitle: const Text(
+                        'Jika aktif, promo grup ini otomatis berlaku untuk seluruh produk di katalog tanpa perlu memilih produk satu per satu.'),
+                    value: _berlakuSemuaProduk,
+                    onChanged: (v) =>
+                        setStateIfMounted(() => _berlakuSemuaProduk = v)),
+                if (!_berlakuSemuaProduk) ...[
                 Row(children: [
                   Expanded(
                       child: Text('Produk (${_produk.length})',
@@ -779,6 +794,7 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> with JejakGalat {
                                 color: AppColors.danger),
                             onPressed: () => setStateIfMounted(() => _produk
                                 .removeWhere((x) => x['id'] == p['id'])))))),
+                ],
                 const SizedBox(height: 16),
                 Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                   TextButton(

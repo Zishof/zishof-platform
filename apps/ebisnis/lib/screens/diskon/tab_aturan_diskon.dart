@@ -420,6 +420,8 @@ class _FormDiskonState extends State<_FormDiskon> with JejakGalat {
   String _dasarPerhitungan = 'SETELAH_DISKON';
   int? _jenisAnggotaId;
   int? _tipeAnggotaId;
+  final Set<int> _jenisTerpilih = {};
+  final Set<int> _tipeTerpilih = {};
   bool _menyimpan = false;
   String? _error;
 
@@ -441,25 +443,85 @@ class _FormDiskonState extends State<_FormDiskon> with JejakGalat {
   void initState() {
     super.initState();
     final a = widget.aturan;
-    _nama = TextEditingController(text: a?['namaAturan'] ?? '');
-    _keterangan = TextEditingController();
-    _kodeProduk = TextEditingController();
+    _nama = TextEditingController(
+        text: '${a?['namaAturan'] ?? a?['nama_aturan'] ?? ''}');
+    _keterangan = TextEditingController(text: '${a?['keterangan'] ?? ''}');
+    _kodeProduk = TextEditingController(
+        text: '${a?['kodeProduk'] ?? a?['kode_produk'] ?? ''}');
     _persentase = TextEditingController(text: '${a?['persentase'] ?? 0}');
     _nominal = TextEditingController(text: '${a?['nominal'] ?? 0}');
-    _maksimalPotongan = TextEditingController();
+    final maksAwal =
+        (a?['maksimalPotongan'] ?? a?['maksimal_potongan']) as num?;
+    _maksimalPotongan = TextEditingController(
+        text: maksAwal != null && maksAwal > 0 ? '$maksAwal' : '');
     _prioritas = TextEditingController(text: '${a?['prioritas'] ?? 100}');
-    _grupEksklusif =
-        TextEditingController(text: '${a?['grupEksklusif'] ?? ''}');
-    _tokoId = TextEditingController();
-    _potonganLangsung = a?['potonganLangsung'] ?? true;
+    _grupEksklusif = TextEditingController(
+        text: '${a?['grupEksklusif'] ?? a?['grup_eksklusif'] ?? ''}');
+    final tokoAwal = a?['tokoId'] ?? a?['toko_id'];
+    _tokoId = TextEditingController(text: tokoAwal == null ? '' : '$tokoAwal');
+    _potonganLangsung =
+        (a?['potonganLangsung'] ?? a?['potongan_langsung']) ?? true;
+    _berlakuPerHariDanPerToko = (a?['berlakuPerHariDanPerToko'] ??
+            a?['berlaku_per_hari_dan_per_toko']) ==
+        true;
     _aktif = a?['aktif'] ?? true;
-    _aktivasiManual = a?['aktivasiManual'] == true;
-    _dapatDigabung = a?['dapatDigabung'] == true;
-    _dasarPerhitungan = '${a?['dasarPerhitungan'] ?? 'SETELAH_DISKON'}';
-    _berlakuSemuaProduk = (a?['produkNama'] as String?)?.isEmpty ?? true;
-    _mulai = _uraiTanggalServer(a?['tanggalMulai'] as String?);
-    _selesai = _uraiTanggalServer(a?['tanggalSelesai'] as String?);
-    _hariAktif.addAll(_uraiHariAktif(a?['hariAktif'] as String?));
+    _aktivasiManual =
+        (a?['aktivasiManual'] ?? a?['aktivasi_manual']) == true;
+    _dapatDigabung = (a?['dapatDigabung'] ?? a?['dapat_digabung']) == true;
+    _dasarPerhitungan =
+        '${a?['dasarPerhitungan'] ?? a?['dasar_perhitungan'] ?? 'SETELAH_DISKON'}';
+    final kodeAwal = '${a?['kodeProduk'] ?? a?['kode_produk'] ?? ''}'.trim();
+    final namaProdukAwal = '${a?['produkNama'] ?? ''}'.trim();
+    if (a != null &&
+        (a.containsKey('berlakuSemuaProduk') ||
+            a.containsKey('berlaku_semua_produk'))) {
+      _berlakuSemuaProduk =
+          (a['berlakuSemuaProduk'] ?? a['berlaku_semua_produk']) == true;
+    } else {
+      _berlakuSemuaProduk = kodeAwal.isEmpty && namaProdukAwal.isEmpty;
+    }
+    for (final x
+        in (a?['jenisMemberJson'] ?? a?['jenis_member_ids']) as List? ??
+            const []) {
+      final id = x is num ? x.toInt() : int.tryParse('$x');
+      if (id != null && id > 0) _jenisTerpilih.add(id);
+    }
+    final singleJenis = a?['jenisAnggotaId'] ?? a?['jenis_anggota_id'];
+    final singleJenisInt =
+        singleJenis is num ? singleJenis.toInt() : int.tryParse('$singleJenis');
+    if (singleJenisInt != null && singleJenisInt > 0) {
+      _jenisTerpilih.add(singleJenisInt);
+      _jenisAnggotaId = singleJenisInt;
+    }
+    for (final x
+        in (a?['tipeMemberJson'] ?? a?['tipe_member_ids']) as List? ??
+            const []) {
+      final id = x is num ? x.toInt() : int.tryParse('$x');
+      if (id != null && id > 0) _tipeTerpilih.add(id);
+    }
+    final singleTipe = a?['tipeAnggotaId'] ?? a?['tipe_anggota_id'];
+    final singleTipeInt =
+        singleTipe is num ? singleTipe.toInt() : int.tryParse('$singleTipe');
+    if (singleTipeInt != null && singleTipeInt > 0) {
+      _tipeTerpilih.add(singleTipeInt);
+      _tipeAnggotaId = singleTipeInt;
+    }
+    if (a != null &&
+        (a.containsKey('berlakuSemuaMember') ||
+            a.containsKey('berlaku_semua_member'))) {
+      _berlakuSemuaMember =
+          (a['berlakuSemuaMember'] ?? a['berlaku_semua_member']) == true &&
+              _jenisTerpilih.isEmpty &&
+              _tipeTerpilih.isEmpty;
+    } else {
+      _berlakuSemuaMember = _jenisTerpilih.isEmpty && _tipeTerpilih.isEmpty;
+    }
+    _mulai = _uraiTanggalServer(
+        (a?['tanggalMulai'] ?? a?['tanggal_mulai']) as String?);
+    _selesai = _uraiTanggalServer(
+        (a?['tanggalSelesai'] ?? a?['tanggal_selesai']) as String?);
+    _hariAktif.addAll(
+        _uraiHariAktif((a?['hariAktif'] ?? a?['hari_aktif']) as String?));
   }
 
   /// Urai CSV hari aktif (mis. "1,2,3,4,5") dari `diskon_list` -- entri yang
@@ -539,8 +601,23 @@ class _FormDiskonState extends State<_FormDiskon> with JejakGalat {
         'berlaku_semua_produk': _berlakuSemuaProduk,
         if (!_berlakuSemuaProduk) 'kode_produk': _kodeProduk.text.trim(),
         'berlaku_semua_member': _berlakuSemuaMember,
-        if (!_berlakuSemuaMember) 'jenis_anggota_id': _jenisAnggotaId,
-        if (!_berlakuSemuaMember) 'tipe_anggota_id': _tipeAnggotaId,
+        'berlakuSemuaMember': _berlakuSemuaMember,
+        'berlakuSemuaProduk': _berlakuSemuaProduk,
+        'kodeProduk': _berlakuSemuaProduk ? '' : _kodeProduk.text.trim(),
+        if (!_berlakuSemuaMember) ...{
+          'jenis_member_ids': _jenisTerpilih.toList(),
+          'tipe_member_ids': _tipeTerpilih.toList(),
+          'jenisMemberJson': _jenisTerpilih.toList(),
+          'tipeMemberJson': _tipeTerpilih.toList(),
+          'jenis_anggota_id':
+              _jenisTerpilih.isNotEmpty ? _jenisTerpilih.first : _jenisAnggotaId,
+          'tipe_anggota_id':
+              _tipeTerpilih.isNotEmpty ? _tipeTerpilih.first : _tipeAnggotaId,
+          'jenisAnggotaId':
+              _jenisTerpilih.isNotEmpty ? _jenisTerpilih.first : _jenisAnggotaId,
+          'tipeAnggotaId':
+              _tipeTerpilih.isNotEmpty ? _tipeTerpilih.first : _tipeAnggotaId,
+        },
         'persentase':
             double.tryParse(_persentase.text.replaceAll(',', '.')) ?? 0,
         'nominal': double.tryParse(_nominal.text.replaceAll(',', '.')) ?? 0,
@@ -600,7 +677,7 @@ class _FormDiskonState extends State<_FormDiskon> with JejakGalat {
             scrollController: scrollController,
             title: ubah ? 'Ubah Aturan Diskon' : 'Tambah Aturan Diskon',
             subtitle: ubah
-                ? 'Target produk/member tidak ditampilkan ulang. Isi lagi bila ingin mengubah cakupannya.'
+                ? 'Periksa atau perbarui cakupan produk, jenis/tipe anggota member, dan nilai potongan promo.'
                 : 'Susun aturan potongan yang akan dipakai saat transaksi kasir.',
             icon: ubah ? Icons.edit_calendar_outlined : Icons.discount_outlined,
             errorText: _error,
@@ -649,37 +726,63 @@ class _FormDiskonState extends State<_FormDiskon> with JejakGalat {
                         setStateIfMounted(() => _berlakuSemuaMember = v),
                   ),
                   if (!_berlakuSemuaMember) ...[
-                    DropdownButtonFormField<int?>(
-                      value: _jenisAnggotaId,
-                      decoration: AppFormStyle.fieldDecoration(
-                        context,
-                        labelText: 'Jenis Anggota',
-                      ),
-                      items: [
-                        const DropdownMenuItem<int?>(
-                            value: null, child: Text('-- Semua Jenis --')),
-                        ...widget.jenisAnggota.map((k) =>
-                            DropdownMenuItem<int?>(
-                                value: k.id, child: Text(k.nama))),
-                      ],
-                      onChanged: (v) =>
-                          setStateIfMounted(() => _jenisAnggotaId = v),
+                    const SizedBox(height: 8),
+                    Text('Jenis Member (boleh lebih dari satu)',
+                        style: Theme.of(context).textTheme.titleSmall),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: widget.jenisAnggota.map((k) {
+                        final selected = _jenisTerpilih.contains(k.id);
+                        return FilterChip(
+                          label: Text(k.nama),
+                          selected: selected,
+                          onSelected: (v) => setStateIfMounted(() {
+                            if (v) {
+                              _jenisTerpilih.add(k.id);
+                            } else {
+                              _jenisTerpilih.remove(k.id);
+                            }
+                            _jenisAnggotaId = _jenisTerpilih.isNotEmpty
+                                ? _jenisTerpilih.first
+                                : null;
+                          }),
+                        );
+                      }).toList(),
                     ),
                     const SizedBox(height: 12),
-                    DropdownButtonFormField<int?>(
-                      value: _tipeAnggotaId,
-                      decoration: AppFormStyle.fieldDecoration(
-                        context,
-                        labelText: 'Tipe Anggota',
+                    Text('Tipe Member (boleh lebih dari satu)',
+                        style: Theme.of(context).textTheme.titleSmall),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: widget.tipeAnggota.map((k) {
+                        final selected = _tipeTerpilih.contains(k.id);
+                        return FilterChip(
+                          label: Text(k.nama),
+                          selected: selected,
+                          onSelected: (v) => setStateIfMounted(() {
+                            if (v) {
+                              _tipeTerpilih.add(k.id);
+                            } else {
+                              _tipeTerpilih.remove(k.id);
+                            }
+                            _tipeAnggotaId = _tipeTerpilih.isNotEmpty
+                                ? _tipeTerpilih.first
+                                : null;
+                          }),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Pilih satu atau beberapa Jenis/Tipe Anggota (sama seperti format Diskon Grup). Jika tidak ada chip yang dipilih, promo berlaku untuk semua member terdaftar.',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: AppColors.textSecondaryOf(context),
                       ),
-                      items: [
-                        const DropdownMenuItem<int?>(
-                            value: null, child: Text('-- Semua Tipe --')),
-                        ...widget.tipeAnggota.map((k) => DropdownMenuItem<int?>(
-                            value: k.id, child: Text(k.nama))),
-                      ],
-                      onChanged: (v) =>
-                          setStateIfMounted(() => _tipeAnggotaId = v),
                     ),
                   ],
                 ],

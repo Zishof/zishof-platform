@@ -22,6 +22,12 @@ const _opsiPeriode = [
   ('3years', '3 Tahun Terakhir'),
 ];
 
+const _opsiJenisDiskon = [
+  ('SEMUA', '- Semua Jenis -'),
+  ('POTONG_STRUK', 'Potong Langsung di Struk'),
+  ('CASHBACK', 'Cashback Saldo'),
+];
+
 /// Tab 3/3 "Monitor Diskon" (padanan `monitor_diskon_kantin.jsp` / ZK
 /// `MonitorDiskonKantinAction`) -- KPI + tren + top-list, dgn filter
 /// Jenis Anggota/Toko/Periode. Aksi `monitor_promo_cashback` (SAMA dgn
@@ -38,9 +44,12 @@ class _TabMonitorDiskonState extends State<TabMonitorDiskon> with JejakGalat {
   String? _error;
   Map<String, dynamic>? _d;
   List<Kategori> _jenisAnggota = [];
+  List<Map<String, dynamic>> _daftarAturanMaster = [];
   int? _jenisAnggotaId;
   int? _tokoId;
   String _periode = 'month';
+  String _jenisDiskon = 'SEMUA';
+  int? _aturanDiskonId;
 
   @override
   void initState() {
@@ -56,10 +65,16 @@ class _TabMonitorDiskonState extends State<TabMonitorDiskon> with JejakGalat {
       // statistik terkini ketika jaringan putus.
       final hasil = await MasterOffline.daftarDenganCache(
           'jenis_anggota_list', {}, 'master:jenis_anggota_pilihan');
+      final hasilAturan = await MasterOffline.daftarDenganCache(
+          'diskon_list', {'page': 1, 'page_size': 200}, 'master:diskon');
       if (!mounted) return;
       setStateIfMounted(() {
         _jenisAnggota = ((hasil['data'] as List?) ?? [])
             .map((e) => Kategori.fromJson(e as Map<String, dynamic>))
+            .toList();
+        _daftarAturanMaster = ((hasilAturan['data'] as List?) ?? [])
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
             .toList();
       });
     } catch (_) {
@@ -78,6 +93,8 @@ class _TabMonitorDiskonState extends State<TabMonitorDiskon> with JejakGalat {
         'periode': _periode,
         if (_jenisAnggotaId != null) 'jenis_anggota_id': _jenisAnggotaId,
         if (Sesi.instance.isAdmin && _tokoId != null) 'toko_id': _tokoId,
+        if (_jenisDiskon != 'SEMUA') 'jenis_diskon': _jenisDiskon,
+        if (_aturanDiskonId != null) 'aturan_diskon_id': _aturanDiskonId,
       });
       if (!mounted) return;
       setStateIfMounted(() => _d = hasil);
@@ -165,6 +182,61 @@ class _TabMonitorDiskonState extends State<TabMonitorDiskon> with JejakGalat {
                   },
                 ),
               ),
+              SizedBox(
+                width: 210,
+                child: DropdownButtonFormField<String>(
+                  value: _jenisDiskon,
+                  isDense: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Jenis Diskon',
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                  ),
+                  items: _opsiJenisDiskon
+                      .map((p) => DropdownMenuItem<String>(
+                            value: p.$1,
+                            child: Text(p.$2, overflow: TextOverflow.ellipsis),
+                          ))
+                      .toList(),
+                  onChanged: (v) {
+                    if (v == null) return;
+                    _jenisDiskon = v;
+                    _muat();
+                  },
+                ),
+              ),
+              SizedBox(
+                width: 220,
+                child: DropdownButtonFormField<int?>(
+                  value: _opsiAturanDropdown().any((a) => a['id'] == _aturanDiskonId)
+                      ? _aturanDiskonId
+                      : null,
+                  isDense: true,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Aturan Promo',
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    const DropdownMenuItem<int?>(
+                      value: null,
+                      child: Text('- Semua Aturan Promo -', overflow: TextOverflow.ellipsis),
+                    ),
+                    ..._opsiAturanDropdown().map((a) => DropdownMenuItem<int?>(
+                          value: a['id'] as int,
+                          child: Text(
+                            '${a['nama']} (${a['potonganLangsung'] == true ? 'Potong Struk' : 'Cashback'})',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        )),
+                  ],
+                  onChanged: (v) {
+                    _aturanDiskonId = v;
+                    _muat();
+                  },
+                ),
+              ),
               IconButton(icon: const Icon(Icons.refresh), tooltip: 'Muat Ulang', onPressed: _muat),
             ],
           ),
@@ -182,15 +254,60 @@ class _TabMonitorDiskonState extends State<TabMonitorDiskon> with JejakGalat {
     );
   }
 
+  List<Map<String, dynamic>> _opsiAturanDropdown() {
+    final dariServer = ((_d?['daftarAturanFilter'] as List?) ?? [])
+        .whereType<Map>()
+        .map((e) => <String, dynamic>{
+              'id': (e['id'] as num?)?.toInt() ?? 0,
+              'nama': '${e['namaAturan'] ?? ''}'.trim(),
+              'potonganLangsung': e['potonganLangsung'] == true,
+            })
+        .where((e) => (e['id'] as int) > 0 && (e['nama'] as String).isNotEmpty)
+        .toList();
+    final sumber = dariServer.isNotEmpty
+        ? dariServer
+        : _daftarAturanMaster
+            .map((e) => <String, dynamic>{
+                  'id': (e['id'] as num?)?.toInt() ?? 0,
+                  'nama': '${e['namaAturan'] ?? ''}'.trim(),
+                  'potonganLangsung': e['potonganLangsung'] == true,
+                })
+            .where((e) => (e['id'] as int) > 0 && (e['nama'] as String).isNotEmpty)
+            .toList();
+    return sumber.where((a) {
+      if (_jenisDiskon == 'POTONG_STRUK') return a['potonganLangsung'] == true;
+      if (_jenisDiskon == 'CASHBACK') return a['potonganLangsung'] != true;
+      return true;
+    }).toList();
+  }
+
   Widget _isiDasbor(BuildContext context) {
     final d = _d!;
+    final hanyaPotongStruk = _jenisDiskon == 'POTONG_STRUK';
+    final hanyaCashback = _jenisDiskon == 'CASHBACK';
     final tren = ((d['tren'] as List?) ?? []).cast<Map<String, dynamic>>();
     final labelTren = tren.map((t) => '${t['periode']}').toList();
-    final seriDiskon = tren.map((t) => (t['diskon'] as num?)?.toDouble() ?? 0.0).toList();
-    final seriCashback = tren.map((t) => (t['cashback'] as num?)?.toDouble() ?? 0.0).toList();
+    final seriDiskon = tren
+        .map((t) => hanyaCashback ? 0.0 : ((t['diskon'] as num?)?.toDouble() ?? 0.0))
+        .toList();
+    final seriCashback = tren
+        .map((t) => hanyaPotongStruk ? 0.0 : ((t['cashback'] as num?)?.toDouble() ?? 0.0))
+        .toList();
     final topProduk = titikDariList(d['topProduk'] as List?);
-    final topMember = titikDariList(d['topMember'] as List?);
-    final aturan = ((d['aturanDiskon'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final topMember = hanyaPotongStruk
+        ? <TitikChart>[]
+        : titikDariList(d['topMember'] as List?);
+    final aturan = ((d['aturanDiskon'] as List?) ?? [])
+        .cast<Map<String, dynamic>>()
+        .where((a) {
+          if (hanyaPotongStruk && a['potonganLangsung'] != true) return false;
+          if (hanyaCashback && a['potonganLangsung'] == true) return false;
+          if (_aturanDiskonId != null && (a['id'] as num?)?.toInt() != _aturanDiskonId) {
+            return false;
+          }
+          return true;
+        })
+        .toList();
 
     return RefreshIndicator(
       onRefresh: _muat,
@@ -200,19 +317,23 @@ class _TabMonitorDiskonState extends State<TabMonitorDiskon> with JejakGalat {
           BarisKpi(kartu: [
             KartuKpi(
                 label: 'Diskon Diberikan',
-                nilai: formatRupiahDasbor.format(d['diskonDiberikan'] ?? 0),
+                nilai: formatRupiahDasbor.format(
+                    hanyaCashback ? 0 : (d['diskonDiberikan'] ?? 0)),
                 warna: const Color(0xFFC0563D)),
             KartuKpi(
                 label: 'Cashback Diberikan',
-                nilai: formatRupiahDasbor.format(d['cashbackDiberikan'] ?? 0),
+                nilai: formatRupiahDasbor.format(
+                    hanyaPotongStruk ? 0 : (d['cashbackDiberikan'] ?? 0)),
                 warna: const Color(0xFF0284C7)),
             KartuKpi(
                 label: 'Cashback Dicairkan',
-                nilai: formatRupiahDasbor.format(d['cashbackDicairkan'] ?? 0),
+                nilai: formatRupiahDasbor.format(
+                    hanyaPotongStruk ? 0 : (d['cashbackDicairkan'] ?? 0)),
                 warna: const Color(0xFF2E7D32)),
             KartuKpi(
                 label: 'Total Saldo Mengendap',
-                nilai: formatRupiahDasbor.format(d['saldoMengendap'] ?? 0),
+                nilai: formatRupiahDasbor.format(
+                    hanyaPotongStruk ? 0 : (d['saldoMengendap'] ?? 0)),
                 warna: const Color(0xFFB8860B)),
           ]),
           const SizedBox(height: 12),
