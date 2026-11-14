@@ -553,12 +553,17 @@ class ApiClient {
         namaAksi == 'pemetaan_akun_kantin_terapkan' ||
         namaAksi.startsWith('apotik_posting_') ||
         namaAksi.startsWith('apotik_pemetaan_akun_');
+    final laporanBerat = namaAksi == 'laporan_jalankan' ||
+        namaAksi == 'laporan_drilldown' ||
+        namaAksi == 'laporan_ekspor';
     final batasWaktu =
         namaAksi == 'produk_impor_excel_preview' || pemetaanKantinMassal
             ? const Duration(minutes: 5)
             : namaAksi == 'produk_impor_excel_komit'
                 ? const Duration(minutes: 3)
-                : const Duration(seconds: 30);
+                : laporanBerat
+                    ? const Duration(seconds: 90)
+                    : const Duration(seconds: 30);
 
     http.Response resp;
     try {
