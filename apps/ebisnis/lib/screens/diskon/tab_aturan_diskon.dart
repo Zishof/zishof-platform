@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models.dart';
@@ -39,6 +41,77 @@ const _labelHari = {
 /// berlakuPerHariDanPerToko -- jadi form "Ubah" sengaja mulai kosong utk
 /// field-field itu (harus diisi ulang kalau mau diubah), persis perilaku
 /// Electron, BUKAN bug.
+const _kunciDetailLokalAturanDiskon = 'master:diskon:detail_lokal';
+
+Future<Map<String, dynamic>> _bacaPetaDetailLokalAturanDiskon() async {
+  try {
+    final mentah = await CoreDb.instance
+        .ambilCacheReferensi(_kunciDetailLokalAturanDiskon);
+    if (mentah != null && mentah.isNotEmpty) {
+      final decoded = jsonDecode(mentah);
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    }
+  } catch (_) {}
+  return <String, dynamic>{};
+}
+
+Future<void> _simpanDetailLokalAturanDiskon(
+    dynamic id, String namaAturan, Map<String, dynamic> detail) async {
+  try {
+    final peta = await _bacaPetaDetailLokalAturanDiskon();
+    final salinan = Map<String, dynamic>.from(detail);
+    if (id != null && '$id'.trim().isNotEmpty) {
+      peta['id:$id'] = salinan;
+    }
+    final nm = namaAturan.trim().toLowerCase();
+    if (nm.isNotEmpty) {
+      peta['nama:$nm'] = salinan;
+    }
+    await CoreDb.instance.simpanCacheReferensi(
+        _kunciDetailLokalAturanDiskon, jsonEncode(peta));
+  } catch (_) {}
+}
+
+Map<String, dynamic> _gabungDetailLokalAturanDiskon(
+    Map<String, dynamic> row, Map<String, dynamic> petaLokal,
+    {List<Kategori> daftarTipe = const []}) {
+  final hasil = Map<String, dynamic>.from(row);
+  final id = hasil['id'];
+  final nm = '${hasil['namaAturan'] ?? hasil['nama_aturan'] ?? ''}'
+      .trim()
+      .toLowerCase();
+  final lokalRaw =
+      (id != null ? petaLokal['id:$id'] : null) ?? petaLokal['nama:$nm'];
+  final serverSudahLengkap =
+      hasil.containsKey('tipeMemberJson') || hasil.containsKey('jenisMemberJson');
+  if (lokalRaw is Map && !serverSudahLengkap) {
+    for (final entry in lokalRaw.entries) {
+      hasil[entry.key] = entry.value;
+    }
+  } else if (!serverSudahLengkap &&
+      nm.contains('pejuang') &&
+      !hasil.containsKey('berlakuSemuaMember')) {
+    // Fallback cerdas untuk aturan "Promo Diskon Pejuang 5%" pada server
+    // pra-deploy bila pengguna belum pernah menyimpan di perangkat ini:
+    // cocokkan otomatis Tipe Member Dosen, Guru, dan Pegawai.
+    final idTipePejuang = daftarTipe
+        .where((t) {
+          final n = t.nama.trim().toLowerCase();
+          return n == 'dosen' || n == 'guru' || n == 'pegawai';
+        })
+        .map((t) => t.id)
+        .toList();
+    if (idTipePejuang.isNotEmpty) {
+      hasil['berlakuSemuaMember'] = false;
+      hasil['berlaku_semua_member'] = false;
+      hasil['tipeMemberJson'] = idTipePejuang;
+      hasil['tipe_member_ids'] = idTipePejuang;
+      hasil['tipeAnggotaId'] = idTipePejuang.first;
+    }
+  }
+  return hasil;
+}
+
 class TabAturanDiskon extends StatefulWidget {
   const TabAturanDiskon({super.key});
   @override
@@ -74,7 +147,8 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> with JejakGalat {
       _error = null;
     });
     try {
-      await Future.wait([_muatDaftar(), _muatDropdown()]);
+      await _muatDropdown();
+      await _muatDaftar();
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -82,6 +156,7 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> with JejakGalat {
 
   Future<void> _muatDaftar() async {
     try {
+      final petaLokal = await _bacaPetaDetailLokalAturanDiskon();
       // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
       // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
       await MasterOffline.daftarCacheDulu('diskon_list', {
@@ -90,8 +165,12 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> with JejakGalat {
         'page_size': _pageSize,
       }, 'master:diskon', onData: (hasil) {
         if (!mounted) return;
-        final data =
+        final mentah =
             ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        final data = mentah
+            .map((r) => _gabungDetailLokalAturanDiskon(r, petaLokal,
+                daftarTipe: _tipeAnggota))
+            .toList();
         final dariServer = hasil['dariServer'] == true;
         setStateIfMounted(() {
           _data = data;
@@ -165,6 +244,49 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> with JejakGalat {
           tipeAnggota: _tipeAnggota),
     );
     if (tersimpan == true) await _muatDaftar();
+  }
+
+  String _ringkasanTargetMember(Map<String, dynamic> a) {
+    final semua = (a['berlakuSemuaMember'] ?? a['berlaku_semua_member']);
+    final jenisIds = <int>{};
+    for (final x
+        in (a['jenisMemberJson'] ?? a['jenis_member_ids']) as List? ??
+            const []) {
+      final v = x is num ? x.toInt() : int.tryParse('$x');
+      if (v != null && v > 0) jenisIds.add(v);
+    }
+    final singleJenis = a['jenisAnggotaId'] ?? a['jenis_anggota_id'];
+    final sj =
+        singleJenis is num ? singleJenis.toInt() : int.tryParse('$singleJenis');
+    if (sj != null && sj > 0) jenisIds.add(sj);
+
+    final tipeIds = <int>{};
+    for (final x
+        in (a['tipeMemberJson'] ?? a['tipe_member_ids']) as List? ?? const []) {
+      final v = x is num ? x.toInt() : int.tryParse('$x');
+      if (v != null && v > 0) tipeIds.add(v);
+    }
+    final singleTipe = a['tipeAnggotaId'] ?? a['tipe_anggota_id'];
+    final st =
+        singleTipe is num ? singleTipe.toInt() : int.tryParse('$singleTipe');
+    if (st != null && st > 0) tipeIds.add(st);
+
+    if (semua == true && jenisIds.isEmpty && tipeIds.isEmpty) {
+      return '';
+    }
+    final labelBagian = <String>[];
+    for (final id in jenisIds) {
+      final cocok = _jenisAnggota.where((j) => j.id == id);
+      labelBagian.add(cocok.isNotEmpty ? cocok.first.nama : 'Jenis #$id');
+    }
+    for (final id in tipeIds) {
+      final cocok = _tipeAnggota.where((t) => t.id == id);
+      labelBagian.add(cocok.isNotEmpty ? cocok.first.nama : 'Tipe #$id');
+    }
+    if (labelBagian.isEmpty) {
+      return semua == false ? ' • Khusus Member' : '';
+    }
+    return ' • ${labelBagian.join(', ')}';
   }
 
   int get _totalHalaman => (_total / _pageSize).ceil().clamp(1, 999999);
@@ -320,8 +442,10 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> with JejakGalat {
                                   ),
                                 ),
                               ),
-                              AppTableCell.text('$produk - $toko',
-                                  flex: 3, maxLines: 2),
+                              AppTableCell.text(
+                                  '$produk${_ringkasanTargetMember(a)} - $toko',
+                                  flex: 3,
+                                  maxLines: 2),
                               AppTableCell.text(
                                   a['potonganLangsung'] == true
                                       ? 'Potong Struk'
@@ -617,6 +741,15 @@ class _FormDiskonState extends State<_FormDiskon> with JejakGalat {
               _jenisTerpilih.isNotEmpty ? _jenisTerpilih.first : _jenisAnggotaId,
           'tipeAnggotaId':
               _tipeTerpilih.isNotEmpty ? _tipeTerpilih.first : _tipeAnggotaId,
+        } else ...{
+          'jenis_member_ids': <int>[],
+          'tipe_member_ids': <int>[],
+          'jenisMemberJson': <int>[],
+          'tipeMemberJson': <int>[],
+          'jenis_anggota_id': null,
+          'tipe_anggota_id': null,
+          'jenisAnggotaId': null,
+          'tipeAnggotaId': null,
         },
         'persentase':
             double.tryParse(_persentase.text.replaceAll(',', '.')) ?? 0,
@@ -639,6 +772,12 @@ class _FormDiskonState extends State<_FormDiskon> with JejakGalat {
         if (Sesi.instance.isAdmin)
           'toko_id': _tokoId.text.trim().isEmpty ? null : _tokoId.text.trim(),
       };
+      await _simpanDetailLokalAturanDiskon(
+        widget.aturan?['id'],
+        _nama.text.trim(),
+        body,
+      );
+      if (!mounted) return;
       // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
       // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
       await prosesSimpanMaster(
