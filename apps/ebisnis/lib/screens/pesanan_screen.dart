@@ -15,6 +15,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_error_info.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/pengaman_keranjang.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/panduan_stok_kosong.dart';
 import '../widgets/riwayat_data_dialog.dart';
@@ -1924,6 +1925,69 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
     // identik; baris dengan qty, harga, promo, atau ekstra berbeda tetap utuh.
     final keranjangNormal = normalisasiDuplikatKeranjangTertahan(keranjang);
     if (!mounted) return;
+
+    // Sesuai ATURAN MUTLAK 388:
+    // Jika di keranjang Kasir saat ini masih ada barang dari transaksi lain
+    // yang belum ditahan/dibayar, tanyakan dulu kepada kasir apakah ingin
+    // melihat keranjang aktif terlebih dahulu atau menggantinya dengan pesanan
+    // tertahan yang dipilih ini, sehingga tidak terjadi tabrakan diam-diam.
+    if (PengamanKeranjang.adaBarangAktif(context)) {
+      final pilihan = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Keranjang Kasir Masih Berisi Barang'),
+          content: Text(
+            'Saat ini masih ada barang di keranjang Kasir. Apakah Anda ingin '
+            'membuka keranjang aktif terlebih dahulu, atau mengganti isi '
+            'keranjang dengan pesanan tertahan ${p.kode}?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, 'batal'),
+              child: const Text('Batal'),
+            ),
+            OutlinedButton(
+              onPressed: () => Navigator.pop(dialogContext, 'lihat_keranjang'),
+              child: const Text('Lihat Keranjang Aktif'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, 'ganti'),
+              child: const Text('Muat Pesanan Ini'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || pilihan == null || pilihan == 'batal') return;
+      if (pilihan == 'lihat_keranjang') {
+        aktifkanTabKasirEBisnis(context);
+        return;
+      }
+    }
+
+    final waktuLanjut = waktuTransaksiDraftDilanjutkan();
+    final payloadDraft = PayloadDraftKasir(
+      keranjang: keranjangNormal,
+      draftIdSumber: p.id,
+      draftKodeSumber: p.kode,
+      memberAwal: member,
+      waktuTransaksiAwal: waktuLanjut,
+      semuaCaraBayarUntukMemberAwal: member != null,
+    );
+
+    // Di Desktop Multi-Tab Workspace, host KasirScreen sudah hidup di dalam
+    // IndexedStack utama. Muat langsung ke host KasirScreen aktif dan
+    // aktifkan tab Kasir/POS agar tidak menumpuk MaterialPageRoute baru yang
+    // justru tertutup kembali oleh tab Pesanan.
+    if (KasirScreen.muatDraftKeHostAktif(context, payloadDraft)) {
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+      return;
+    }
+
+    // Fallback (mis. bila dibuka dari luar host KasirScreen): pastikan tab
+    // aktif workspace disetel ke Kasir/POS sebelum membuka KasirScreen.
+    aktifkanTabKasirEBisnis(context);
     await Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => KasirScreen(
         keranjangAwal: keranjangNormal,
@@ -1932,7 +1996,7 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
         memberAwal: member,
         // Waktu draft lama tidak boleh ikut menjadi tanggal transaksi baru.
         // Tangkap waktu tepat ketika kasir memilih "Muat ke Keranjang".
-        waktuTransaksiAwal: waktuTransaksiDraftDilanjutkan(),
+        waktuTransaksiAwal: waktuLanjut,
         // Member draft tetap dikirim ke transaksi, tetapi pemulihan draft
         // harus menawarkan semua metode aktif (termasuk Kasbon Divisi).
         semuaCaraBayarUntukMemberAwal: member != null,

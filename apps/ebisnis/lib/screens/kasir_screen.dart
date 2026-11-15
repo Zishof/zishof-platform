@@ -74,6 +74,27 @@ bool produkBolehDijualMenurutStok(
   return produk.stok > 0 || paksaStokMinusToko || produk.izinkanJualMinusStok;
 }
 
+/// Payload pemulihan transaksi tertahan (*Hold/Draft*) untuk dimuat langsung ke
+/// instance [KasirScreen] utama di dalam `Multi-Tab Workspace` Desktop tanpa
+/// menumpuk `MaterialPageRoute` baru di atas `AppShell` (sesuai **ATURAN MUTLAK 388**).
+class PayloadDraftKasir {
+  final List<ItemKeranjang> keranjang;
+  final int? draftIdSumber;
+  final String? draftKodeSumber;
+  final Anggota? memberAwal;
+  final DateTime? waktuTransaksiAwal;
+  final bool semuaCaraBayarUntukMemberAwal;
+
+  const PayloadDraftKasir({
+    required this.keranjang,
+    this.draftIdSumber,
+    this.draftKodeSumber,
+    this.memberAwal,
+    this.waktuTransaksiAwal,
+    this.semuaCaraBayarUntukMemberAwal = false,
+  });
+}
+
 class KasirScreen extends StatefulWidget {
   final List<ItemKeranjang> keranjangAwal;
   final int? draftIdSumber;
@@ -81,6 +102,35 @@ class KasirScreen extends StatefulWidget {
   final Anggota? memberAwal;
   final DateTime? waktuTransaksiAwal;
   final bool semuaCaraBayarUntukMemberAwal;
+
+  /// Notifier komunikasi langsung antara tab `Pesanan` dan host `KasirScreen`
+  /// di dalam `IndexedStack` Desktop.
+  static final ValueNotifier<PayloadDraftKasir?> draftDimuatNotifier =
+      ValueNotifier<PayloadDraftKasir?>(null);
+
+  /// Menyimpan referensi ke `_KasirScreenState` yang sedang aktif/terpasang
+  /// paling akhir agar layar `Pesanan` dapat memeriksa apakah sudah ada host
+  /// `KasirScreen` yang siap menerima pemulihan draft secara langsung.
+  static _KasirScreenState? _instanceAktif;
+
+  /// Mengembalikan `true` bila ada host [KasirScreen] yang sedang terpasang
+  /// di pohon widget dan siap menerima pemulihan keranjang tertahan.
+  static bool get punyaHostAktif =>
+      _instanceAktif != null && _instanceAktif!.mounted;
+
+  /// Memuat [payload] langsung ke host [KasirScreen] aktif dan mengaktifkan
+  /// tab `Kasir/POS` di dalam `Multi-Tab Workspace`. Mengembalikan `true` bila
+  /// berhasil ditangani langsung oleh host aktif.
+  static bool muatDraftKeHostAktif(
+    BuildContext context,
+    PayloadDraftKasir payload,
+  ) {
+    final host = _instanceAktif;
+    if (host == null || !host.mounted) return false;
+    host._terimaDraftDariWorkspace(payload);
+    aktifkanTabKasirEBisnis(context);
+    return true;
+  }
 
   const KasirScreen({
     super.key,
@@ -210,6 +260,8 @@ class _KasirScreenState extends State<KasirScreen> {
   @override
   void initState() {
     super.initState();
+    KasirScreen._instanceAktif = this;
+    KasirScreen.draftDimuatNotifier.addListener(_saatDraftWorkspaceDikirim);
     _keranjang.addAll(widget.keranjangAwal);
     _draftIdSumber = widget.draftIdSumber;
     _draftKodeSumber = widget.draftKodeSumber;
@@ -236,6 +288,40 @@ class _KasirScreenState extends State<KasirScreen> {
     SinkronStokOpname.mulai();
   }
 
+  void _saatDraftWorkspaceDikirim() {
+    final payload = KasirScreen.draftDimuatNotifier.value;
+    if (payload == null || !mounted) return;
+    KasirScreen.draftDimuatNotifier.value = null;
+    _terimaDraftDariWorkspace(payload);
+  }
+
+  /// Menerima pemulihan transaksi tertahan (*Hold/Draft*) dari tab `Pesanan`
+  /// langsung ke instance `KasirScreen` aktif, menerapkan harga kanal aktif,
+  /// menaikkan `_versiTransaksi` agar `PanelKeranjang` menyegarkan form member
+  /// dan metode pembayaran, lalu menyiarkan keranjang ke Layar Pelanggan.
+  void _terimaDraftDariWorkspace(PayloadDraftKasir payload) {
+    if (!mounted) return;
+    setStateIfMounted(() {
+      _keranjang
+        ..clear()
+        ..addAll(payload.keranjang);
+      for (final item in _keranjang) {
+        item.hargaKanal = _hargaKanal[item.produk.id];
+      }
+      _draftIdSumber = payload.draftIdSumber;
+      _draftKodeSumber = payload.draftKodeSumber;
+      _memberAwal = payload.memberAwal;
+      _waktuTransaksiAwal = payload.waktuTransaksiAwal;
+      _semuaCaraBayarUntukMemberAwal = payload.semuaCaraBayarUntukMemberAwal;
+      _versiTransaksi++;
+      _kataKunciController.clear();
+      _kataKunci = '';
+    });
+    _siarkanKeranjangKasir();
+    _jadwalkanFokusCariItem();
+    _jadwalkanEvaluasiHargaCoret();
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -253,6 +339,10 @@ class _KasirScreenState extends State<KasirScreen> {
 
   @override
   void dispose() {
+    if (identical(KasirScreen._instanceAktif, this)) {
+      KasirScreen._instanceAktif = null;
+    }
+    KasirScreen.draftDimuatNotifier.removeListener(_saatDraftWorkspaceDikirim);
     MasterOffline.revisiBaris.removeListener(_saatStokLokalBerubah);
     _debounceHargaCoret?.cancel();
     _debounceCariProduk?.cancel();
@@ -2459,11 +2549,15 @@ class _KasirScreenState extends State<KasirScreen> {
   @override
   Widget build(BuildContext context) => PengamanKeranjang(
         adaBarang: () => _keranjang.isNotEmpty,
+        onKembaliKeKeranjang: () => aktifkanTabKasirEBisnis(context),
         child: PopScope(
           canPop: _keranjang.isEmpty,
           onPopInvokedWithResult: (didPop, result) {
             if (!didPop && _keranjang.isNotEmpty) {
-              PengamanKeranjang.tampilkanPeringatan(context);
+              PengamanKeranjang.tampilkanPeringatan(
+                context,
+                onKembaliKeKeranjang: () => aktifkanTabKasirEBisnis(context),
+              );
             }
           },
           child: _buildKasir(context),

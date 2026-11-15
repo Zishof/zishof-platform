@@ -161,6 +161,45 @@ class AppTheme {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
+      // Sesuai ATURAN MUTLAK 388:
+      // Batang gulir (scrollbar) di kanan layar wajib selalu terlihat jelas
+      // (thumbVisibility: true pada desktop, interactive: true) dan tidak hilang
+      // otomatis agar pengguna desktop yang memakai mouse dapat langsung
+      // menemukan serta menyeret kursor gulir dengan mudah.
+      scrollbarTheme: ScrollbarThemeData(
+        thumbVisibility: const WidgetStatePropertyAll(true),
+        trackVisibility: const WidgetStatePropertyAll(true),
+        interactive: true,
+        radius: const Radius.circular(6),
+        thickness: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.dragged) ||
+              states.contains(WidgetState.hovered)) {
+            return 12.0;
+          }
+          return 9.0;
+        }),
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.dragged)) {
+            return AppColors.primary.withValues(alpha: 0.90);
+          }
+          if (states.contains(WidgetState.hovered)) {
+            return AppColors.primary.withValues(alpha: 0.78);
+          }
+          return brightness == Brightness.dark
+              ? Colors.white.withValues(alpha: 0.45)
+              : AppColors.primary.withValues(alpha: 0.52);
+        }),
+        trackColor: WidgetStatePropertyAll(
+          brightness == Brightness.dark
+              ? Colors.white.withValues(alpha: 0.06)
+              : Colors.black.withValues(alpha: 0.04),
+        ),
+        trackBorderColor: WidgetStatePropertyAll(
+          brightness == Brightness.dark
+              ? Colors.white.withValues(alpha: 0.10)
+              : Colors.black.withValues(alpha: 0.08),
+        ),
+      ),
     );
   }
 }

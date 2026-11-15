@@ -21,6 +21,7 @@ import '../services/print_util.dart';
 import '../services/transaksi_outbox_service.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
+import '../widgets/app_shell.dart';
 import 'kasir_screen.dart';
 
 /// Menentukan nama yang dicetak sebagai kasir tanpa mencampur identitas
@@ -1331,11 +1332,18 @@ class StrukScreen extends StatelessWidget {
                         menungguAngkaServer: menungguAngkaServer,
                         tampilkanTransaksiBaru: !modeCetakUlang,
                         tampilkanBukaLaci: !modeCetakUlang,
-                        onTransaksiBaru: () =>
-                            Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(
-                              builder: (_) => const KasirScreen()),
-                        ),
+                        onTransaksiBaru: () {
+                          aktifkanTabKasirEBisnis(context);
+                          final nav = Navigator.of(context);
+                          if (nav.canPop()) {
+                            nav.popUntil((route) => route.isFirst);
+                            return;
+                          }
+                          nav.pushReplacement(
+                            MaterialPageRoute(
+                                builder: (_) => const KasirScreen()),
+                          );
+                        },
                         // Alur pembayaran dari Pesanan membuka Kasir sebagai
                         // route sementara, lalu menggantinya dengan layar struk.
                         // Pop dari sini mengembalikan kasir ke daftar Pesanan.
@@ -2232,6 +2240,7 @@ void _kembaliDariStruk(BuildContext context) {
     nav.pop();
     return;
   }
+  aktifkanTabKasirEBisnis(context);
   nav.pushReplacement(MaterialPageRoute(builder: (_) => const KasirScreen()));
 }
 

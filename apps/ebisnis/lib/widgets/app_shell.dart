@@ -177,6 +177,19 @@ void bukaMenuEBisnis(BuildContext context, MenuEBisnis menu) {
   _pindahMenu(context, item);
 }
 
+/// Mengaktifkan tab `Kasir/POS` secara langsung di dalam `Multi-Tab Workspace`
+/// tanpa terhalang gerbang `PengamanKeranjang` (sesuai **ATURAN MUTLAK 388**).
+///
+/// Digunakan ketika:
+/// 1. Kasir menekan `Muat ke Keranjang` pada layar `Pesanan` (transaksi tertahan).
+/// 2. Kasir menekan `Kembali ke keranjang` pada dialog `PengamanKeranjang`.
+/// 3. Kasir menekan `Transaksi Baru` atau `Kembali` dari layar `StrukScreen`.
+void aktifkanTabKasirEBisnis([BuildContext? context]) {
+  workspaceTabController.activateOrOpen(MenuEBisnis.kasir);
+  AppDrawer.menuAktifNotifier.value = _labelDrawer(MenuEBisnis.kasir);
+  _menuAktifNotifier.value = MenuEBisnis.kasir;
+}
+
 /// Mereset daftar tab `Multi-Tab Workspace` (misalnya saat keluar akun atau
 /// pada pengujian widget).
 void resetWorkspaceTabsEBisnis() {
@@ -1669,7 +1682,18 @@ void _pindahMenu(BuildContext context, _ItemMenuShell item,
       workspaceTabController.activeId == item.kunci) {
     return;
   }
-  if (PengamanKeranjang.cegahKeluar(context)) return;
+  // Sesuai ATURAN MUTLAK 388:
+  // 1. Berpindah KE tab Kasir/POS TIDAK BOLEH pernah dicegah oleh
+  //    PengamanKeranjang (justru pengguna sedang ingin kembali ke keranjang!).
+  // 2. Jika pengguna saat ini sedang berada di tab selain Kasir (mis. Pesanan)
+  //    ketika keranjang berisi barang (mis. karena baru memuat draft), jangan
+  //    jebak pengguna di tab tersebut; izinkan kembali ke Kasir, dan bila
+  //    mencoba pindah ke menu ketiga tampilkan peringatan yang tombol
+  //    "Kembali ke keranjang"-nya otomatis mengaktifkan tab Kasir/POS.
+  if (item.kunci != MenuEBisnis.kasir &&
+      PengamanKeranjang.cegahKeluar(context)) {
+    return;
+  }
   workspaceTabController.activateOrOpen(item.kunci);
   AppDrawer.menuAktifNotifier.value = _labelDrawer(item.kunci);
   _menuAktifNotifier.value = item.kunci;
@@ -2313,6 +2337,13 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   bool _notifierSudahSinkron = false;
+  final ScrollController _scrollControllerDesktop = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollControllerDesktop.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -2333,12 +2364,24 @@ class _AppShellState extends State<AppShell> {
               !bolehTampilMenu(MenuEBisnis.kasir))
           ? menuAwalPosSesuaiHakAkses()
           : widget.menuAktif;
+      // Sesuai ATURAN MUTLAK 388:
+      // Bila AppShell ini baru saja dibuka melalui Navigator.push /
+      // pushReplacement untuk menu spesifik (mis. KasirScreen yang membawa
+      // keranjangAwal dari Pesanan, atau kembali dari StrukScreen), maka tab
+      // aktif workspace WAJIB diselaraskan ke `menuEfektif` (Kasir/POS), BUKAN
+      // tertinggal di tab lama (mis. Pesanan) yang menyebabkan layar Kasir
+      // hanya berkedip 1 frame lalu tertutup kembali oleh tab Pesanan.
+      final harusAktifkanMenuIni = Navigator.of(context).canPop() ||
+          workspaceTabController.openIds.isEmpty;
       workspaceTabController.ensureInitialized(
         menuEfektif,
-        initialActiveId: workspaceTabController.openIds.isEmpty
+        initialActiveId: harusAktifkanMenuIni
             ? menuEfektif
             : workspaceTabController.activeId,
       );
+      if (harusAktifkanMenuIni) {
+        workspaceTabController.activateOrOpen(menuEfektif);
+      }
       final menuAktifTarget = workspaceTabController.activeId ?? menuEfektif;
       if (_menuAktifNotifier.value != menuAktifTarget) {
         _menuAktifNotifier.value = menuAktifTarget;
@@ -2379,11 +2422,17 @@ class _AppShellState extends State<AppShell> {
 
   Widget _bangunBadanKontenDesktop(BuildContext context) {
     if (widget.scrollable) {
-      return SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+      return Scrollbar(
+        controller: _scrollControllerDesktop,
+        thumbVisibility: true,
+        trackVisibility: true,
+        interactive: true,
+        child: SingleChildScrollView(
+          controller: _scrollControllerDesktop,
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
             if (widget.tampilkanJudul)
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
@@ -2458,6 +2507,7 @@ class _AppShellState extends State<AppShell> {
               ),
             widget.body,
           ],
+        ),
         ),
       );
     }
