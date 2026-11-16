@@ -25,6 +25,7 @@ import '../services/uom_konversi.dart';
 import '../services/validasi_saldo_pembayaran.dart';
 import '../services/biometric_capture_bridge.dart';
 import '../theme/app_colors.dart';
+import 'pesanan_screen.dart';
 import 'struk_screen.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/app_components.dart';
@@ -238,6 +239,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     }
     _muatPreferensiDanCaraBayar();
     _sinkronkanUangDiterima();
+    if (widget.keranjang.isNotEmpty) {
+      _jadwalkanEvaluasiDiskon();
+    }
   }
 
   void _pilihJenisKonsumsi(String nilai) {
@@ -1235,7 +1239,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
             Future<void> cekStatus() async {
               if (!dialogAktif ||
                   kodePembayaranOnlineId != null ||
-                  cekStatusBerjalan) return;
+                  cekStatusBerjalan) {
+                return;
+              }
               cekStatusBerjalan = true;
               try {
                 final res = await ApiClient.instance.aksi('checkBayar', {
@@ -2107,9 +2113,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       unawaited(_muatCaraBayarUntukMember(null));
       final keteranganSukses = widget.draftIdSumber == null
           ? 'Transaksi ditahan (kode: $kodeUnik).'
-          : 'Transaksi tertahan diperbarui (kode: $kodeUnik).';
+          : 'Transaksi tertahan diperbarui (kode: $kodeUnik, tanggal: ${DateFormat('dd-MM-yyyy HH:mm').format(waktu)}).';
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(keteranganSukses)));
+      PesananScreen.beritahuPerubahanPesanan();
       widget.onSelesai?.call();
       if (Navigator.of(context).canPop()) Navigator.of(context).pop();
     } catch (e) {
@@ -2517,9 +2524,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         _catatanPesananController.clear();
         _jenisKonsumsi = 'NORMAL';
       });
+      PesananScreen.beritahuPerubahanPesanan();
       widget.onSelesai?.call();
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(MaterialPageRoute(
+      final nav = Navigator.of(context);
+      final strukRoute = MaterialPageRoute(
         builder: (_) => StrukScreen(
           kode: kodeUnik,
           waktu: _formatWaktuServer(waktu),
@@ -2538,7 +2547,18 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           catatanPesanan: catatanPesananStruk,
           jenisKonsumsi: jenisKonsumsiStruk,
         ),
-      ));
+      );
+      // Di Desktop Multi-Tab Workspace, PanelKeranjang tertanam langsung di
+      // dalam root route KasirScreen (nav.canPop() == false). Jangan gunakan
+      // pushReplacement bila ini adalah route pertama karena akan membuang
+      // (dispose) host KasirScreen dan seluruh IndexedStack workspace!
+      // Sebaliknya di Mobile (KeranjangScreen dibuka via push), gunakan
+      // pushReplacement agar kembali dari Struk langsung mendarat di KasirScreen.
+      if (nav.canPop()) {
+        nav.pushReplacement(strukRoute);
+      } else {
+        nav.push(strukRoute);
+      }
     } catch (e, stackTrace) {
       if (e is ApiException &&
           e.kode == 'PENGAJUAN_LIMIT_MENUNGGU' &&
@@ -2946,11 +2966,44 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
 
   Widget _pemilihWaktuTransaksiTertahan() {
     if (widget.draftIdSumber == null) return const SizedBox.shrink();
+    final kodeDraft = (widget.draftKodeSumber ?? '').trim();
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.latarLembut(AppColors.success),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: AppColors.success.withValues(alpha: 0.35)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.shopping_cart_checkout,
+                    size: 18, color: AppColors.success),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Melanjutkan Pesanan Tertahan${kodeDraft.isEmpty ? '' : ' ($kodeDraft)'}\n'
+                    'Silakan klik/scan produk untuk menambah barang, lalu tekan '
+                    '"Simpan Tertahan - F3" (simpan perubahan) atau "Bayar - F2" (lunasi sekarang). '
+                    'Tanggal transaksi otomatis diperbarui ke hari ini (${DateFormat('dd-MM-yyyy').format(_waktuTransaksi)}).',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      height: 1.35,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimaryOf(context),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           _labelBagian('Tanggal transaksi'),
           const SizedBox(height: 8),
           InkWell(
@@ -2958,7 +3011,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
             borderRadius: BorderRadius.circular(10),
             child: InputDecorator(
               decoration: const InputDecoration(
-                labelText: 'Tanggal dan jam transaksi',
+                labelText: 'Tanggal dan jam transaksi (diperbarui ke hari ini)',
                 helperText:
                     'Transaksi tertahan akan disimpan pada tanggal/jam ini.',
                 border: _radiusInput,
@@ -2967,8 +3020,13 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(DateFormat('dd-MM-yyyy HH:mm').format(_waktuTransaksi)),
-                  const Icon(Icons.calendar_month_outlined, size: 18),
+                  Text(
+                    DateFormat('dd-MM-yyyy HH:mm').format(_waktuTransaksi),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, color: AppColors.success),
+                  ),
+                  const Icon(Icons.calendar_month_outlined,
+                      size: 18, color: AppColors.success),
                 ],
               ),
             ),
@@ -3728,8 +3786,12 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                     onPressed:
                         _memproses || widget.keranjang.isEmpty ? null : _tahan,
                     icon: const Icon(Icons.pause_circle_outline, size: 18),
-                    label: const Text('Tahan - F3',
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    label: Text(
+                        widget.draftIdSumber == null
+                            ? 'Tahan - F3'
+                            : 'Simpan Tertahan - F3',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
@@ -4506,6 +4568,51 @@ class _DialogTambahMemberCepatState extends State<_DialogTambahMemberCepat> {
     _muatReferensiKategori();
   }
 
+  /// Daftar kategori bawaan (fallback client-side) apabila server belum mengembalikan
+  /// `tipe_anggota_list` (misalnya saat offline atau sebelum server memperbarui
+  /// gerbang akses role kasir). ID negatif (`<= 0`) menandakan opsi panduan lokal
+  /// yang tidak dikirim sebagai FK numerik mentah, melainkan menampilkan panduan
+  /// alur divisi (Sekolah/Pondok, Akademik, SDM) secara konsisten.
+  static final List<Kategori> _fallbackKategoriKasir = [
+    Kategori(
+      id: 0,
+      nama: 'Umum (Pelanggan Toko)',
+      defaultKasir: true,
+      kategoriSivitas: false,
+      wajibHp: true,
+    ),
+    Kategori(
+      id: -101,
+      nama: 'Santri / Siswa (Melalui Divisi Sekolah / Pondok)',
+      kategoriSivitas: true,
+      wajibHp: false,
+    ),
+    Kategori(
+      id: -102,
+      nama: 'Pejuang / Pegawai (Melalui Divisi SDM)',
+      kategoriSivitas: true,
+      wajibHp: true,
+    ),
+    Kategori(
+      id: -103,
+      nama: 'Mahasiswa (Melalui Divisi Akademik)',
+      kategoriSivitas: true,
+      wajibHp: false,
+    ),
+    Kategori(
+      id: -104,
+      nama: 'Guru / Ustadz (Melalui Divisi Sekolah / SDM)',
+      kategoriSivitas: true,
+      wajibHp: true,
+    ),
+    Kategori(
+      id: -105,
+      nama: 'Dosen (Melalui Divisi Akademik / SDM)',
+      kategoriSivitas: true,
+      wajibHp: true,
+    ),
+  ];
+
   Future<void> _muatReferensiKategori() async {
     final idToko = Sesi.instance.idTokoTerpilih;
     List<Kategori> tipe = const [];
@@ -4534,6 +4641,10 @@ class _DialogTambahMemberCepatState extends State<_DialogTambahMemberCepat> {
             .where((k) => k.id > 0 && k.nama.trim().isNotEmpty)
             .toList();
       } catch (_) {}
+    }
+
+    if (tipe.isEmpty) {
+      tipe = _fallbackKategoriKasir;
     }
 
     try {

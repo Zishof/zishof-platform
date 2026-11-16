@@ -1752,6 +1752,53 @@ class _KasirScreenState extends State<KasirScreen> {
       _jadwalkanFokusCariItem();
       return;
     }
+
+    // Fallback pencarian nama produk (ATURAN MUTLAK 395):
+    // Jika kasir mengetik nama produk (bukan barcode/kode exact) lalu menekan Enter:
+    // 1. Bila hasil saringan hanya 1 produk (atau 1 dari cache SQLite), langsung
+    //    tambahkan ke keranjang.
+    // 2. Bila ada beberapa produk yang cocok namanya, JANGAN menghapus teks
+    //    pencarian (`_kataKunci`), agar grid katalog / dropdown Fokus Keranjang
+    //    tetap menampilkan daftar produk tersebut untuk diklik kasir.
+    var cocokNama = _produkTersaring;
+    if (cocokNama.isEmpty) {
+      final cacheNama = await CoreDb.instance.produkCache(keyword: v, limit: 30);
+      if (!mounted) return;
+      cocokNama = cacheNama.map(_produkDariCache).toList();
+      if (cocokNama.isNotEmpty) {
+        setStateIfMounted(() => _semuaProduk = cocokNama);
+      }
+    }
+    if (cocokNama.length == 1) {
+      final tunggal = cocokNama.first;
+      _tambahKeKeranjang(tunggal);
+      if (tunggal.ekstraPilihan.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${tunggal.nama} ditambahkan'),
+            duration: const Duration(milliseconds: 700),
+          ),
+        );
+      }
+      _kataKunciController.clear();
+      setStateIfMounted(() => _kataKunci = '');
+      _cariProdukLazy('');
+      _jadwalkanFokusCariItem();
+      return;
+    }
+    if (cocokNama.length > 1) {
+      setStateIfMounted(() => _kataKunci = v);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Ditemukan ${cocokNama.length} produk cocok. Klik produk yang diinginkan untuk menambah ke keranjang.'),
+          duration: const Duration(milliseconds: 1400),
+        ),
+      );
+      _jadwalkanFokusCariItem();
+      return;
+    }
+
     _kataKunciController.clear();
     setStateIfMounted(() => _kataKunci = '');
     ScaffoldMessenger.of(context).showSnackBar(

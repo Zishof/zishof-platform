@@ -44,6 +44,17 @@ const _pageSizePesanan = 15;
 class PesananScreen extends StatefulWidget {
   const PesananScreen({super.key});
 
+  /// Notifier lintas-tab di dalam `Multi-Tab Workspace`: dinaikkan setiap kali
+  /// transaksi baru ditahan, pesanan tertahan diperbarui, atau pembayaran
+  /// selesai di `PanelKeranjang` supaya instance `PesananScreen` yang tetap
+  /// hidup di `IndexedStack` langsung menyegarkan daftarnya dari server.
+  static final ValueNotifier<int> segarkanNotifier = ValueNotifier<int>(0);
+
+  /// Memberi tahu seluruh instance [PesananScreen] aktif agar memuat ulang data.
+  static void beritahuPerubahanPesanan() {
+    segarkanNotifier.value++;
+  }
+
   @override
   State<PesananScreen> createState() => _PesananScreenState();
 }
@@ -90,13 +101,32 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
   @override
   void initState() {
     super.initState();
+    PesananScreen.segarkanNotifier.addListener(_saatPerluSegarkanDariLuar);
+    workspaceTabController.addListener(_saatTabWorkspaceBerubah);
     _muat();
     _muatRingkasanPending();
     PesananPoller.instance.tandaiSudahDilihat();
   }
 
+  void _saatPerluSegarkanDariLuar() {
+    if (!mounted) return;
+    _muat();
+    _muatRingkasanPending();
+  }
+
+  void _saatTabWorkspaceBerubah() {
+    if (!mounted) return;
+    if (workspaceTabController.activeId == MenuEBisnis.pesanan) {
+      _muat();
+      _muatRingkasanPending();
+      PesananPoller.instance.tandaiSudahDilihat();
+    }
+  }
+
   @override
   void dispose() {
+    PesananScreen.segarkanNotifier.removeListener(_saatPerluSegarkanDariLuar);
+    workspaceTabController.removeListener(_saatTabWorkspaceBerubah);
     _kodeController.dispose();
     _pembeliController.dispose();
     _pedagangController.dispose();
@@ -1487,6 +1517,86 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
         : const Color(0xFFB8860B);
   }
 
+  Future<void> _perbaruiTanggalTertahanKeHariIni(Pesanan p) async {
+    try {
+      final waktuSekarang = waktuTransaksiDraftDilanjutkan();
+      final caraBayarId = p.caraBayarId ??
+          (Sesi.instance.caraBayar.isNotEmpty
+              ? Sesi.instance.caraBayar.first.id
+              : null);
+      if (caraBayarId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Metode pembayaran belum tersedia di sesi ini.')));
+        }
+        return;
+      }
+      final baseItems = <ItemPesanan>[];
+      final ekstraByInduk = <int, List<ItemPesanan>>{};
+      for (final i in p.items) {
+        if (i.indukId != null) {
+          ekstraByInduk.putIfAbsent(i.indukId!, () => []).add(i);
+        } else {
+          baseItems.add(i);
+        }
+      }
+      final transaksi = <Map<String, dynamic>>[];
+      for (final i in baseItems) {
+        final anak = i.draftItemId == null
+            ? const <ItemPesanan>[]
+            : (ekstraByInduk[i.draftItemId] ?? const <ItemPesanan>[]);
+        final qtyInduk = i.jumlah <= 0 ? 1.0 : i.jumlah;
+        transaksi.add({
+          'id': i.produkId,
+          'kode': i.kode,
+          'nama': i.nama,
+          'harga': i.harga,
+          'jumlah': i.jumlah,
+          'diskon': i.diskon,
+          'cashback': i.cashback,
+          if (i.aturanDiskonId != null) 'aturanDiskon': i.aturanDiskonId,
+          if (anak.isNotEmpty)
+            'ekstra': anak
+                .map((e) => {
+                      'id': e.produkId,
+                      'kode': e.kode,
+                      'nama': e.nama,
+                      'harga': e.harga,
+                      'jumlah': (e.jumlah / qtyInduk).clamp(1, 999999).round(),
+                    })
+                .toList(),
+        });
+      }
+      final payload = <String, dynamic>{
+        'id': p.id,
+        'kodeUnik': p.kode,
+        'idToko': Sesi.instance.idTokoTerpilih ?? Sesi.instance.tokoId,
+        'waktu': _formatWaktuServer(waktuSekarang),
+        'caraBayar': caraBayarId,
+        'total': p.totalBiaya,
+        'id_member': p.anggotaId,
+        'keterangan': p.keterangan,
+        'id_perangkat': IdentitasMesin.instance.idMesin,
+        'nama_perangkat': IdentitasMesin.instance.namaMesin,
+        'nama_mesin': IdentitasMesin.instance.namaMesin,
+        'transaksi': transaksi,
+      };
+      await ApiClient.instance.aksi('draft_bayar', payload);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              'Tanggal transaksi ${p.kode} berhasil diperbarui ke hari ini (${DateFormat('dd-MM-yyyy HH:mm').format(waktuSekarang)}).'),
+        ));
+      }
+      await _muat();
+    } catch (e) {
+      if (mounted) {
+        await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+            aktivitas: 'memperbarui tanggal pesanan tertahan');
+      }
+    }
+  }
+
   Future<void> _lihatDetail(Pesanan p) async {
     await showDialog(
       context: context,
@@ -1525,6 +1635,15 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
               },
               icon: const Icon(Icons.print_outlined, size: 18),
               label: const Text('Cetak Struk'),
+            ),
+          if (!p.dariPembeliOnline && !_sudahTerbayar(p))
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _perbaruiTanggalTertahanKeHariIni(p);
+              },
+              icon: const Icon(Icons.update, size: 18),
+              label: const Text('Perbarui ke Tanggal Hari Ini'),
             ),
           // Keranjang Tertahan (draft lokal, BUKAN pesanan online) -- gap-closure:
           // sebelumnya dialog ini murni tampilan, satu-satunya jalan lanjut
@@ -1600,6 +1719,8 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
 
   Widget _ringkasanDetailPesanan(Pesanan p) {
     final waktuTransaksi = _tanggalTransaksiPesanan(p.tanggalPembayaran);
+    final keranjangTertahanBelumLunas =
+        !p.dariPembeliOnline && !_sudahTerbayar(p);
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -1612,11 +1733,13 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
           _chipDetail(Icons.badge_outlined, 'Kasir: ${p.kasirLoginNama}'),
         _chipDetail(
           Icons.calendar_month_outlined,
-          'Tanggal transaksi: ${waktuTransaksi == null ? (p.tanggalPembayaran.isEmpty ? "-" : p.tanggalPembayaran) : DateFormat('dd-MM-yyyy').format(waktuTransaksi)}',
+          '${keranjangTertahanBelumLunas ? "Tanggal ditahan: " : "Tanggal transaksi: "}'
+          '${waktuTransaksi == null ? (p.tanggalPembayaran.isEmpty ? "-" : p.tanggalPembayaran) : DateFormat('dd-MM-yyyy').format(waktuTransaksi)}',
         ),
         _chipDetail(
           Icons.schedule_outlined,
-          'Waktu transaksi: ${waktuTransaksi == null ? "-" : DateFormat('HH:mm:ss').format(waktuTransaksi)}',
+          '${keranjangTertahanBelumLunas ? "Waktu ditahan: " : "Waktu transaksi: "}'
+          '${waktuTransaksi == null ? "-" : DateFormat('HH:mm:ss').format(waktuTransaksi)}',
         ),
         StreamBuilder<DateTime>(
           stream: Stream<DateTime>.periodic(
@@ -1627,6 +1750,11 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
             'Waktu sekarang: ${DateFormat('dd-MM-yyyy HH:mm:ss').format(snapshot.data ?? DateTime.now())}',
           ),
         ),
+        if (keranjangTertahanBelumLunas)
+          _chipDetail(
+            Icons.event_available_outlined,
+            'Saat dilanjutkan otomatis ke hari ini (${DateFormat('dd-MM-yyyy').format(DateTime.now())})',
+          ),
         _chipDetail(
           p.dariPembeliOnline ? Icons.public : Icons.pause_circle_outline,
           p.dariPembeliOnline ? 'Pesanan Online' : 'Keranjang Tertahan',
@@ -1813,7 +1941,17 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
         // Gagal memuat detail member -- tetap lanjut memuat keranjang tanpa member (bukan blocker).
       }
     }
-    final produkCache = await CoreDb.instance.produkCache();
+    final produkCache = await CoreDb.instance.produkCache(limit: 100000);
+    final petaProdukCache = <int, Map<String, Object?>>{};
+    for (final row in produkCache) {
+      final rawId = row['id'];
+      final id = rawId is int
+          ? rawId
+          : (rawId is num ? rawId.toInt() : int.tryParse('${rawId ?? ''}'));
+      if (id != null && id > 0) {
+        petaProdukCache[id] = row;
+      }
+    }
     int? idProduk(ItemPesanan item) {
       if (item.produkId != null && item.produkId! > 0) return item.produkId;
       final kode = item.kode.trim();
@@ -1827,6 +1965,31 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
         }
       }
       return null;
+    }
+
+    Produk bangunProdukDraft(int produkId, ItemPesanan i) {
+      final rowCache = petaProdukCache[produkId];
+      if (rowCache != null) {
+        try {
+          final jsonCache = Produk.cacheRowKeJson(rowCache);
+          jsonCache['id'] = produkId;
+          if (i.kode.trim().isNotEmpty) jsonCache['kode'] = i.kode.trim();
+          if (i.nama.trim().isNotEmpty) jsonCache['nama'] = i.nama.trim();
+          jsonCache['hargaJual'] = i.harga;
+          return Produk.fromJson(jsonCache);
+        } catch (_) {}
+      }
+      return Produk(
+        id: produkId,
+        kode: i.kode,
+        barcode: '',
+        nama: i.nama,
+        hargaJual: i.harga,
+        stok: 999999,
+        kategoriId: null,
+        kategoriNama: '',
+        gambarUrl: null,
+      );
     }
 
     // Gap-closure "Produk Ekstra": server mengembalikan baris ekstra FLAT
@@ -1881,17 +2044,7 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
       }
       keranjang.add(
         ItemKeranjang(
-          produk: Produk(
-            id: produkId,
-            kode: i.kode,
-            barcode: '',
-            nama: i.nama,
-            hargaJual: i.harga,
-            stok: 999999,
-            kategoriId: null,
-            kategoriNama: '',
-            gambarUrl: null,
-          ),
+          produk: bangunProdukDraft(produkId, i),
           jumlah: i.jumlah.round(),
           diskon: i.diskon,
           cashback: i.cashback,
