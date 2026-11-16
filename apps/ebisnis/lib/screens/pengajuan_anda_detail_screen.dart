@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../api_client.dart';
 import '../services/unggah_lampiran_sop.dart';
@@ -267,7 +268,72 @@ class _PengajuanAndaDetailScreenState extends State<PengajuanAndaDetailScreen> {
         ),
       );
 
-  // ── Tampilan ────────────────────────────────────────────────────────────
+  String _resolveLampiranUrl(String rawUrl) {
+    final trimmed = rawUrl.trim();
+    if (trimmed.isEmpty) return '';
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    final parsedBase = Uri.parse(ApiClient.baseUrl);
+    if (trimmed.startsWith('/')) {
+      return '${parsedBase.origin}$trimmed';
+    }
+    return '${parsedBase.origin}/$trimmed';
+  }
+
+  Future<void> _bukaLampiran(String rawUrl, String judul) async {
+    final fullUrl = _resolveLampiranUrl(rawUrl);
+    if (fullUrl.isEmpty) return;
+    final uri = Uri.tryParse(fullUrl);
+    if (uri == null) {
+      _pesan('Tautan lampiran tidak valid.', galat: true);
+      return;
+    }
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      _pesan('Tidak dapat membuka lampiran $judul.', galat: true);
+    }
+  }
+
+  Widget _bagianRingkasanLampiran() {
+    final lampiran = _list('ringkasanLampiran');
+    if (lampiran.isEmpty) return const SizedBox.shrink();
+    return _kotak(
+      judul: 'Ringkasan Berkas & Lampiran Pengajuan',
+      ikon: Icons.attach_file,
+      isi: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final item in lampiran)
+            if ('${item['url'] ?? ''}'.trim().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    const Icon(Icons.insert_drive_file_outlined, size: 15),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '${item['kategori'] ?? item['namaDokumen'] ?? 'Lampiran'}: '
+                        '${item['namaBerkas'] ?? 'Unduh berkas'}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    TextButton.icon(
+                      icon: const Icon(Icons.open_in_new, size: 14),
+                      label: const Text('Buka', style: TextStyle(fontSize: 11)),
+                      onPressed: () => _bukaLampiran(
+                        '${item['url']}',
+                        '${item['namaBerkas'] ?? item['kategori'] ?? 'Lampiran'}',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -305,6 +371,10 @@ class _PengajuanAndaDetailScreenState extends State<PengajuanAndaDetailScreen> {
                           if (_d['selesai'] == true) ...[
                             const SizedBox(height: 12),
                             _spandukSelesai(),
+                          ],
+                          if (_list('ringkasanLampiran').isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            _bagianRingkasanLampiran(),
                           ],
                           const SizedBox(height: 12),
                           _bagianTahapPending(),
@@ -686,8 +756,56 @@ class _PengajuanAndaDetailScreenState extends State<PengajuanAndaDetailScreen> {
                             color: AppColors.textSecondaryOf(context)),
                         const SizedBox(width: 4),
                         Expanded(
-                          child: Text('${dk['nama'] ?? dk['key'] ?? 'Lampiran'}',
+                          child: Text(
+                              '${dk['nama'] ?? dk['key'] ?? 'Lampiran'}'
+                              '${'${dk['fileNama'] ?? ''}'.isEmpty ? '' : ' -> ${dk['fileNama']}'}',
                               style: const TextStyle(fontSize: 11)),
+                        ),
+                        if ('${dk['url'] ?? ''}'.trim().isNotEmpty)
+                          InkWell(
+                            onTap: () => _bukaLampiran(
+                                '${dk['url']}',
+                                '${dk['fileNama'] ?? dk['nama'] ?? 'Lampiran'}'),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              child: Text('Buka',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      decoration: TextDecoration.underline,
+                                      color: AppColors.primary)),
+                            ),
+                          ),
+                      ]),
+                    ),
+                  if ('${r['lampiranCatatanUrl'] ?? ''}'.trim().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Row(children: [
+                        Icon(Icons.attach_file,
+                            size: 12,
+                            color: AppColors.textSecondaryOf(context)),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                              'Lampiran Catatan: ${r['lampiranCatatanNama'] ?? 'Berkas'}',
+                              style: const TextStyle(fontSize: 11)),
+                        ),
+                        InkWell(
+                          onTap: () => _bukaLampiran(
+                              '${r['lampiranCatatanUrl']}',
+                              '${r['lampiranCatatanNama'] ?? 'Lampiran Catatan'}'),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            child: Text('Buka',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    decoration: TextDecoration.underline,
+                                    color: AppColors.primary)),
+                          ),
                         ),
                       ]),
                     ),
