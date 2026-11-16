@@ -2089,6 +2089,7 @@ class _FormTopupOnlineState extends State<_FormTopupOnline> {
     final va = '${hasil['va'] ?? ''}'.trim();
     final link = '${hasil['link'] ?? ''}'.trim();
     final vaBankLain = '${hasil['va_bank_lain'] ?? ''}'.trim();
+    final batasWaktu = '${hasil['billExpired'] ?? ''}'.trim();
     final gateway = '${hasil['gateway'] ?? ''}'.trim().toLowerCase();
     final isOnlineBmt = gateway == 'online_bmt' ||
         va.toUpperCase().startsWith('BMT') ||
@@ -2096,68 +2097,269 @@ class _FormTopupOnlineState extends State<_FormTopupOnline> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Kartu Ringkasan Hero Setara va.zul (Teal-to-Sky Gradient)
         Container(
-          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: AppColors.latarLembut(AppColors.warning),
-            borderRadius: BorderRadius.circular(8),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(Icons.schedule_outlined, color: AppColors.warning),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  isOnlineBmt
-                      ? 'Nomor Invoice Online BMT berhasil diterbitkan dan menunggu pembayaran. Saldo member belum bertambah dan akan otomatis masuk begitu pembayaran melalui Mobile Banking BMT, Petugas/Agen BMT, atau Teller BMT berhasil dikonfirmasi.'
-                      : 'Tagihan online berhasil dibuat dan masih menunggu pembayaran. Saldo member belum bertambah. Saldo akan masuk otomatis hanya setelah bank/gateway mengonfirmasi pembayaran berhasil.',
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 15, 16, 15),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF0F766E),
+                      Color(0xFF0D9488),
+                      Color(0xFF0284C7),
+                    ],
+                    stops: [0.0, 0.55, 1.0],
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.3)),
+                          ),
+                          child: Text(
+                            isOnlineBmt
+                                ? 'MENUNGGU PEMBAYARAN • INVOICE BMT'
+                                : 'MENUNGGU PEMBAYARAN',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ),
+                        if (batasWaktu.isNotEmpty && batasWaktu != '-')
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(999),
+                              border:
+                                  Border.all(color: const Color(0xFFFDE68A)),
+                            ),
+                            child: Text(
+                              'Batas: $batasWaktu',
+                              style: const TextStyle(
+                                color: Color(0xFF92400E),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Total yang Harus Dibayar (Sesuai Mobile Banking)',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _formatRupiah.format(total),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 25,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        if (total > 0) ...[
+                          const SizedBox(width: 8),
+                          FilledButton.icon(
+                            onPressed: () =>
+                                _salin('Nominal', '${total.round()}'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: const Color(0xFF0F766E),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 11, vertical: 8),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                            icon: const Icon(Icons.copy_rounded, size: 15),
+                            label: const Text(
+                              'Salin Nominal',
+                              style: TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                child: Column(
+                  children: [
+                    _barisHasil(
+                        'Member', '${hasil['member'] ?? _namaMember ?? '-'}'),
+                    _barisHasil('Nominal topup', _formatRupiah.format(nominal)),
+                    if (admin > 0)
+                      _barisHasil('Biaya layanan', _formatRupiah.format(admin)),
+                  ],
                 ),
               ),
             ],
           ),
         ),
         const SizedBox(height: 12),
-        AppFormSection(
-          judul: isOnlineBmt
-              ? 'Rincian Invoice Online BMT'
-              : 'Rincian Tagihan Online',
-          children: [
-            _barisHasil('Member', '${hasil['member'] ?? _namaMember ?? '-'}'),
-            _barisHasil('Nominal topup', _formatRupiah.format(nominal)),
-            _barisHasil('Biaya admin', _formatRupiah.format(admin)),
-            _barisHasil('Total bayar', _formatRupiah.format(total)),
-            _barisHasil('Berlaku sampai', '${hasil['billExpired'] ?? '-'}'),
-            _barisHasil(
-              isOnlineBmt ? 'Nomor Invoice BMT' : 'Nomor VA',
-              va,
-              dapatDisalin: true,
+        if (va.isNotEmpty) ...[
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0FDFA),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFF5EEAD4), width: 1.5),
             ),
-            if (isOnlineBmt && va.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.latarLembut(AppColors.primary),
-                  borderRadius: BorderRadius.circular(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isOnlineBmt ? 'NOMOR INVOICE BMT' : 'NOMOR VIRTUAL ACCOUNT',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.4,
+                    color: Color(0xFF0F766E),
+                  ),
                 ),
-                child: const Text(
-                  'Cara bayar: salin atau berikan Nomor Invoice BMT di atas kepada Member/Teller BMT untuk dibayar melalui aplikasi Mobile BMT Al-Bahjah, Teller BMT, atau Virtual Account BMT.\n\nCatatan: Status pembayaran tagihan ini dapat langsung dipantau melalui tab "Tagihan Online (Invoice / VA)" pada layar Topup.',
-                  style: TextStyle(fontSize: 12.5),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SelectableText(
+                        va,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.icon(
+                      onPressed: () => _salin(
+                          isOnlineBmt ? 'Nomor Invoice BMT' : 'Nomor VA', va),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF0F766E),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 9),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.copy_rounded, size: 15),
+                      label: const Text('Salin Kode',
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w700)),
+                    ),
+                  ],
+                ),
+                if (vaBankLain.isNotEmpty && vaBankLain != va) ...[
+                  const Divider(height: 18),
+                  _barisHasil('VA Bank Lain', vaBankLain, dapatDisalin: true),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+        if (isOnlineBmt && va.isNotEmpty) ...[
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.latarLembut(AppColors.primary),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Text(
+              'Cara bayar: salin atau berikan Nomor Invoice BMT di atas kepada Member/Teller BMT untuk dibayar melalui aplikasi Mobile BMT Al-Bahjah, Teller BMT, atau Virtual Account BMT.\n\nCatatan: Status pembayaran tagihan ini dapat langsung dipantau melalui tab "Tagihan Online (Invoice / VA)" pada layar Topup.',
+              style: TextStyle(fontSize: 12.5),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+        if (link.isNotEmpty) ...[
+          FilledButton.icon(
+            onPressed: () => _bukaLink(link),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF0F766E),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 16),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            icon: const Icon(Icons.open_in_new, size: 18),
+            label: const Text('Buka Halaman Pembayaran Online',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+          const SizedBox(height: 10),
+        ],
+        Container(
+          padding: const EdgeInsets.all(11),
+          decoration: BoxDecoration(
+            color: AppColors.latarLembut(AppColors.warning),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.schedule_outlined,
+                  color: AppColors.warning, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isOnlineBmt
+                      ? 'Saldo member belum bertambah dan akan otomatis masuk begitu pembayaran melalui Mobile Banking BMT, Petugas/Agen BMT, atau Teller BMT dikonfirmasi.'
+                      : 'Saldo member belum bertambah dan baru masuk otomatis setelah bank/gateway mengonfirmasi pembayaran berhasil.',
+                  style: const TextStyle(fontSize: 12),
                 ),
               ),
             ],
-            if (vaBankLain.isNotEmpty)
-              _barisHasil('Prefix bank lain', vaBankLain, dapatDisalin: true),
-            if (link.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              FilledButton.icon(
-                onPressed: () => _bukaLink(link),
-                icon: const Icon(Icons.open_in_new, size: 18),
-                label: const Text('Buka Halaman Pembayaran'),
-              ),
-            ],
-          ],
+          ),
         ),
       ],
     );

@@ -349,6 +349,7 @@ class _TopupScreenState extends State<TopupScreen> {
   Widget _hasilTagihan(Map<String, dynamic> hasil) {
     final va = '${hasil['va'] ?? ''}'.trim();
     final link = '${hasil['link'] ?? ''}'.trim();
+    final batasWaktu = '${hasil['billExpired'] ?? ''}'.trim();
     final nominal = ((hasil['topup'] as Map?)?['nilai'] as num?)?.toDouble() ??
         _nominalInput();
     final admin = (hasil['biayaAdministrasi'] as num?)?.toDouble() ?? 0;
@@ -356,30 +357,189 @@ class _TopupScreenState extends State<TopupScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text('Menunggu Pembayaran',
-            style:
-                TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 6),
-        Text('Total: ${rupiah(total)}'),
-        if ('${hasil['billExpired'] ?? ''}'.trim().isNotEmpty)
-          Text('Berlaku sampai: ${hasil['billExpired']}'),
-        if (va.isNotEmpty)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Nomor Virtual Account'),
-            subtitle: SelectableText(va),
-            trailing: IconButton(
-              tooltip: 'Salin VA',
-              onPressed: () => _salin('Nomor VA', va),
-              icon: const Icon(Icons.copy_outlined),
+        Container(
+          padding: const EdgeInsets.fromLTRB(15, 14, 15, 14),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF0F766E),
+                Color(0xFF0D9488),
+                Color(0xFF0284C7),
+              ],
+              stops: [0.0, 0.55, 1.0],
+            ),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const Text(
+                      'MENUNGGU PEMBAYARAN',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  if (batasWaktu.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        'Batas: $batasWaktu',
+                        style: const TextStyle(
+                          color: Color(0xFF92400E),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Total yang Harus Dibayar',
+                style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.9), fontSize: 12),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      rupiah(total),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 23,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  if (total > 0)
+                    FilledButton.icon(
+                      onPressed: () =>
+                          _salin('Nominal', '${total.round()}'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF0F766E),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 7),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(9)),
+                      ),
+                      icon: const Icon(Icons.copy_rounded, size: 14),
+                      label: const Text('Salin Nominal',
+                          style: TextStyle(
+                              fontSize: 11.5, fontWeight: FontWeight.w800)),
+                    ),
+                ],
+              ),
+              if (admin > 0) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'Pokok ${rupiah(nominal)} + Biaya ${rupiah(admin)}',
+                  style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      fontSize: 11.5),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (va.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(13),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0FDFA),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF5EEAD4), width: 1.4),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'NOMOR VIRTUAL ACCOUNT',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F766E),
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SelectableText(
+                        va,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.icon(
+                      onPressed: () => _salin('Nomor VA', va),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF0F766E),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 11, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(9)),
+                      ),
+                      icon: const Icon(Icons.copy_rounded, size: 14),
+                      label: const Text('Salin Kode',
+                          style: TextStyle(
+                              fontSize: 11.5, fontWeight: FontWeight.w700)),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-        if (link.isNotEmpty)
-          OutlinedButton.icon(
+        ],
+        if (link.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          FilledButton.icon(
             onPressed: () => _bukaLink(link),
-            icon: const Icon(Icons.open_in_new),
-            label: const Text('Bayar Sekarang'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF0F766E),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            icon: const Icon(Icons.open_in_new, size: 18),
+            label: const Text('Buka Halaman Pembayaran Online',
+                style: TextStyle(fontWeight: FontWeight.w700)),
           ),
+        ],
       ],
     );
   }
@@ -430,10 +590,17 @@ class _TopupScreenState extends State<TopupScreen> {
     final link = '${v['link'] ?? ''}'.trim();
     return Container(
       margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.black12),
-        borderRadius: BorderRadius.circular(9),
+        color: status == 'MENUNGGU' || status.isEmpty
+            ? const Color(0xFFF8FAFC)
+            : Colors.white,
+        border: Border.all(
+          color: status == 'MENUNGGU' || status.isEmpty
+              ? const Color(0xFF99F6E4)
+              : Colors.black12,
+        ),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -452,33 +619,51 @@ class _TopupScreenState extends State<TopupScreen> {
               ),
             ],
           ),
-          Row(
-            children: [
-              Expanded(
-                child: SelectableText(kode,
-                    style:
-                        const TextStyle(fontFamily: 'monospace', fontSize: 15)),
-              ),
-              if (kode.isNotEmpty)
+          if (kode.isNotEmpty)
+            Row(
+              children: [
+                Expanded(
+                  child: SelectableText(kode,
+                      style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700)),
+                ),
                 IconButton(
                   tooltip: 'Salin VA',
                   onPressed: () => _salin('Nomor VA', kode),
-                  icon: const Icon(Icons.copy_outlined, size: 18),
+                  icon: const Icon(Icons.copy_outlined,
+                      size: 18, color: Color(0xFF0F766E)),
                 ),
-            ],
-          ),
+              ],
+            ),
           if ('${v['batas_waktu'] ?? ''}'.trim().isNotEmpty)
             Text('Batas waktu: ${v['batas_waktu']}',
                 style: const TextStyle(fontSize: 12, color: Colors.black54)),
-          Text(rupiah(total),
-              style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Row(
+            children: [
+              Expanded(
+                child: Text(rupiah(total),
+                    style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F766E))),
+              ),
+              if (total > 0)
+                IconButton(
+                  tooltip: 'Salin Nominal',
+                  onPressed: () => _salin('Nominal', '${total.round()}'),
+                  icon: const Icon(Icons.copy_outlined,
+                      size: 17, color: Color(0xFF0F766E)),
+                ),
+            ],
+          ),
           if (status != 'LUNAS' && status != 'KEDALUWARSA' && link.isNotEmpty)
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton.icon(
+              child: FilledButton.tonalIcon(
                 onPressed: () => _bukaLink(link),
-                icon: const Icon(Icons.open_in_new, size: 17),
+                icon: const Icon(Icons.open_in_new, size: 16),
                 label: const Text('Bayar Sekarang'),
               ),
             ),
