@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models.dart';
 import '../services/master_offline.dart';
 import '../widgets/indikator_baris_sinkron.dart';
 import '../sesi.dart';
@@ -199,6 +200,13 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
         rowLokal: {'id': cara['id']},
         hapusLokal: true,
       );
+      final idHapus = (cara['id'] as num?)?.toInt();
+      if (idHapus != null) {
+        Sesi.instance.caraBayar = Sesi.instance.caraBayar
+            .where((x) => x.id != idHapus)
+            .toList();
+      }
+      Sesi.instance.revisiCaraBayar.value++;
       await _muatDaftar();
     } catch (e) {
       if (mounted) {
@@ -587,6 +595,19 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
           break;
         }
       }
+      final masukHutangEfektif = _metodeKasbon ? true : _masukSebagaiHutang;
+      final wajibPilihMemberRaw = _metodeKasbon ? true : _wajibPilihMember;
+      final eksternalNonDeposit = CaraBayar.adalahMetodeEksternalNonDeposit(
+        '${_kode.text.trim()} ${_nama.text.trim()}',
+        online: _online,
+      );
+      final memotongDepositEfektif = !masukHutangEfektif &&
+          (_memotongDeposit ||
+              (!_online && !_manual && !eksternalNonDeposit));
+      final wajibPilihMemberEfektif =
+          (masukHutangEfektif || memotongDepositEfektif)
+              ? true
+              : (wajibPilihMemberRaw == true);
       final body = {
         if (widget.cara != null) 'id': widget.cara!['id'],
         'kode': _kode.text.trim(),
@@ -595,8 +616,9 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
         'manual': _manual,
         'online': _online,
         'memotongDeposit': _memotongDeposit,
-        'masukSebagaiHutang': _metodeKasbon ? true : _masukSebagaiHutang,
-        'wajibPilihMember': _metodeKasbon ? true : _wajibPilihMember,
+        'masukSebagaiHutang': masukHutangEfektif,
+        'wajibPilihMember': wajibPilihMemberRaw,
+        'wajibPilihMemberEfektif': wajibPilihMemberEfektif,
         'akunId': _akunId ?? 0,
         'akunLabel': akunLabel,
         'kanalPembayaranId': _kanalPembayaranId ?? 0,
@@ -604,7 +626,7 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
         'aktif': _aktif,
       };
       // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster).
-      await prosesSimpanMaster(
+      final hasilSimpan = await prosesSimpanMaster(
         context,
         aksi: 'cara_bayar_simpan',
         body: body,
@@ -614,6 +636,30 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
         cacheKey: _CaraBayarScreenState._cacheKey,
         rowLokal: body,
       );
+      // Segarkan Sesi.instance.caraBayar dan beri tahu tab Kasir/POS yang
+      // sedang terbuka agar pengaturan metode pembayaran terbaru langsung
+      // berlaku tanpa perlu klik "Muat Ulang" manual.
+      final idMetode = (hasilSimpan['id'] as num?)?.toInt() ??
+          (widget.cara?['id'] as num?)?.toInt();
+      if (idMetode != null && idMetode > 0) {
+        final listBaru = List<CaraBayar>.of(Sesi.instance.caraBayar);
+        final idx = listBaru.indexWhere((x) => x.id == idMetode);
+        if (!_aktif) {
+          if (idx >= 0) listBaru.removeAt(idx);
+        } else {
+          final objekBaru = CaraBayar.fromJson({
+            ...body,
+            'id': idMetode,
+          });
+          if (idx >= 0) {
+            listBaru[idx] = objekBaru;
+          } else {
+            listBaru.add(objekBaru);
+          }
+        }
+        Sesi.instance.caraBayar = listBaru;
+      }
+      Sesi.instance.revisiCaraBayar.value++;
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _pesanError = terapkanGalat(e));

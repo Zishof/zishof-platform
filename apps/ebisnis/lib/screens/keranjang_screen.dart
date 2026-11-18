@@ -238,10 +238,16 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           PengaturanPembayaran.instance.pilihDefault(_caraBayarTersedia);
     }
     _muatPreferensiDanCaraBayar();
+    Sesi.instance.revisiCaraBayar.addListener(_saatMasterCaraBayarBerubah);
     _sinkronkanUangDiterima();
     if (widget.keranjang.isNotEmpty) {
       _jadwalkanEvaluasiDiskon();
     }
+  }
+
+  void _saatMasterCaraBayarBerubah() {
+    if (!mounted) return;
+    _muatCaraBayarUntukMember(_memberTerpilih?.id);
   }
 
   void _pilihJenisKonsumsi(String nilai) {
@@ -418,6 +424,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
 
   @override
   void dispose() {
+    Sesi.instance.revisiCaraBayar.removeListener(_saatMasterCaraBayarBerubah);
     _debounceDiskon?.cancel();
     _catatanPesananController.dispose();
     _uangDiterimaController.dispose();
@@ -2128,24 +2135,54 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     }
   }
 
-  /// Nama metode yang MEMICU keharusan memilih pelanggan. Pada split bayar
-  /// pemicunya belum tentu slot 1, dan menyebut metode yang salah di dialog
-  /// membuat kasir mencari-cari kesalahan di tempat yang keliru.
-  String _namaMetodeWajibMember() {
-    if (_caraBayarTerpilih?.wajibPilihMember == true) {
-      return _caraBayarTerpilih!.nama;
+  /// Mengembalikan objek [CaraBayar] yang memicu kewajiban memilih pelanggan
+  /// (baik pada pembayaran tunggal maupun split).
+  CaraBayar? _metodePemicuWajibMember() {
+    if (!_splitAktif && _caraBayarTerpilih != null) {
+      if (_caraBayarTerpilih!.wajibPilihMember ||
+          _metodeMemotongDeposit(_caraBayarTerpilih!)) {
+        return _caraBayarTerpilih;
+      }
     }
     for (final s in _splitBayar) {
       if (s.caraBayar.wajibPilihMember && s.nominal > 0) {
-        return s.caraBayar.nama;
+        return s.caraBayar;
       }
     }
     for (final s in _splitBayar) {
       if (_metodeMemotongDeposit(s.caraBayar) && s.nominal > 0) {
-        return s.caraBayar.nama;
+        return s.caraBayar;
       }
     }
-    return _caraBayarTerpilih?.nama ?? '';
+    return _caraBayarTerpilih;
+  }
+
+  /// Nama metode yang MEMICU keharusan memilih pelanggan. Pada split bayar
+  /// pemicunya belum tentu slot 1, dan menyebut metode yang salah di dialog
+  /// membuat kasir mencari-cari kesalahan di tempat yang keliru.
+  String _namaMetodeWajibMember() {
+    return _metodePemicuWajibMember()?.nama ?? '';
+  }
+
+  /// Menyusun pesan penjelasan yang akurat pada dialog `Pilih Member / PIC`
+  /// sesuai dengan sifat metode pembayaran yang dipilih (Piutang/Kasbon,
+  /// Potong Saldo/Deposit/Voucher, atau metode umum yang disetel Wajib PIC).
+  String _pesanDialogWajibMember() {
+    final metode = _metodePemicuWajibMember();
+    final nama = metode?.nama ?? '';
+    if (metode != null && metode.masukSebagaiHutang) {
+      return 'Metode "$nama" wajib mempunyai penanggung jawab. '
+          'Pilih member/PIC terlebih dahulu agar transaksi dapat ditelusuri tim '
+          'keuangan. Semua metode Kasbon langsung dicatat sebagai piutang customer; '
+          'untuk Kasbon Divisi/Operasional, member menjadi customer sekaligus PJ/PIC '
+          'yang mewakili divisi.';
+    }
+    if (metode != null && _metodeMemotongDeposit(metode)) {
+      return 'Metode "$nama" memotong saldo deposit/voucher anggota. '
+          'Pilih member terlebih dahulu untuk memeriksa dan memotong saldo anggota.';
+    }
+    return 'Metode "$nama" disetel wajib memilih member/PIC pada pengaturan '
+        'Cara Pembayaran. Pilih member/PIC terlebih dahulu sebelum melanjutkan.';
   }
 
   /// True bila metode bayar terpilih (slot 1 atau slot split mana pun) menuntut
@@ -2329,12 +2366,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         context: context,
         builder: (c) => AlertDialog(
           title: const Text('Pilih Member / PIC'),
-          content: Text(
-              'Metode "${_namaMetodeWajibMember()}" wajib mempunyai penanggung jawab. '
-              'Pilih member/PIC terlebih dahulu agar transaksi dapat ditelusuri tim '
-              'keuangan. Semua metode Kasbon langsung dicatat sebagai piutang customer; '
-              'untuk Kasbon Divisi/Operasional, member menjadi customer sekaligus PJ/PIC '
-              'yang mewakili divisi.'),
+          content: Text(_pesanDialogWajibMember()),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(c, false),

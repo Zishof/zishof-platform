@@ -58,4 +58,40 @@ void main() {
     expect(master, contains('Semua Kasbon wajib memilih member'));
     expect(master, contains("AppTableColumn('Wajib PIC'"));
   });
+
+  test(
+      'QRIS BSI / QRIS BMT dengan manual=false dan memotongDeposit=false '
+      'tidak dianggap memotong deposit dan tidak mewajibkan Member/PIC', () {
+    final qrisBsi = CaraBayar.fromJson({
+      'id': 3,
+      'kode': 'QRIS BSI',
+      'nama': 'QRIS BSI',
+      'manual': false,
+      'online': false,
+      'memotongDeposit': false,
+      'masukSebagaiHutang': false,
+      'wajibPilihMember': false,
+    });
+
+    expect(qrisBsi.masukSebagaiHutang, isFalse);
+    expect(qrisBsi.memotongDeposit, isFalse);
+    expect(qrisBsi.memotongDepositEfektif, isFalse);
+    expect(qrisBsi.wajibPilihMember, isFalse);
+
+    // Bahkan bila wajibPilihMember masih null ("Ikut bawaan"), QRIS BSI tetap
+    // tidak wajib memilih member dan tidak memotong deposit walaupun manual=false.
+    final qrisDefault = CaraBayar.fromJson({
+      'id': 4,
+      'kode': 'QRIS BMT',
+      'nama': 'QRIS BMT',
+      'manual': false,
+      'online': false,
+      'memotongDeposit': false,
+      'masukSebagaiHutang': false,
+      'wajibPilihMember': null,
+    });
+
+    expect(qrisDefault.memotongDepositEfektif, isFalse);
+    expect(qrisDefault.wajibPilihMember, isFalse);
+  });
 }

@@ -472,12 +472,36 @@ class CaraBayar {
   /// Menebak hanya dari nama "saldo/deposit" pernah membuat metode seperti
   /// Voucher Pejuang lolos ke antrean offline lalu ditolak berulang oleh server.
   ///
+  /// Menentukan secara defensif apakah metode ini adalah metode pembayaran
+  /// eksternal/non-deposit (seperti QRIS, Transfer Bank, Virtual Account, atau
+  /// Pembayaran Online) yang **tidak pernah** boleh dianggap memotong saldo
+  /// deposit/tabungan member hanya karena saklar `manual` (Verifikasi Manual)
+  /// dimatikan oleh admin.
+  static bool adalahMetodeEksternalNonDeposit(
+    String kodeAtauNama, {
+    bool online = false,
+  }) {
+    if (online) return true;
+    final lower = kodeAtauNama.toLowerCase();
+    return lower.contains('qris') ||
+        lower.contains('transfer') ||
+        lower.contains('virtual account') ||
+        lower.contains('online');
+  }
+
   /// Catatan penting: metode yang secara eksplisit bertanda [memotongDeposit]
   /// wajib tetap dianggap memotong deposit meskipun flag [online] di database
-  /// sempat tercentang secara tidak sengaja.
+  /// sempat tercentang secara tidak sengaja. Sebaliknya, metode pembayaran
+  /// eksternal (QRIS/Transfer/Online/EDC) atau metode yang secara eksplisit
+  /// disetel tidak wajib memilih member tidak boleh dianggap memotong deposit
+  /// hanya karena `manual == false`.
   bool get memotongDepositEfektif =>
       !masukSebagaiHutang &&
-      (memotongDeposit || (!online && !onlineBmt && !manual));
+      (memotongDeposit ||
+          (!online &&
+              !onlineBmt &&
+              !manual &&
+              !adalahMetodeEksternalNonDeposit(nama, online: online)));
   CaraBayar({
     required this.id,
     required this.nama,
@@ -495,7 +519,11 @@ class CaraBayar {
         wajibPilihMember = wajibPilihMember ??
             (masukSebagaiHutang ||
                 memotongDeposit ||
-                (!masukSebagaiHutang && !online && !onlineBmt && !manual));
+                (!masukSebagaiHutang &&
+                    !online &&
+                    !onlineBmt &&
+                    !manual &&
+                    !adalahMetodeEksternalNonDeposit(nama, online: online)));
   factory CaraBayar.fromJson(Map<String, dynamic> j) {
     final nama = (j['nama'] ?? '') as String;
     final namaLower = nama.toLowerCase();
@@ -530,7 +558,10 @@ class CaraBayar {
     final potongDepositEfektif = !explicitHutang &&
         (rawExplicitDeposit == true ||
             (rawExplicitDeposit == null && metodeSaldoAtauVoucher));
-    final rawWajibMember = j['wajibPilihMember'] ?? j['wajib_pilih_member'];
+    final rawWajibMember = j['wajibPilihMember'] ??
+        j['wajib_pilih_member'] ??
+        j['wajibPilihMemberEfektif'] ??
+        j['wajib_pilih_member_efektif'];
     // Online BMT hanya untuk pengisian saldo dan biaya sekolah, bukan checkout
     // POS. Abaikan flag lama/cache kanal BMT agar QRIS/EDC toko tidak dialihkan
     // ke tagihan BMT. Status online metode toko tetap mengikuti flag umumnya,
@@ -538,11 +569,24 @@ class CaraBayar {
     const onlineBmt = false;
     final online =
         j['online'] == true && !potongDepositEfektif && !explicitHutang;
+    final eksternalNonDeposit = !potongDepositEfektif &&
+        !explicitHutang &&
+        adalahMetodeEksternalNonDeposit(identitas, online: online);
+    final rawManual = j['manual'] == true;
     final rawAdaKembalian = j['adaKembalian'] ?? j['ada_kembalian'];
     return CaraBayar(
       id: j['id'] as int,
       nama: nama,
-      manual: j['manual'] == true,
+      // Jika server mengirim memotongDeposit: false (atau metode terdeteksi
+      // sebagai QRIS/Transfer/Online eksternal), paksa manual efektif = true
+      // saat memotongDeposit == false agar properti memotongDepositEfektif
+      // tidak pernah keliru menganggap QRIS/Transfer sebagai potong saldo
+      // ketika admin mematikan saklar "Verifikasi Manual".
+      manual: rawManual ||
+          (!potongDepositEfektif &&
+              (rawExplicitDeposit == false ||
+                  eksternalNonDeposit ||
+                  rawWajibMember == false)),
       online: online,
       onlineBmt: onlineBmt,
       adaKembalian: rawAdaKembalian is bool
@@ -557,7 +601,9 @@ class CaraBayar {
           ? true
           : rawWajibMember != null
               ? (rawWajibMember == true)
-              : (online ? false : null),
+              : ((online || eksternalNonDeposit || rawExplicitDeposit == false)
+                  ? false
+                  : null),
       memotongDeposit: potongDepositEfektif,
     );
   }

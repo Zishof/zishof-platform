@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'models.dart';
 
 /// Data toko/kasir yang sedang login -- diisi sekali sesudah aksi "konfigurasi"
@@ -6,6 +7,13 @@ import 'models.dart';
 class Sesi {
   Sesi._();
   static final Sesi instance = Sesi._();
+
+  /// Notifier yang dinaikkan setiap kali daftar atau pengaturan `Cara Pembayaran`
+  /// disimpan/dihapus di menu Master Data -> Cara Pembayaran, sehingga layar
+  /// `Kasir/POS` (`PanelKeranjang`) yang sedang terbuka di tab lain langsung
+  /// menyegarkan daftar metode pembayarannya secara otomatis tanpa perlu
+  /// menekan tombol "Muat Ulang" secara manual.
+  final ValueNotifier<int> revisiCaraBayar = ValueNotifier<int>(0);
 
   /// Tenant (usaha) aktif pada perangkat ini — bagian PUBLIKNYA saja.
   ///
