@@ -1255,7 +1255,8 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
                 {'keyword': q.text.trim(), 'page': 1, 'page_size': 60},
                 'master:produk:so_partial:${q.text.trim()}',
               );
-              hasil = ((r['data'] as List?) ?? [])
+              final rawList = (r['data'] as List?) ?? (r['produk'] as List?) ?? [];
+              hasil = rawList
                   .whereType<Map>()
                   .map((e) => Map<String, dynamic>.from(e))
                   .toList();
@@ -1307,7 +1308,7 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
                                     value: cek,
                                     title: Text('${item['nama'] ?? '-'}'),
                                     subtitle: Text(
-                                      '${item['kode'] ?? '-'} · Stok Sistem: ${item['stok'] ?? 0} ${item['satuan'] ?? 'PCS'} · Rak: ${item['rakUtamaNama'] ?? item['rakNama'] ?? 'Rak Utama'}',
+                                      '${item['kode'] ?? '-'} · Stok Sistem: ${item['stok'] ?? 0} ${item['satuan'] ?? item['satuanNama'] ?? 'PCS'} · Rak: ${item['rakUtamaNama'] ?? item['rakNama'] ?? 'Rak Utama'}',
                                     ),
                                     onChanged: (v) {
                                       setLocal(() {
@@ -1358,7 +1359,7 @@ class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
           'kode': p['kode'] ?? '',
           'barcode': p['barcode'] ?? '',
           'nama': p['nama'] ?? '',
-          'satuan': p['satuan'] ?? 'PCS',
+          'satuan': p['satuan'] ?? p['satuanNama'] ?? 'PCS',
           'rakNama': p['rakUtamaNama'] ?? p['rakNama'] ?? 'Rak Utama',
           'qtyTerjual': 0,
           'qtyRetur': 0,

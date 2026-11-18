@@ -51,4 +51,25 @@ void main() {
     expect(screen, contains("s == 'DRAF' || s == 'TERPOSTING'"));
     expect(screen, contains('akun persediaan bahan dari BOM'));
   });
+
+  test('SO Harian Partial dan Inventaris GA mendukung kontrak multi-outlet tenant',
+      () {
+    final soScreen =
+        File('lib/screens/stok_opname_screen.dart').readAsStringSync();
+    final gaScreen =
+        File('lib/screens/ga_inventaris_screen.dart').readAsStringSync();
+    final apiClient = File('lib/api_client.dart').readAsStringSync();
+
+    // SO Harian Partial harus membaca baik key 'data' maupun fallback 'produk' & 'satuanNama'
+    expect(soScreen,
+        contains("(r['data'] as List?) ?? (r['produk'] as List?) ?? []"));
+    expect(soScreen, contains("item['satuan'] ?? item['satuanNama'] ?? 'PCS'"));
+
+    // Inventaris GA mendukung pemilih dropdown outlet tujuan perpindahan (DKB-58) & scope toko
+    expect(gaScreen, contains('DropdownButtonFormField<int>'));
+    expect(gaScreen, contains("labelText: 'Toko / Outlet tujuan *'"));
+    expect(apiClient, contains("'ga_inventaris_simpan'"));
+    expect(apiClient, contains("'ga_inventaris_pengajuan_simpan'"));
+    expect(apiClient, contains("namaAksi == 'produk_list'"));
+  });
 }

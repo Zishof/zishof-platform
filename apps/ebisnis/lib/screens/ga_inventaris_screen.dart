@@ -56,7 +56,7 @@ class _GaInventarisScreenState extends State<GaInventarisScreen> {
 
   Future<void> _tambah() async {
     final ok = await showDialog<bool>(
-        context: context, builder: (_) => const _FormAsetGa());
+        context: context, builder: (_) => _FormAsetGa(tokoId: _tokoId));
     if (ok == true) await _muat();
   }
 
@@ -68,7 +68,12 @@ class _GaInventarisScreenState extends State<GaInventarisScreen> {
 
   Future<void> _bukaPengajuan() async {
     await showDialog<void>(
-        context: context, builder: (_) => _GaPengajuanDialog(aset: _data));
+        context: context,
+        builder: (_) => _GaPengajuanDialog(
+              aset: _data,
+              toko: _toko,
+              tokoIdAsal: _tokoId,
+            ));
     await _muat();
   }
 
@@ -158,8 +163,14 @@ class _GaInventarisScreenState extends State<GaInventarisScreen> {
 }
 
 class _GaPengajuanDialog extends StatefulWidget {
-  const _GaPengajuanDialog({required this.aset});
+  const _GaPengajuanDialog({
+    required this.aset,
+    this.toko = const [],
+    this.tokoIdAsal,
+  });
   final List<Map<String, dynamic>> aset;
+  final List<Map<String, dynamic>> toko;
+  final int? tokoIdAsal;
   @override
   State<_GaPengajuanDialog> createState() => _GaPengajuanDialogState();
 }
@@ -198,7 +209,12 @@ class _GaPengajuanDialogState extends State<_GaPengajuanDialog> {
 
   Future<void> _tambah() async {
     final ok = await showDialog<bool>(
-        context: context, builder: (_) => _FormPengajuanGa(aset: widget.aset));
+        context: context,
+        builder: (_) => _FormPengajuanGa(
+              aset: widget.aset,
+              toko: widget.toko,
+              tokoIdAsal: widget.tokoIdAsal,
+            ));
     if (ok == true) await _muat();
   }
 
@@ -299,8 +315,14 @@ class _GaPengajuanDialogState extends State<_GaPengajuanDialog> {
 }
 
 class _FormPengajuanGa extends StatefulWidget {
-  const _FormPengajuanGa({required this.aset});
+  const _FormPengajuanGa({
+    required this.aset,
+    this.toko = const [],
+    this.tokoIdAsal,
+  });
   final List<Map<String, dynamic>> aset;
+  final List<Map<String, dynamic>> toko;
+  final int? tokoIdAsal;
   @override
   State<_FormPengajuanGa> createState() => _FormPengajuanGaState();
 }
@@ -308,6 +330,7 @@ class _FormPengajuanGa extends StatefulWidget {
 class _FormPengajuanGaState extends State<_FormPengajuanGa> {
   String _jenis = 'PERMINTAAN';
   int? _asetId;
+  int? _tokoTujuanId;
   final _nama = TextEditingController();
   final _jumlah = TextEditingController(text: '1');
   final _alasan = TextEditingController();
@@ -323,10 +346,14 @@ class _FormPengajuanGaState extends State<_FormPengajuanGa> {
     super.dispose();
   }
 
+  int? get _resolvedTokoTujuanId =>
+      _tokoTujuanId ?? int.tryParse(_tokoTujuan.text.trim());
+
   Future<void> _kirim() async {
+    final tujuanId = _resolvedTokoTujuanId;
     if (_nama.text.trim().isEmpty ||
         (_jenis != 'PERMINTAAN' && _asetId == null) ||
-        (_jenis == 'PERPINDAHAN' && int.tryParse(_tokoTujuan.text) == null)) {
+        (_jenis == 'PERPINDAHAN' && tujuanId == null)) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Lengkapi jenis, aset, dan keterangannya.')));
       return;
@@ -338,9 +365,9 @@ class _FormPengajuanGaState extends State<_FormPengajuanGa> {
         'nama': _nama.text.trim(),
         'jumlah': int.tryParse(_jumlah.text) ?? 1,
         'alasan': _alasan.text.trim(),
+        if (widget.tokoIdAsal != null) 'toko_id': widget.tokoIdAsal,
         if (_asetId != null) 'asset_detail_id': _asetId,
-        if (_jenis == 'PERPINDAHAN')
-          'toko_tujuan_id': int.tryParse(_tokoTujuan.text),
+        if (_jenis == 'PERPINDAHAN') 'toko_tujuan_id': tujuanId,
       });
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -415,11 +442,30 @@ class _FormPengajuanGaState extends State<_FormPengajuanGa> {
                     decoration: const InputDecoration(labelText: 'Jumlah')),
                 if (_jenis == 'PERPINDAHAN') ...[
                   const SizedBox(height: 10),
-                  TextField(
-                      controller: _tokoTujuan,
-                      keyboardType: TextInputType.number,
-                      decoration:
-                          const InputDecoration(labelText: 'ID toko tujuan *'))
+                  if (widget.toko.isNotEmpty)
+                    DropdownButtonFormField<int>(
+                      value: _tokoTujuanId,
+                      decoration: const InputDecoration(
+                        labelText: 'Toko / Outlet tujuan *',
+                      ),
+                      items: widget.toko
+                          .where((x) => (x['id'] as num?) != null)
+                          .map((x) => DropdownMenuItem<int>(
+                                value: (x['id'] as num).toInt(),
+                                child: Text('${x['nama'] ?? 'Toko #${x['id']}'}'),
+                              ))
+                          .toList(),
+                      onChanged: (v) => setState(() {
+                        _tokoTujuanId = v;
+                        _tokoTujuan.text = v == null ? '' : '$v';
+                      }),
+                    )
+                  else
+                    TextField(
+                        controller: _tokoTujuan,
+                        keyboardType: TextInputType.number,
+                        decoration:
+                            const InputDecoration(labelText: 'ID toko tujuan *'))
                 ],
                 const SizedBox(height: 10),
                 TextField(
@@ -439,7 +485,8 @@ class _FormPengajuanGaState extends State<_FormPengajuanGa> {
 }
 
 class _FormAsetGa extends StatefulWidget {
-  const _FormAsetGa();
+  const _FormAsetGa({this.tokoId});
+  final int? tokoId;
   @override
   State<_FormAsetGa> createState() => _FormAsetGaState();
 }
@@ -470,7 +517,8 @@ class _FormAsetGaState extends State<_FormAsetGa> {
         'harga_beli':
             double.tryParse(_harga.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0,
         'keterangan': _ket.text.trim(),
-        'boleh_dipinjam': _dipinjam
+        'boleh_dipinjam': _dipinjam,
+        if (widget.tokoId != null) 'toko_id': widget.tokoId,
       });
       if (mounted) Navigator.pop(context, true);
     } catch (e) {

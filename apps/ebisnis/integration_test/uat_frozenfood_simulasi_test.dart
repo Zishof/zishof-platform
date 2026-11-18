@@ -4,9 +4,7 @@ import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:core_db/core_db.dart';
-import 'package:ebisnis/app_variant.dart';
 import 'package:ebisnis/models.dart';
-import 'package:ebisnis/product_profile.dart';
 import 'package:ebisnis/screens/kasir_screen.dart';
 import 'package:ebisnis/screens/pesanan_screen.dart';
 import 'package:ebisnis/screens/kulakan_screen.dart';
@@ -245,7 +243,6 @@ void main() {
     final listRekapPerProduk = <String, Map<String, dynamic>>{};
 
     double totalOmzet10Transaksi = 0;
-    int totalQty10Transaksi = 0;
 
     final baseDate = DateTime.now().subtract(const Duration(hours: 3));
 
@@ -296,8 +293,6 @@ void main() {
         listRekapPerProduk[prod.kode]!['qty'] = (listRekapPerProduk[prod.kode]!['qty'] as int) + qty;
         listRekapPerProduk[prod.kode]!['omzet'] = (listRekapPerProduk[prod.kode]!['omzet'] as double) + subtotal;
         listRekapPerProduk[prod.kode]!['hpp'] = (listRekapPerProduk[prod.kode]!['hpp'] as double) + (prod.hargaBeli * qty);
-
-        totalQty10Transaksi += qty;
       }
 
       totalOmzet10Transaksi += subtotalTrx;

@@ -307,6 +307,10 @@ class ApiClient {
     'posting_penyesuaian_draft',
     'posting_penyesuaian_terapkan',
     'laporan_keuangan_pendukung',
+    'ga_inventaris_simpan',
+    'ga_inventaris_pengajuan_simpan',
+    'hrd_pegawai_tenant_tautkan',
+    'hrd_kehadiran_daftar',
   };
 
   static bool _nilaiTokoValid(Object? nilai) {
@@ -365,6 +369,7 @@ class ApiClient {
     // `semuaToko = true` agar server mengagregasi data ke seluruh toko yang diizinkan,
     // bukan menolaknya atau mengunci ke satu toko yang kebetulan kosong.
     if ((namaAksi == 'katalog' ||
+            namaAksi == 'produk_list' ||
             namaAksi == 'produk_mutasi_ringkasan' ||
             namaAksi == 'produk_mutasi_per_tanggal') &&
         !sudahAdaLingkupKatalog) {
