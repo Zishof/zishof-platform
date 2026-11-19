@@ -445,6 +445,24 @@ Map<String, dynamic> metadataLaporanShortcut(
       'pelanggan': false,
       'perToko': true,
     },
+    'pnj_per_kategori_member': {
+      'id': 'pnj_per_kategori_member',
+      'judul': 'Penjualan per Kategori & Member',
+      'ket':
+          'Rincian omzet belanja per pelanggan/anggota yang dikelompokkan berdasarkan Tipe Member / Unit.',
+      'produk': false,
+      'pelanggan': true,
+      'perToko': true,
+    },
+    'transaksi_per_kasir': {
+      'id': 'transaksi_per_kasir',
+      'judul': 'Transaksi Per Kasir',
+      'ket':
+          'Rekonsiliasi modal awal, metode bayar, kas closing, dan selisih per kasir.',
+      'produk': false,
+      'pelanggan': false,
+      'perToko': true,
+    },
   };
   final dasar = peta[idLaporan] ??
       <String, dynamic>{
@@ -568,13 +586,23 @@ MenuEBisnis? _petakanTargetKeMenu(String target) {
     case 'laporan_transaksi':
       return MenuEBisnis.laporanTransaksi;
     case 'laporan':
+    case 'laporanlaporan':
     case 'laporan_laporan':
       return MenuEBisnis.laporanLaporan;
+    case 'laporankeuangan':
+    case 'laporan_keuangan':
+      return MenuEBisnis.laporanKeuangan;
+    case 'postingpenjualan':
+    case 'posting_penjualan':
+      return MenuEBisnis.postingPenjualan;
     default:
       return null;
   }
 }
 
+/// Memetakan nama ikon shortcut (baik format lokal Flutter maupun format server
+/// `EbisnisShortcutHelper.java`) ke [IconData] Material yang presisi agar tidak
+/// jatuh ke ikon generik `bolt_rounded`.
 IconData ikonShortcutDariNama(String? namaIkon) {
   switch ((namaIkon ?? '').trim().toLowerCase()) {
     case 'storefront':
@@ -585,38 +613,64 @@ IconData ikonShortcutDariNama(String? namaIkon) {
       return Icons.swap_horiz_rounded;
     case 'calendar_month':
       return Icons.calendar_month_outlined;
+    case 'event_note':
+      return Icons.event_note_outlined;
     case 'event_available':
       return Icons.event_available_outlined;
     case 'account_balance':
       return Icons.account_balance_outlined;
+    case 'summarize':
+      return Icons.summarize_outlined;
     case 'assessment':
       return Icons.assessment_outlined;
     case 'payments':
       return Icons.payments_outlined;
     case 'inventory':
       return Icons.inventory_outlined;
+    case 'warehouse':
+      return Icons.warehouse_outlined;
     case 'date_range':
       return Icons.date_range_outlined;
     case 'point_of_sale':
       return Icons.point_of_sale_outlined;
+    case 'shopping_cart_checkout':
+      return Icons.shopping_cart_checkout_rounded;
     case 'inventory_2':
       return Icons.inventory_2_outlined;
+    case 'category':
+      return Icons.category_outlined;
     case 'fact_check':
       return Icons.fact_check_outlined;
+    case 'rule_folder':
+      return Icons.rule_folder_outlined;
     case 'shelves':
       return Icons.shelves;
     case 'local_shipping':
       return Icons.local_shipping_outlined;
     case 'history':
       return Icons.history_rounded;
+    case 'receipt_long':
+      return Icons.receipt_long_outlined;
     case 'badge':
       return Icons.badge_outlined;
     case 'account_balance_wallet':
       return Icons.account_balance_wallet_outlined;
+    case 'credit_score':
+      return Icons.credit_score_outlined;
     case 'people':
       return Icons.people_outline;
+    case 'groups':
+      return Icons.groups_outlined;
     case 'folder_open':
       return Icons.folder_open_outlined;
+    case 'folder_copy':
+      return Icons.folder_copy_outlined;
+    case 'post_add':
+      return Icons.post_add_rounded;
+    case 'insights':
+      return Icons.insights_rounded;
+    case 'star':
+      return Icons.star_outline_rounded;
     default:
       return Icons.bolt_rounded;
   }
@@ -760,8 +814,15 @@ MenuEBisnis? _menuEBisnisDariShortcutTarget(String target) {
     case 'laporan_transaksi':
       return MenuEBisnis.laporanTransaksi;
     case 'laporan':
+    case 'laporanlaporan':
     case 'laporan_laporan':
       return MenuEBisnis.laporanLaporan;
+    case 'laporankeuangan':
+    case 'laporan_keuangan':
+      return MenuEBisnis.laporanKeuangan;
+    case 'postingpenjualan':
+    case 'posting_penjualan':
+      return MenuEBisnis.postingPenjualan;
     default:
       return null;
   }
@@ -771,6 +832,8 @@ Widget? _bangunLayarMenuTarget(String target) {
   switch (target.trim().toLowerCase()) {
     case 'kasir':
       return const KasirScreen();
+    case 'ringkasan':
+      return const RingkasanScreen();
     case 'pesanan':
       return const PesananScreen();
     case 'anggota':
@@ -814,8 +877,27 @@ Widget? _bangunLayarMenuTarget(String target) {
     case 'laporan_transaksi':
       return const LaporanTransaksiScreen();
     case 'laporan':
+    case 'laporanlaporan':
     case 'laporan_laporan':
       return const LaporanScreen();
+    case 'laporankeuangan':
+    case 'laporan_keuangan':
+      return const LaporanScreen(
+        aksiKatalog: 'laporan_keuangan_katalog',
+        menuAktif: MenuEBisnis.laporanKeuangan,
+        judul: 'Laporan Keuangan',
+        subjudul: 'Neraca, Laba Rugi, Arus Kas, Buku Besar, Piutang & lainnya',
+      );
+    case 'postingpenjualan':
+    case 'posting_penjualan':
+      return const LaporanScreen(
+        key: ValueKey<String>('posting-keuangan:posting_penjualan'),
+        aksiKatalog: 'laporan_keuangan_katalog',
+        menuAktif: MenuEBisnis.postingPenjualan,
+        judul: 'Posting Penjualan',
+        subjudul: 'Membukukan penjualan kasir ke buku besar',
+        bukaPosting: 'posting_penjualan',
+      );
     default:
       return null;
   }
