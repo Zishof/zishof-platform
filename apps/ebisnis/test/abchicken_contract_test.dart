@@ -17,8 +17,8 @@ void main() {
     expect(setting, contains("'abchiken.ebisnis.id'"),
         reason: 'Ejaan domain produksi memang abchiken, bukan kode brand.');
     expect(serverConfig, contains('if (AppVariant.isAbChicken)'));
-    expect(serverConfig,
-        contains('AppVariant.isAbChicken ? AppSetting.baseUrlHost : host'));
+    expect(serverConfig, contains('_adalahHostAbChickenSah'));
+    expect(serverConfig, contains("'dkb.ebisnis.id'"));
     expect(profile, contains('AppProductProfile.abChicken'));
     expect(profile, contains('OperasiRantaiPasokScreen'));
   });

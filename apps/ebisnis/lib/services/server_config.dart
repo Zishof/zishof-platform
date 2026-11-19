@@ -32,15 +32,29 @@ class ServerConfig {
   Future<void> muat() async {
     final sp = await SharedPreferences.getInstance();
 
-    // Build AB Chicken adalah aplikasi tenant khusus, bukan client generik. Alamat
-    // server dikunci agar konfigurasi lama/perangkat lain tidak dapat mengarahkannya
-    // ke host tenant berbeda. Otorisasi dan binding host tetap divalidasi server.
+    // Build AB Chicken / DKB Group memakai server bawaan AppSetting.baseUrlHost
+    // secara otomatis pada instalasi baru, namun tetap mengizinkan pemilihan
+    // antara domain resmi dkb.ebisnis.id (context dkb / ebisnis) dan
+    // abchiken.ebisnis.id / abchicken.ebisnis.id (context ebisnis / dkb)
+    // tanpa pernah bocor ke host tenant lain.
     if (AppVariant.isAbChicken) {
-      await simpan(
-        host: AppSetting.baseUrlHost,
-        contextPath: AppSetting.baseUrlContextPath,
-        https: AppSetting.baseUrlHttps,
-      );
+      final savedHost = sanitizeHost(sp.getString(_kHost) ?? '').toLowerCase();
+      final savedCtx = sanitizeContextPath(sp.getString(_kContextPath) ?? '');
+      final savedHttps = sp.getBool(_kHttps) ?? AppSetting.baseUrlHttps;
+      if (_adalahHostAbChickenSah(savedHost) &&
+          _adalahContextAbChickenSah(savedCtx)) {
+        await simpan(
+          host: savedHost,
+          contextPath: savedCtx,
+          https: savedHttps,
+        );
+      } else {
+        await simpan(
+          host: AppSetting.baseUrlHost,
+          contextPath: AppSetting.baseUrlContextPath,
+          https: AppSetting.baseUrlHttps,
+        );
+      }
       return;
     }
     host = sp.getString(_kHost) ?? '';
@@ -123,15 +137,34 @@ class ServerConfig {
     }
   }
 
+  static bool _adalahHostAbChickenSah(String rawHost) {
+    final h = sanitizeHost(rawHost).toLowerCase();
+    return h == 'abchiken.ebisnis.id' ||
+        h == 'abchicken.ebisnis.id' ||
+        h == 'dkb.ebisnis.id';
+  }
+
+  static bool _adalahContextAbChickenSah(String rawCtx) {
+    final c = sanitizeContextPath(rawCtx).toLowerCase();
+    return c == 'ebisnis' || c == 'dkb';
+  }
+
   Future<void> simpan({
     required String host,
     required String contextPath,
     required bool https,
   }) async {
     final sp = await SharedPreferences.getInstance();
-    final hostEfektif = AppVariant.isAbChicken ? AppSetting.baseUrlHost : host;
-    final contextEfektif =
-        AppVariant.isAbChicken ? AppSetting.baseUrlContextPath : contextPath;
+    final hostEfektif = AppVariant.isAbChicken
+        ? (_adalahHostAbChickenSah(host)
+            ? sanitizeHost(host).toLowerCase()
+            : AppSetting.baseUrlHost)
+        : host;
+    final contextEfektif = AppVariant.isAbChicken
+        ? (_adalahContextAbChickenSah(contextPath)
+            ? sanitizeContextPath(contextPath).toLowerCase()
+            : AppSetting.baseUrlContextPath)
+        : contextPath;
     final httpsEfektif =
         AppVariant.isAbChicken ? AppSetting.baseUrlHttps : https;
     await sp.setString(_kHost, hostEfektif);
