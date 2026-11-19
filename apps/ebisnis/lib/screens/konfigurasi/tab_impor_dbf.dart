@@ -65,6 +65,8 @@ class _TabImporDbfState extends State<TabImporDbf> {
     final home = Platform.environment['USERPROFILE'];
     if (home == null || home.trim().isEmpty) return;
     final kandidat = <String>[
+      '$home\\Documents\\5-Inventory--\\5-Inventory',
+      '$home\\Documents\\5-Inventory--',
       '$home\\Downloads\\5-Inventory--\\5-Inventory',
       '$home\\Downloads\\5-Inventory--',
     ];
@@ -194,6 +196,7 @@ class _TabImporDbfState extends State<TabImporDbf> {
           }
         }
         var dibuat = 0, diperbarui = 0, dilewati = dilewatiKlien, gagal = 0;
+        var jenisDitolakNonTenant = false;
         for (var i = 0; i < barisNormal.length; i += 400) {
           final batch = barisNormal.sublist(
               i, i + 400 > barisNormal.length ? barisNormal.length : i + 400);
@@ -201,23 +204,72 @@ class _TabImporDbfState extends State<TabImporDbf> {
             _statusProgres =
                 '${PetaDbfLegacy.labelJenis[jenis]}: ${i + batch.length}/${barisNormal.length} baris...';
           });
-          final hasil = await ApiClient.instance.aksi('si_import_legacy', {
-            'jenis': jenis,
-            'rows': batch,
-            'buat_opname_awal': _opnameAwal,
-          });
-          dibuat += (hasil['dibuat'] as num?)?.toInt() ?? 0;
-          diperbarui += (hasil['diperbarui'] as num?)?.toInt() ?? 0;
-          dilewati += (hasil['dilewati'] as num?)?.toInt() ?? 0;
-          gagal += (hasil['gagal'] as num?)?.toInt() ?? 0;
-          for (final ex in ((hasil['exceptions'] as List?) ?? [])) {
-            if (_exceptions.length < 100) _exceptions.add('$ex');
+          try {
+            final hasil = await ApiClient.instance.aksi('si_import_legacy', {
+              'jenis': jenis,
+              'rows': batch,
+              'buat_opname_awal': _opnameAwal,
+            });
+            dibuat += (hasil['dibuat'] as num?)?.toInt() ?? 0;
+            diperbarui += (hasil['diperbarui'] as num?)?.toInt() ?? 0;
+            dilewati += (hasil['dilewati'] as num?)?.toInt() ?? 0;
+            gagal += (hasil['gagal'] as num?)?.toInt() ?? 0;
+            for (final ex in ((hasil['exceptions'] as List?) ?? [])) {
+              if (_exceptions.length < 100) _exceptions.add('$ex');
+            }
+          } catch (err) {
+            final msg = '$err';
+            if (msg.contains('jenis tidak dikenal:')) {
+              jenisDitolakNonTenant = true;
+              break;
+            }
+            rethrow;
           }
         }
-        b.hasil =
-            'dibuat $dibuat · diperbarui $diperbarui · dilewati $dilewati · gagal $gagal';
+        // Khusus Tran_Piut.DBF / PIUTSEMEN.DBF: baris bernilai negatif dikirim
+        // pada gelombang kedua sebagai pembayaran_piutang_legacy agar mengurangi sisa AR.
+        if (!jenisDitolakNonTenant && jenis == 'piutang_legacy') {
+          final barisBayar = <Map<String, dynamic>>[];
+          for (final r in b.tabel!.rows) {
+            final nb = PetaDbfLegacy.normalisasi('pembayaran_piutang_legacy', r);
+            if (nb != null) barisBayar.add(nb);
+          }
+          for (var i = 0; i < barisBayar.length; i += 400) {
+            final batch = barisBayar.sublist(
+                i, i + 400 > barisBayar.length ? barisBayar.length : i + 400);
+            setStateIfMounted(() {
+              _statusProgres =
+                  'Pembayaran Piutang (${b.nama}): ${i + batch.length}/${barisBayar.length} baris...';
+            });
+            try {
+              final hasil = await ApiClient.instance.aksi('si_import_legacy', {
+                'jenis': 'pembayaran_piutang_legacy',
+                'rows': batch,
+              });
+              dibuat += (hasil['dibuat'] as num?)?.toInt() ?? 0;
+              diperbarui += (hasil['diperbarui'] as num?)?.toInt() ?? 0;
+              dilewati += (hasil['dilewati'] as num?)?.toInt() ?? 0;
+              gagal += (hasil['gagal'] as num?)?.toInt() ?? 0;
+            } catch (err) {
+              if ('$err'.contains('jenis tidak dikenal:')) break;
+              rethrow;
+            }
+          }
+        }
+        b.hasil = jenisDitolakNonTenant
+            ? 'dilewati pada mode non-tenant'
+            : 'dibuat $dibuat · diperbarui $diperbarui · dilewati $dilewati · gagal $gagal';
         selesai++;
         setStateIfMounted(() => _progres = selesai / antre.length);
+      }
+      // Langkah turunan wajib pada skema tenant: bangun ulang saldo_stok dari mutasi_stok
+      // agar layar Persediaan menampilkan seluruh barang secara akurat.
+      try {
+        await ApiClient.instance.aksi('si_import_legacy', {
+          'jenis': 'saldo_stok',
+        });
+      } catch (_) {
+        // Mode non-tenant tidak memerlukan langkah turunan saldo_stok.
       }
       setStateIfMounted(() => _statusProgres = 'Impor selesai.');
     } catch (e) {
