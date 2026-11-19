@@ -2616,40 +2616,45 @@ class _AppShellState extends State<AppShell> {
     if (_WorkspacePaneScope.isInsidePane(context)) {
       return _bangunPaneTabDesktop(context);
     }
-    return ValueListenableBuilder<MenuEBisnis>(
-      valueListenable: _menuAktifNotifier,
-      builder: (context, menuTerpilih, _) {
-        return ValueListenableBuilder<int>(
-          valueListenable: _versiTokoNotifier,
-          builder: (context, versiToko, _) {
-            final kunciToko = '${Sesi.instance.idTokoTerpilih ?? "semua"}-$versiToko';
-            if (widget.menuAktif == MenuEBisnis.kasir &&
-                !bolehTampilMenu(MenuEBisnis.kasir)) {
-              final pengalihan = menuAwalPosSesuaiHakAkses();
-              if (pengalihan != MenuEBisnis.kasir) {
-                final itemPengalihan = _itemMenu(pengalihan);
-                if (itemPengalihan?.builder != null) {
-                  return KeyedSubtree(
-                    key: ValueKey('shell-${pengalihan.name}-$kunciToko'),
-                    child: itemPengalihan!.builder!(context),
-                  );
+    return ValueListenableBuilder<int>(
+      valueListenable: Sesi.instance.revisiKonfig,
+      builder: (context, _, __) {
+        return ValueListenableBuilder<MenuEBisnis>(
+          valueListenable: _menuAktifNotifier,
+          builder: (context, menuTerpilih, _) {
+            return ValueListenableBuilder<int>(
+              valueListenable: _versiTokoNotifier,
+              builder: (context, versiToko, _) {
+                final kunciToko = '${Sesi.instance.idTokoTerpilih ?? "semua"}-$versiToko';
+                if (widget.menuAktif == MenuEBisnis.kasir &&
+                    !bolehTampilMenu(MenuEBisnis.kasir)) {
+                  final pengalihan = menuAwalPosSesuaiHakAkses();
+                  if (pengalihan != MenuEBisnis.kasir) {
+                    final itemPengalihan = _itemMenu(pengalihan);
+                    if (itemPengalihan?.builder != null) {
+                      return KeyedSubtree(
+                        key: ValueKey('shell-${pengalihan.name}-$kunciToko'),
+                        child: itemPengalihan!.builder!(context),
+                      );
+                    }
+                  }
                 }
-              }
-            }
-            final lebarLayar = MediaQuery.maybeSizeOf(context)?.width ?? 0;
-            final modeDesktop = lebarLayar >= kAmbangLebarDesktop;
-            if (!modeDesktop &&
-                _notifierSudahSinkron &&
-                menuTerpilih != widget.menuAktif) {
-              final item = _itemMenu(menuTerpilih);
-              if (item?.builder != null) {
-                return KeyedSubtree(
-                  key: ValueKey('shell-${menuTerpilih.name}-$kunciToko'),
-                  child: item!.builder!(context),
-                );
-              }
-            }
-            return _buildShell(context, kunciToko: kunciToko, menuTerpilih: menuTerpilih);
+                final lebarLayar = MediaQuery.maybeSizeOf(context)?.width ?? 0;
+                final modeDesktop = lebarLayar >= kAmbangLebarDesktop;
+                if (!modeDesktop &&
+                    _notifierSudahSinkron &&
+                    menuTerpilih != widget.menuAktif) {
+                  final item = _itemMenu(menuTerpilih);
+                  if (item?.builder != null) {
+                    return KeyedSubtree(
+                      key: ValueKey('shell-${menuTerpilih.name}-$kunciToko'),
+                      child: item!.builder!(context),
+                    );
+                  }
+                }
+                return _buildShell(context, kunciToko: kunciToko, menuTerpilih: menuTerpilih);
+              },
+            );
           },
         );
       },
@@ -3194,6 +3199,15 @@ class _AppTopbarState extends State<_AppTopbar> {
         if (mounted) setState(() {});
       });
     }
+    // Segarkan pula hak akses sesi (`konfigurasi`) dari server secara ringan
+    // saat bilah atas dipasang sehingga perubahan hak akses grup pengguna
+    // (Tbmrole.ebisnisMenu) di database langsung memperbarui sidebar tanpa
+    // mengharuskan pengguna keluar-masuk akun.
+    if (ApiClient.instance.sudahLogin) {
+      muatKonfigurasiSesiAwal().then((_) {
+        if (mounted) setState(() {});
+      });
+    }
   }
 
   @override
@@ -3202,7 +3216,10 @@ class _AppTopbarState extends State<_AppTopbar> {
     super.dispose();
   }
 
-  Future<void> _muat() async {
+  Future<void> _muat({bool segarkanKonfig = false}) async {
+    if (segarkanKonfig && ApiClient.instance.sudahLogin) {
+      await muatKonfigurasiSesiAwal();
+    }
     final kas = await CoreDb.instance.sesiKasAktif();
     // Hitung PENDING dan GAGAL sekaligus. Sebelumnya chip hanya membaca
     // PENDING, sehingga nota yang sudah divonis GAGAL -- yang justru TIDAK
@@ -3219,11 +3236,14 @@ class _AppTopbarState extends State<_AppTopbar> {
 
   /// Sinkronisasi manual seluruh tabel yang didukung. Termasuk katalog,
   /// member, transaksi lokal/pending (termasuk GAGAL atas keputusan manual),
-  /// perubahan master, dan antrean Inventory & Sales.
+  /// perubahan master, dan antrean Inventory & Sales, serta menyegarkan
+  /// konfigurasi hak akses menu pengguna dari server.
   Future<void> _sinkronkanManual() async {
     if (_sinkronBerjalan) return;
     setStateIfMounted(() => _sinkronBerjalan = true);
     try {
+      await muatKonfigurasiSesiAwal();
+      if (!mounted) return;
       await tampilkanSinkronisasiSeluruhTabel(context);
       await _muat();
     } catch (e) {
@@ -3474,9 +3494,9 @@ class _AppTopbarState extends State<_AppTopbar> {
           }),
           const SizedBox(width: 16),
           IconButton(
-            tooltip: 'Segarkan Status',
+            tooltip: 'Segarkan Status & Hak Akses',
             icon: const Icon(Icons.refresh, size: 19),
-            onPressed: _muat,
+            onPressed: () => _muat(segarkanKonfig: true),
           ),
           ValueListenableBuilder<ThemeMode>(
             valueListenable: AppThemeController.instance.mode,

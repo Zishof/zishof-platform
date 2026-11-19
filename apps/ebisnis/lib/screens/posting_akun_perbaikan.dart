@@ -25,17 +25,17 @@ enum SisiAkunPosting { debet, kredit }
         debet:
             'Jenis Produk → Akun HPP; bila kosong sistem membaca akun HPP bawaan Kelompok Aset.',
         kredit:
-            'Master Aset barang → Akun Persediaan; bila kosong sistem membaca Kelompok Aset.',
+            'Jenis Produk → Akun Persediaan Barang; bila kosong sistem membaca Master Aset atau Kelompok Aset.',
         urutan:
-            'Jenis Produk/Master Aset → Kelompok Aset → konfigurasi cadangan Kantin. Akun Persediaan harus sama dengan debet Kulakan.'
+            'Jenis Produk → Master Aset → Kelompok Aset → konfigurasi cadangan Kantin. Akun Persediaan harus sama dengan debet Kulakan.'
       ),
     'kulakan' => (
         debet:
-            'Master Aset barang → Akun Persediaan/Pembelian; bila kosong memakai Kelompok Aset.',
+            'Jenis Produk → Akun Persediaan Barang; bila kosong memakai Master Aset atau Kelompok Aset.',
         kredit:
             'Pembelian kredit: Supplier → Akun Utang. Pembelian tunai: Cara Pembayaran/Toko → Akun Kas/Bank.',
         urutan:
-            'Master Aset/Supplier → Kelompok Aset/Toko/Cara Pembayaran → konfigurasi cadangan Kantin.'
+            'Jenis Produk/Master Aset/Supplier → Kelompok Aset/Toko/Cara Pembayaran → konfigurasi cadangan Kantin.'
       ),
     'bayar_hutang' => (
         debet: 'Supplier → Akun Utang Dagang yang akan dikurangi.',
@@ -143,7 +143,8 @@ const _caraBayar = TargetCrudAkunPosting(
 const _jenisProduk = TargetCrudAkunPosting(
   id: 'jenis_produk',
   label: 'Jenis Produk',
-  keterangan: 'Ubah akun Pendapatan, PPN, HPP, retur, atau selisih stok.',
+  keterangan:
+      'Ubah akun Pendapatan, PPN, HPP, Persediaan Barang, retur, atau selisih stok.',
 );
 const _supplier = TargetCrudAkunPosting(
   id: 'supplier',
@@ -187,11 +188,11 @@ List<TargetCrudAkunPosting> targetCrudAkunPosting({
     case 'hpp':
       hasil = sisi == SisiAkunPosting.debet
           ? const [_jenisProduk, _kelompokAset]
-          : const [_masterAset, _kelompokAset];
+          : const [_jenisProduk, _masterAset, _kelompokAset];
       break;
     case 'kulakan':
       hasil = sisi == SisiAkunPosting.debet
-          ? const [_masterAset, _kelompokAset]
+          ? const [_jenisProduk, _masterAset, _kelompokAset]
           : const [_supplier, _toko, _caraBayar];
       break;
     case 'bayar_hutang':
@@ -235,7 +236,9 @@ List<TargetCrudAkunPosting> targetCrudAkunPosting({
       return t.id == 'jenis_produk';
     }
     if (kecil.contains('persediaan') || kecil.contains('master aset')) {
-      return t.id == 'master_aset' || t.id == 'kelompok_aset';
+      return t.id == 'jenis_produk' ||
+          t.id == 'master_aset' ||
+          t.id == 'kelompok_aset';
     }
     return false;
   }

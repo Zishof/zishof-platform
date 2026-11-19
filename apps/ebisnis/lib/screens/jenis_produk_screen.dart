@@ -370,6 +370,9 @@ class _FormJenisProdukState extends State<_FormJenisProduk> with JejakGalat {
   int? _akunPpnKeluaranId;
   int? _akunHppId;
 
+  /// Akun persediaan barang dagang (dikredit saat Posting HPP & didebet saat Posting Kulakan).
+  int? _akunPersediaanId;
+
   /// Akun selisih persediaan (susut/temuan) -- lawan jurnal stok opname.
   int? _akunSelisihPersediaanId;
 
@@ -390,6 +393,7 @@ class _FormJenisProdukState extends State<_FormJenisProduk> with JejakGalat {
     _akunPendapatanId = (j?['akunPendapatanId'] as num?)?.toInt();
     _akunPpnKeluaranId = (j?['akunPpnKeluaranId'] as num?)?.toInt();
     _akunHppId = (j?['akunHppId'] as num?)?.toInt();
+    _akunPersediaanId = (j?['akunPersediaanId'] as num?)?.toInt();
     _akunSelisihPersediaanId = (j?['akunSelisihPersediaanId'] as num?)?.toInt();
     _akunReturPenjualanId = (j?['akunReturPenjualanId'] as num?)?.toInt();
     _muatAkun();
@@ -436,6 +440,7 @@ class _FormJenisProdukState extends State<_FormJenisProduk> with JejakGalat {
         'akunPendapatanId': _akunPendapatanId,
         'akunPpnKeluaranId': _akunPpnKeluaranId,
         'akunHppId': _akunHppId,
+        'akunPersediaanId': _akunPersediaanId,
         'akunSelisihPersediaanId': _akunSelisihPersediaanId,
         'akunReturPenjualanId': _akunReturPenjualanId,
       };
@@ -533,7 +538,18 @@ class _FormJenisProdukState extends State<_FormJenisProduk> with JejakGalat {
                       label: 'Akun HPP (Beban Pokok Penjualan)',
                       daftar: _akun,
                       nilai: _akunHppId,
+                      helperText: 'Didebet saat Posting HPP Kantin.',
                       onChanged: (v) => setStateIfMounted(() => _akunHppId = v),
+                    ),
+                    const SizedBox(height: 12),
+                    PemilihAkunField(
+                      label: 'Akun Persediaan Barang',
+                      daftar: _akun,
+                      nilai: _akunPersediaanId,
+                      helperText:
+                          'Dikredit saat Posting HPP dan didebet saat Posting Kulakan.',
+                      onChanged: (v) =>
+                          setStateIfMounted(() => _akunPersediaanId = v),
                     ),
                     const SizedBox(height: 12),
                     PemilihAkunField(

@@ -191,6 +191,19 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen>
             );
             hasilTersimpan = Map<String, dynamic>.from(hasil);
             await _muat();
+            if (mounted &&
+                untukServer['id'] == null &&
+                responsSimpan?['offline'] != true) {
+              final kodeBastBaru = '${responsSimpan?['kode'] ?? ''}'.trim();
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(
+                  'Penerimaan ${kodeBastBaru.isEmpty ? '' : '$kodeBastBaru '}tersimpan '
+                  'sebagai DRAFT. Klik menu Aksi (...) -> Setujui agar stok barang '
+                  'otomatis masuk ke Kulakan & Riwayat Mutasi Produk.',
+                ),
+                duration: const Duration(seconds: 6),
+              ));
+            }
             return true;
           } catch (_) {
             return false;
@@ -1233,6 +1246,21 @@ class _FormBastDialogState extends State<_FormBastDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (!_terkunci)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFE0F2FE),
+                      borderRadius: BorderRadius.circular(8)),
+                  child: const Text(
+                      'Catatan Alur Stok: Menyimpan dokumen ini akan mencatat BAST '
+                      'sebagai DRAFT. Setelah disimpan, lakukan persetujuan melalui '
+                      'menu Aksi (...) -> Setujui agar stok barang otomatis masuk ke '
+                      'Kulakan dan Riwayat Mutasi Produk.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF0369A1))),
+                ),
               if (_terkunci)
                 Container(
                   width: double.infinity,

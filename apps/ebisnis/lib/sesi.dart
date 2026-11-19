@@ -15,6 +15,12 @@ class Sesi {
   /// menekan tombol "Muat Ulang" secara manual.
   final ValueNotifier<int> revisiCaraBayar = ValueNotifier<int>(0);
 
+  /// Notifier yang dinaikkan setiap kali `terapkanKonfig` selesai memperbarui
+  /// hak akses menu ([aksesMenu], [crudPos], [isAdmin], [supervisorPedagang]),
+  /// sehingga sidebar (`_AppSidebar`) dan drawer (`AppDrawer`) langsung
+  /// merender ulang daftar menu tanpa mengharuskan pengguna keluar-masuk akun.
+  final ValueNotifier<int> revisiKonfig = ValueNotifier<int>(0);
+
   /// Tenant (usaha) aktif pada perangkat ini — bagian PUBLIKNYA saja.
   ///
   /// Kosong bila pengguna tidak bernaung pada tenant mana pun; itu keadaan
@@ -254,6 +260,7 @@ class Sesi {
     if (userRoleId.isEmpty && activeRoleId.isNotEmpty) {
       userRoleId = activeRoleId;
     }
+    revisiKonfig.value++;
   }
 
   void _terapkanAktor(dynamic aktorRaw) {

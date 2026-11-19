@@ -351,6 +351,7 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
   List<Map<String, dynamic>> _daftarRutin = [];
   String _cari = '';
   String _status = '';
+  String _statusBayar = '';
   int _halaman = 1;
   int _total = 0;
   bool _anggaranWajib = false;
@@ -388,10 +389,11 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
         {
           if (_cari.isNotEmpty) 'cari': _cari,
           if (_status.isNotEmpty) 'status': _status,
+          if (_statusBayar.isNotEmpty) 'statusBayar': _statusBayar,
           'page': _halaman,
           'pageSize': _pageSize,
         },
-        'master:pengadaan_tagihan:${_status}_${_cari}_$_halaman',
+        'master:pengadaan_tagihan:${_status}_${_statusBayar}_${_cari}_$_halaman',
         onData: (res) {
           if (!mounted) return;
           final sukses = res['status'] == '00' || res['status'] == 'success';
@@ -667,7 +669,7 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
               ),
             ),
             SizedBox(
-              width: 220,
+              width: 200,
               child: DropdownButtonFormField<String>(
                 value: _status,
                 isExpanded: true,
@@ -683,6 +685,33 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
                 onChanged: (v) {
                   setStateIfMounted(() {
                     _status = v ?? '';
+                    _halaman = 1;
+                  });
+                  _muat();
+                },
+              ),
+            ),
+            SizedBox(
+              width: 220,
+              child: DropdownButtonFormField<String>(
+                value: _statusBayar,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                    labelText: 'Status pelunasan', isDense: true),
+                items: const [
+                  DropdownMenuItem(value: '', child: Text('Semua pelunasan')),
+                  DropdownMenuItem(value: 'LUNAS', child: Text('Sudah lunas')),
+                  DropdownMenuItem(
+                      value: 'SEBAGIAN', child: Text('Dibayar sebagian')),
+                  DropdownMenuItem(
+                      value: 'PROSES_TRANSFER',
+                      child: Text('Dalam proses transfer')),
+                  DropdownMenuItem(
+                      value: 'BELUM_BAYAR', child: Text('Belum lunas')),
+                ],
+                onChanged: (v) {
+                  setStateIfMounted(() {
+                    _statusBayar = v ?? '';
                     _halaman = 1;
                   });
                   _muat();
@@ -772,6 +801,17 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
                 final penyedia = '${row['penyedia'] ?? '-'}';
                 final tanggal = '${row['tanggalTagihan'] ?? '-'}';
                 final lunas = row['lunas'] == true;
+                final stBayar = '${row['statusBayar'] ?? ''}';
+                final kodePt = '${row['kodeProsesTransfer'] ?? ''}'.trim();
+                final dibayar = (row['dibayarTagihan'] as num?)?.toDouble() ?? 0;
+                final sisa = (row['sisaTagihan'] as num?)?.toDouble() ?? 0;
+                final statusTeks = lunas
+                    ? 'Lunas${kodePt.isNotEmpty ? ' (Transfer: $kodePt)' : ''}'
+                    : (stBayar == 'SEBAGIAN'
+                        ? 'Dibayar sebagian (${_fmtRp.format(dibayar)}, sisa ${_fmtRp.format(sisa)})'
+                        : (stBayar == 'PROSES_TRANSFER'
+                            ? 'Dalam proses transfer${kodePt.isNotEmpty ? ' ($kodePt)' : ''}'
+                            : 'Belum lunas'));
                 return ExpansionTile(
                   dense: true,
                   leading: Icon(
@@ -781,7 +821,7 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
                   title: Text('$kode · $penyedia',
                       maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text(
-                    '$tanggal · ${row['keterangan'] ?? '-'} · ${lunas ? 'Lunas' : 'Belum lunas'}',
+                    '$tanggal · ${row['keterangan'] ?? '-'} · $statusTeks',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -826,7 +866,7 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
 
   Widget _tabelTagihanBast(int totalHalaman) {
     return AppDataTable(
-      minWidth: 1080,
+      minWidth: 1180,
       emptyText: 'Tidak ada tagihan pada filter ini.',
       columns: const [
         AppTableColumn('BAST', flex: 2),
@@ -836,6 +876,7 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
         AppTableColumn('Termin ke', flex: 2),
         AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
         AppTableColumn('Faktur', flex: 3),
+        AppTableColumn('Status Bayar', flex: 3),
         AppTableColumn('Barang', flex: 2, align: TextAlign.center),
         AppTableColumn('Lampiran', flex: 3),
         AppTableColumn('Aksi', width: 64),
@@ -960,6 +1001,74 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
                         fontWeight: FontWeight.w700,
                         color: warna)),
               ),
+      ),
+      /* Status PELUNASAN TAGIHAN dari Proses Transfer (DPC) / Pembayaran Vendor:
+       * menjawab langsung apakah tagihan faktur vendor ini sudah lunas (terealisasi),
+       * sedang dalam antrean Proses Transfer, dibayar sebagian (cicilan), atau belum lunas. */
+      AppTableCell(
+        flex: 3,
+        child: Builder(builder: (_) {
+          final stBayar = '${row['statusBayar'] ?? ''}'.trim();
+          final lunas = row['lunas'] == true || stBayar == 'LUNAS';
+          final kodePt = '${row['kodeProsesTransfer'] ?? ''}'.trim();
+          final tglBayar = '${row['tanggalBayar'] ?? ''}'.trim();
+          final dibayar = (row['dibayarTagihan'] as num?)?.toDouble() ?? 0;
+          final sisa = (row['sisaTagihan'] as num?)?.toDouble() ?? 0;
+          if (!sudah || stBayar == 'BELUM_DITAGIH') {
+            return Text('-',
+                style: TextStyle(
+                    fontSize: 11, color: AppColors.textSecondaryOf(context)));
+          }
+          Color wBayar;
+          String labelBayar;
+          if (lunas) {
+            wBayar = AppColors.success;
+            labelBayar = 'LUNAS';
+          } else if (stBayar == 'SEBAGIAN') {
+            wBayar = const Color(0xFF0284C7);
+            labelBayar = 'DIBAYAR SEBAGIAN';
+          } else if (stBayar == 'PROSES_TRANSFER') {
+            wBayar = AppColors.primary;
+            labelBayar = 'PROSES TRANSFER';
+          } else {
+            wBayar = AppColors.warning;
+            labelBayar = 'BELUM LUNAS';
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                    color: wBayar.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(6)),
+                child: Text(labelBayar,
+                    style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        color: wBayar)),
+              ),
+              if (stBayar == 'SEBAGIAN')
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                      'Dibayar: ${_fmtRp.format(dibayar)}\nSisa: ${_fmtRp.format(sisa)}',
+                      style: const TextStyle(fontSize: 10)),
+                ),
+              if (kodePt.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                      'Transfer: $kodePt${tglBayar.isNotEmpty ? ' ($tglBayar)' : ''}',
+                      style: TextStyle(
+                          fontSize: 10,
+                          color: AppColors.textSecondaryOf(context))),
+                ),
+            ],
+          );
+        }),
       ),
       /* Status BARANG, bukan status faktur. Kolom Faktur di sebelah kiri sudah
        * menyatakan apakah tagihannya sudah masuk; yang belum pernah terlihat di

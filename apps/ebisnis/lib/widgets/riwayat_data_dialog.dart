@@ -153,7 +153,8 @@ class _RiwayatDataDialogState extends State<_RiwayatDataDialog> {
                     children: [
                       Text(
                         '${revisi['tanggal'] ?? '-'}'
-                        '${revisi['oleh'] == null ? '' : ' · oleh ${revisi['oleh']}'}',
+                        '${revisi['oleh'] == null ? '' : ' · oleh ${revisi['oleh']}'}'
+                        '${revisi['sumberAksi'] == null || '${revisi['sumberAksi']}'.isEmpty ? '' : '\nSumber aksi: ${revisi['sumberAksi']}'}',
                         style: const TextStyle(
                             fontSize: 12, color: Colors.black54),
                       ),
@@ -389,6 +390,7 @@ class _RiwayatDataDialogState extends State<_RiwayatDataDialog> {
                                     fontSize: 13, fontWeight: FontWeight.w600)),
                             subtitle: Text(
                                 '${r['tanggal'] ?? '-'}'
+                                '${r['sumberAksi'] == null || '${r['sumberAksi']}'.isEmpty ? '' : ' • ${r['sumberAksi']}'}'
                                 '${ringkas.isEmpty ? '' : '\n$ringkas'}'
                                 '${perubahan.length > 2 ? '\n+${perubahan.length - 2} data lain berubah' : ''}',
                                 style: const TextStyle(fontSize: 12)),

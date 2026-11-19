@@ -56,7 +56,7 @@ void main() {
       expect(
         targetCrudAkunPosting(jenis: 'hpp', sisi: SisiAkunPosting.kredit)
             .map((e) => e.id),
-        containsAll(['master_aset', 'kelompok_aset']),
+        containsAll(['jenis_produk', 'master_aset', 'kelompok_aset']),
       );
     });
 
@@ -100,7 +100,7 @@ void main() {
           sisi: SisiAkunPosting.kredit,
           alasan: 'Akun persediaan belum diatur pada Master Aset.',
         ).map((e) => e.id),
-        containsAll(['master_aset', 'kelompok_aset']),
+        containsAll(['jenis_produk', 'master_aset', 'kelompok_aset']),
       );
     });
   });
