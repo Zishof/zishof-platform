@@ -48,7 +48,7 @@ class AppSetting {
   /// https://kantinpcu.ecampus.id/petra, dan Sarimpi Jaya Frozen memakai
   /// https://sarimpijaya.ebisnis.id/ebisnis.
   static const String baseUrlHost = AppVariant.isAbChicken
-      ? 'abchiken.ebisnis.id'
+      ? 'dkb.ebisnis.id'
       : (AppVariant.isAlBahjah
           ? 'ecampus.staialbahjah.ac.id'
           : (AppVariant.isNahl
@@ -58,11 +58,13 @@ class AppSetting {
                   : (AppVariant.isFrozenFood
                       ? 'sarimpijaya.ebisnis.id'
                       : 'ebisnis.id'))));
-  static const String baseUrlContextPath = AppVariant.isAlBahjah
-      ? 'albahjah'
-      : (AppVariant.isNahl
-          ? 'nahl'
-          : (AppVariant.isPetra ? 'petra' : 'ebisnis'));
+  static const String baseUrlContextPath = AppVariant.isAbChicken
+      ? 'dkb'
+      : (AppVariant.isAlBahjah
+          ? 'albahjah'
+          : (AppVariant.isNahl
+              ? 'nahl'
+              : (AppVariant.isPetra ? 'petra' : 'ebisnis')));
   static const bool baseUrlHttps = true;
 
   /// Warna tema BAWAAN varian ini, sebelum pengguna pernah mengubahnya

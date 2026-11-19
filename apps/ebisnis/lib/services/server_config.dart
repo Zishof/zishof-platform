@@ -33,15 +33,19 @@ class ServerConfig {
     final sp = await SharedPreferences.getInstance();
 
     // Build AB Chicken / DKB Group memakai server bawaan AppSetting.baseUrlHost
-    // secara otomatis pada instalasi baru, namun tetap mengizinkan pemilihan
-    // antara domain resmi dkb.ebisnis.id (context dkb / ebisnis) dan
-    // abchiken.ebisnis.id / abchicken.ebisnis.id (context ebisnis / dkb)
-    // tanpa pernah bocor ke host tenant lain.
+    // (https://dkb.ebisnis.id/dkb/) secara otomatis, dan secara otomatis
+    // memigrasikan instalasi lama yang masih menunjuk ke abchiken.ebisnis.id /
+    // abchicken.ebisnis.id agar beralih ke server dedicated dkb.ebisnis.id/dkb.
     if (AppVariant.isAbChicken) {
       final savedHost = sanitizeHost(sp.getString(_kHost) ?? '').toLowerCase();
-      final savedCtx = sanitizeContextPath(sp.getString(_kContextPath) ?? '');
+      final savedCtx =
+          sanitizeContextPath(sp.getString(_kContextPath) ?? '').toLowerCase();
       final savedHttps = sp.getBool(_kHttps) ?? AppSetting.baseUrlHttps;
-      if (_adalahHostAbChickenSah(savedHost) &&
+      final isLegacyAbChickenDefault = (savedHost == 'abchiken.ebisnis.id' ||
+              savedHost == 'abchicken.ebisnis.id') &&
+          (savedCtx == 'ebisnis' || savedCtx.isEmpty);
+      if (!isLegacyAbChickenDefault &&
+          _adalahHostAbChickenSah(savedHost) &&
           _adalahContextAbChickenSah(savedCtx)) {
         await simpan(
           host: savedHost,
@@ -80,8 +84,12 @@ class ServerConfig {
           sanitizeHost(legacyHost).toLowerCase() == 'an-nahl.santri.info' &&
               sanitizeContextPath(legacyContext).toLowerCase() == 'nahl';
       final legacyAbChicken =
-          sanitizeHost(legacyHost).toLowerCase() == 'abchiken.ebisnis.id' &&
-              sanitizeContextPath(legacyContext).toLowerCase() == 'ebisnis';
+          (sanitizeHost(legacyHost).toLowerCase() == 'dkb.ebisnis.id' ||
+                  sanitizeHost(legacyHost).toLowerCase() ==
+                      'abchiken.ebisnis.id') &&
+              (sanitizeContextPath(legacyContext).toLowerCase() == 'dkb' ||
+                  sanitizeContextPath(legacyContext).toLowerCase() ==
+                      'ebisnis');
       if (legacyHost.trim().isNotEmpty &&
           (AppVariant.isAbChicken
               ? legacyAbChicken

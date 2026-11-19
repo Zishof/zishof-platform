@@ -14,8 +14,9 @@ void main() {
   test('varian AB Chicken memakai identitas dan endpoint produksi yang benar',
       () {
     expect(variant, contains("kode == 'abchicken'"));
-    expect(setting, contains("'abchiken.ebisnis.id'"),
-        reason: 'Ejaan domain produksi memang abchiken, bukan kode brand.');
+    expect(setting, contains("'dkb.ebisnis.id'"),
+        reason: 'Default server varian abchicken mengarah ke https://dkb.ebisnis.id/dkb/.');
+    expect(setting, contains("'dkb'"));
     expect(serverConfig, contains('if (AppVariant.isAbChicken)'));
     expect(serverConfig, contains('_adalahHostAbChickenSah'));
     expect(serverConfig, contains("'dkb.ebisnis.id'"));
