@@ -25,6 +25,37 @@ class ApiClient {
   static final ApiClient instance = ApiClient._();
 
   static const Duration _batasWaktu = Duration(seconds: 30);
+  static final Map<String, String> _endpointSetelahRedirect = <String, String>{};
+
+  /// Mengirim POST JSON sambil mengikuti pengalihan HTTP -> HTTPS (301/302/307/308)
+  /// pada host yang sama agar body POST dan header tidak hilang saat redirect.
+  Future<http.Response> _kirimPostTahanRedirect(String url, String bodyJson) async {
+    var tujuan = _endpointSetelahRedirect[url] ?? url;
+    const headers = {'Content-Type': 'application/json'};
+    for (var lompatan = 0; lompatan < 3; lompatan++) {
+      final resp = await http
+          .post(Uri.parse(tujuan), headers: headers, body: bodyJson)
+          .timeout(_batasWaktu);
+      final kode = resp.statusCode;
+      final pindah = kode == 301 || kode == 302 || kode == 307 || kode == 308;
+      final lokasi = resp.headers['location'];
+      if (!pindah || lokasi == null || lokasi.trim().isEmpty) {
+        return resp;
+      }
+      final asal = Uri.parse(tujuan);
+      final baru = asal.resolve(lokasi.trim());
+      if (baru.host.toLowerCase() != asal.host.toLowerCase()) {
+        return resp;
+      }
+      tujuan = baru.toString();
+      if (kode == 301 || kode == 308) {
+        _endpointSetelahRedirect[url] = tujuan;
+      }
+    }
+    return await http
+        .post(Uri.parse(tujuan), headers: headers, body: bodyJson)
+        .timeout(_batasWaktu);
+  }
 
   /// Kirim satu aksi. [sertakanToken] dimatikan hanya untuk `login`.
   Future<Map<String, dynamic>> aksi(
@@ -44,13 +75,7 @@ class ApiClient {
 
     http.Response res;
     try {
-      res = await http
-          .post(
-            Uri.parse(url),
-            headers: const {'Content-Type': 'application/json'},
-            body: jsonEncode(payload),
-          )
-          .timeout(_batasWaktu);
+      res = await _kirimPostTahanRedirect(url, jsonEncode(payload));
     } catch (e) {
       throw ApiException(
           'Tidak dapat menghubungi server.\n\nAlamat: $url\nRincian: $e');
