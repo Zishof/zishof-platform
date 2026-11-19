@@ -36,11 +36,12 @@ class TabImporDbf extends StatefulWidget {
 class _BerkasDbf {
   final String nama;
   final String? jenis; // null = tidak dikenal
-  final DbfTabel? tabel;
+  final Uint8List? rawBytes;
+  DbfTabel? tabel;
   final String? errorParse;
   bool dipilih;
   String hasil = '';
-  _BerkasDbf(this.nama, this.jenis, this.tabel, this.errorParse)
+  _BerkasDbf(this.nama, this.jenis, this.rawBytes, this.tabel, this.errorParse)
       : dipilih = jenis != null;
 }
 
@@ -50,6 +51,7 @@ class _TabImporDbfState extends State<TabImporDbf> {
   bool _memindai = false;
   bool _mengimpor = false;
   bool _opnameAwal = true;
+  bool _sertakanHistoriLunas = false;
   double _progres = 0;
   String _statusProgres = '';
   final List<String> _exceptions = [];
@@ -149,12 +151,32 @@ class _TabImporDbfState extends State<TabImporDbf> {
 
   _BerkasDbf _parse(String nama, Uint8List bytes) {
     final jenis = PetaDbfLegacy.jenisDariNamaFile(nama);
-    if (jenis == null) return _BerkasDbf(nama, null, null, null);
+    if (jenis == null) return _BerkasDbf(nama, null, null, null, null);
+    final bolehDeleted = _sertakanHistoriLunas &&
+        (jenis == 'hutang_legacy' || jenis == 'piutang_legacy');
     try {
-      return _BerkasDbf(nama, jenis, DbfParser.parse(nama, bytes), null);
+      return _BerkasDbf(
+          nama,
+          jenis,
+          bytes,
+          DbfParser.parse(nama, bytes, sertakanTerhapus: bolehDeleted),
+          null);
     } catch (e) {
-      return _BerkasDbf(nama, jenis, null, e.toString());
+      return _BerkasDbf(nama, jenis, bytes, null, e.toString());
     }
+  }
+
+  void _segarkanModeHistoriLunas(bool aktif) {
+    setStateIfMounted(() {
+      _sertakanHistoriLunas = aktif;
+      for (final b in _berkas) {
+        if ((b.jenis == 'hutang_legacy' || b.jenis == 'piutang_legacy') &&
+            b.rawBytes != null) {
+          b.tabel = DbfParser.parse(b.nama, b.rawBytes!,
+              sertakanTerhapus: _sertakanHistoriLunas);
+        }
+      }
+    });
   }
 
   List<_BerkasDbf> _urutkan(List<_BerkasDbf> daftar) {
@@ -226,12 +248,20 @@ class _TabImporDbfState extends State<TabImporDbf> {
             rethrow;
           }
         }
-        // Khusus Tran_Piut.DBF / PIUTSEMEN.DBF: baris bernilai negatif dikirim
-        // pada gelombang kedua sebagai pembayaran_piutang_legacy agar mengurangi sisa AR.
-        if (!jenisDitolakNonTenant && jenis == 'piutang_legacy') {
+        // Khusus Tran_Hut.DBF / Tran_Piut.DBF / PIUTSEMEN.DBF: baris bernilai negatif
+        // dikirim pada gelombang kedua sebagai pembayaran_hutang_legacy / pembayaran_piutang_legacy
+        // agar mengurangi sisa AP/AR secara akurat (termasuk saat histori lunas disertakan).
+        if (!jenisDitolakNonTenant &&
+            (jenis == 'piutang_legacy' || jenis == 'hutang_legacy')) {
+          final jenisBayar = jenis == 'piutang_legacy'
+              ? 'pembayaran_piutang_legacy'
+              : 'pembayaran_hutang_legacy';
+          final labelBayar = jenis == 'piutang_legacy'
+              ? 'Pembayaran Piutang'
+              : 'Pembayaran Hutang';
           final barisBayar = <Map<String, dynamic>>[];
           for (final r in b.tabel!.rows) {
-            final nb = PetaDbfLegacy.normalisasi('pembayaran_piutang_legacy', r);
+            final nb = PetaDbfLegacy.normalisasi(jenisBayar, r);
             if (nb != null) barisBayar.add(nb);
           }
           for (var i = 0; i < barisBayar.length; i += 400) {
@@ -239,11 +269,11 @@ class _TabImporDbfState extends State<TabImporDbf> {
                 i, i + 400 > barisBayar.length ? barisBayar.length : i + 400);
             setStateIfMounted(() {
               _statusProgres =
-                  'Pembayaran Piutang (${b.nama}): ${i + batch.length}/${barisBayar.length} baris...';
+                  '$labelBayar (${b.nama}): ${i + batch.length}/${barisBayar.length} baris...';
             });
             try {
               final hasil = await ApiClient.instance.aksi('si_import_legacy', {
-                'jenis': 'pembayaran_piutang_legacy',
+                'jenis': jenisBayar,
                 'rows': batch,
               });
               dibuat += (hasil['dibuat'] as num?)?.toInt() ?? 0;
@@ -339,11 +369,19 @@ class _TabImporDbfState extends State<TabImporDbf> {
               AppFormSwitchTile(
                 title: 'Jadikan saldo STOK legacy sebagai Stok Opname awal',
                 subtitle:
-                    'Hanya untuk barang BARU: saldo AWAL+MASUK-KELUAR dicatat lewat ledger opname "Migrasi DBF" (bukan menimpa stok berjalan).',
+                    'Hanya untuk barang BARU: saldo AWAL+MASUK-ABS(KELUAR) dicatat lewat ledger opname "Migrasi DBF" (bukan menimpa stok berjalan).',
                 value: _opnameAwal,
                 onChanged: _mengimpor
                     ? null
                     : (v) => setStateIfMounted(() => _opnameAwal = v),
+              ),
+              AppFormSwitchTile(
+                title:
+                    'Sertakan histori Hutang & Piutang yang sudah lunas (Layar 23 & 33)',
+                subtitle:
+                    'Membaca baris ber-flag deleted FoxPro pada Tran_Hut.DBF & Tran_Piut.DBF beserta alokasi pelunasannya sehingga tampil pada filter "Lunas Muncul" tanpa menambah saldo tagihan aktif.',
+                value: _sertakanHistoriLunas,
+                onChanged: _mengimpor ? null : _segarkanModeHistoriLunas,
               ),
               for (final b in _berkas)
                 Padding(

@@ -46,3 +46,10 @@ Seluruh layar aplikasi POS Desktop & Mobile (Windows, Android, Web) **WAJIB** me
 4. Cantumkan dokumentasi Dartdoc pada widget/layar baru yang menjelaskan penerapan pembatasan lebar frame ini.
 
 
+## Kontrak Paritas Impor DBF Legacy (`si_import_legacy` & `PetaDbfLegacy`)
+
+Setiap penambahan atau perubahan jenis impor pada `SalesInventoryDbfImportTenant` (backend Java) **wajib** disinkronkan secara simetris pada `lib/screens/konfigurasi/dbf_parser.dart` dan `tab_impor_dbf.dart` serta diverifikasi oleh `test/dbf_parser_legacy_parity_test.dart`:
+
+1. Setiap baris DBF wajib meneruskan nomor rekaman fisik 1-based pada kunci `baris_ke`.
+2. Nilai harga jual tunai (`HARGAJUAL2`) yang bernilai `<= 0` wajib dikirim `null` (bukan `0`) agar tidak dibaca sebagai barang gratis / margin `-100%`.
+3. Berkas `Tran_Hut.DBF`, `Tran_Piut.DBF`, dan `PIUTSEMEN.DBF` wajib memisahkan baris positif (`hutang_legacy` / `piutang_legacy`) dan gelombang kedua baris negatif (`pembayaran_hutang_legacy` / `pembayaran_piutang_legacy`), serta memanggil langkah akhir `saldo_stok` setelah seluruh berkas selesai diimpor.

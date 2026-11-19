@@ -27,7 +27,8 @@ class DbfTabel {
 class DbfParser {
   DbfParser._();
 
-  static DbfTabel parse(String namaFile, Uint8List b) {
+  static DbfTabel parse(String namaFile, Uint8List b,
+      {bool sertakanTerhapus = false}) {
     if (b.length < 32) {
       throw const FormatException('Berkas terlalu kecil untuk DBF.');
     }
@@ -63,13 +64,14 @@ class DbfParser {
       if (pos + panjangRecord > b.length) break;
       final flagHapus = b[pos];
       var fpos = pos + 1;
-      if (flagHapus == 0x2A) {
+      if (flagHapus == 0x2A && !sertakanTerhapus) {
         pos += panjangRecord;
-        continue; // record terhapus (soft delete FoxPro / settled AP-AR) -- jangan diimpor sebagai aktif.
+        continue; // record terhapus (soft delete FoxPro / settled AP-AR) -- dilewati bila tidak diminta.
       }
       final row = <String, dynamic>{
         '_BARIS_KE': i + 1,
         '_NAMA_FILE': namaFile,
+        '_TERHAPUS': flagHapus == 0x2A,
       };
       for (final f in fields) {
         final raw = b.sublist(fpos, fpos + f.lebar);
@@ -119,6 +121,7 @@ class PetaDbfLegacy {
     'customer',
     'sales',
     'produk',
+    'batch_legacy',
     'opname',
     'harga_beli',
     'harga_jual',
@@ -134,13 +137,14 @@ class PetaDbfLegacy {
     'customer': 'Master Customer (CUSTOMER.DBF)',
     'sales': 'Master Sales (SALES.DBF)',
     'produk': 'Master Barang + saldo (STOK.DBF)',
+    'batch_legacy': 'Master Nomor Batch & Kedaluwarsa (batchno.dbf)',
     'opname': 'Riwayat Stok Opname (dataopn.dbf)',
     'harga_beli': 'Harga Beli per Supplier (masterbl.DBF)',
     'harga_jual': 'Harga Jual per Customer (masterjl.DBF)',
     'pembelian_legacy': 'Riwayat Pembelian/Pengadaan (BELI.DBF)',
     'penjualan_legacy': 'Riwayat Penjualan (JUAL.DBF)',
-    'hutang_legacy': 'Tagihan Hutang Aktif (Tran_Hut.DBF)',
-    'piutang_legacy': 'Tagihan & Pembayaran Piutang Aktif (Tran_Piut / PIUTSEMEN)',
+    'hutang_legacy': 'Tagihan & Pembayaran Hutang (Tran_Hut.DBF)',
+    'piutang_legacy': 'Tagihan & Pembayaran Piutang (Tran_Piut / PIUTSEMEN)',
   };
 
   static String? jenisDariNamaFile(String namaFile) {
@@ -156,6 +160,8 @@ class PetaDbfLegacy {
         return 'sales';
       case 'stok.dbf':
         return 'produk';
+      case 'batchno.dbf':
+        return 'batch_legacy';
       case 'dataopn.dbf':
         return 'opname';
       case 'masterbl.dbf':
@@ -259,6 +265,15 @@ class PetaDbfLegacy {
           'stok_legacy':
               _n(r, 'AWAL') + _n(r, 'MASUK') - _n(r, 'KELUAR').abs(),
         };
+      case 'batch_legacy':
+        if (_s(r, 'KODEBRG').isEmpty || _s(r, 'NOBATCH').isEmpty) return null;
+        return {
+          if (barisKe != null) 'baris_ke': '$barisKe',
+          'kode_produk': _s(r, 'KODEBRG'),
+          'nomor_batch': _s(r, 'NOBATCH'),
+          'tanggal_expired': _s(r, 'TGLEXP'),
+          'qty': _n(r, 'JUMLAH'),
+        };
       case 'opname':
         if (_s(r, 'KODEBRG').isEmpty || _s(r, 'TANGGAL').isEmpty) return null;
         return {
@@ -344,6 +359,28 @@ class PetaDbfLegacy {
           'jatuh_tempo': _s(r, 'JTHTEMPO'),
           'tanggal_bayar': _s(r, 'TGLBAYAR'),
           'nilai': nilaiHutang,
+        };
+      case 'pembayaran_hutang_legacy':
+        final nilaiBayarHutang = _n(r, 'JUMLAH');
+        if (_s(r, 'NOFAKTUR').isEmpty ||
+            _s(r, 'KODESUPPL').isEmpty ||
+            _s(r, 'TANGGAL').isEmpty ||
+            nilaiBayarHutang >= 0) {
+          return null;
+        }
+        return {
+          if (barisKe != null) 'baris_ke': '$barisKe',
+          'nomor_faktur': _s(r, 'NOFAKTUR'),
+          'kode_supplier': _s(r, 'KODESUPPL'),
+          'tanggal': _s(r, 'TANGGAL'),
+          'tanggal_bayar': _s(r, 'TGLBAYAR').isEmpty
+              ? _s(r, 'TANGGAL')
+              : _s(r, 'TGLBAYAR'),
+          'keterangan': _s(r, 'KETBAYAR'),
+          'nomor_bg': _s(r, 'NOMERBG'),
+          'nama_bank': _s(r, 'NAMABANK'),
+          'tanggal_bg': _s(r, 'TANGGALBG'),
+          'nilai': nilaiBayarHutang.abs(),
         };
       case 'piutang_legacy':
         final nilaiPiutang = _n(r, 'JUMLAH');
