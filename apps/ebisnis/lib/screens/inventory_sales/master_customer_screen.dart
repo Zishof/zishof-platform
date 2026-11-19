@@ -752,6 +752,35 @@ class _FormCustomerState extends State<_FormCustomer> with JejakGalat {
               icon: _ubah ? Icons.edit_outlined : Icons.people_alt_outlined,
               errorText: _error,
               errorDetail: detailUntuk(_error),
+              actions: [
+                OutlinedButton.icon(
+                  onPressed: _menyimpan
+                      ? null
+                      : () async {
+                          if (await _konfirmasiTutup() && context.mounted) {
+                            Navigator.of(context).pop(false);
+                          }
+                        },
+                  icon: const Icon(Icons.close, size: 18),
+                  label: const Text('Batal'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: _menyimpan ? null : _simpan,
+                  icon: _menyimpan
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.save_outlined, size: 18),
+                  label: const Text('Simpan'),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 12)),
+                ),
+              ],
               children: [
                 AppFormSection(judul: 'Identitas Customer', children: [
                   AppFormTextField(
@@ -835,35 +864,6 @@ class _FormCustomerState extends State<_FormCustomer> with JejakGalat {
                   AppFormTextField(
                       label: 'Alamat Bank', controller: _alamatBank),
                 ]),
-              ],
-              actions: [
-                OutlinedButton.icon(
-                  onPressed: _menyimpan
-                      ? null
-                      : () async {
-                          if (await _konfirmasiTutup() && context.mounted) {
-                            Navigator.of(context).pop(false);
-                          }
-                        },
-                  icon: const Icon(Icons.close, size: 18),
-                  label: const Text('Batal'),
-                ),
-                ElevatedButton.icon(
-                  onPressed: _menyimpan ? null : _simpan,
-                  icon: _menyimpan
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.save_outlined, size: 18),
-                  label: const Text('Simpan'),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 12)),
-                ),
               ],
             ),
           ),

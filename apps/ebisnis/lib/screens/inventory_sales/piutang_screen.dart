@@ -171,9 +171,10 @@ class _TabPiutangState extends State<_TabPiutang> with JejakGalat {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null)
+    if (_error != null) {
       return _PanelError(
           pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
+    }
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -825,9 +826,10 @@ class _TabRiwayatState extends State<_TabRiwayat> with JejakGalat {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null)
+    if (_error != null) {
       return _PanelError(
           pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
+    }
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -1011,9 +1013,10 @@ class _TabAgingCustomerState extends State<_TabAgingCustomer> with JejakGalat {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null)
+    if (_error != null) {
       return _PanelError(
           pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
+    }
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -1136,9 +1139,10 @@ class _TabAgingSalesState extends State<_TabAgingSales> with JejakGalat {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null)
+    if (_error != null) {
       return _PanelError(
           pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
+    }
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -1313,9 +1317,10 @@ class _TabLaporanPiutangState extends State<_TabLaporanPiutang>
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null)
+    if (_error != null) {
       return _PanelError(
           pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
+    }
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(

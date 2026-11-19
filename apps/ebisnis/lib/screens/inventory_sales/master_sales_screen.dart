@@ -579,6 +579,47 @@ class _FormSalesState extends State<_FormSales> with JejakGalat {
               icon: _ubah ? Icons.edit_outlined : Icons.badge_outlined,
               errorText: _error,
               errorDetail: detailUntuk(_error),
+              actions: [
+                // Paritas aksi "Riwayat Audit" legacy: SalesInventory sendiri
+                // entity ber-@Audited, jadi id-nya langsung dipakai.
+                if (_ubah)
+                  OutlinedButton.icon(
+                    onPressed: () => tampilkanRiwayatAudit(
+                        context,
+                        'sales',
+                        widget.data!['id'] as Object,
+                        '${widget.data!['nama']}'),
+                    icon: const Icon(Icons.history, size: 18),
+                    label: const Text('Riwayat Audit'),
+                  ),
+                OutlinedButton.icon(
+                  onPressed: _menyimpan
+                      ? null
+                      : () async {
+                          if (await _konfirmasiTutup() && context.mounted) {
+                            Navigator.of(context).pop(false);
+                          }
+                        },
+                  icon: const Icon(Icons.close, size: 18),
+                  label: const Text('Batal'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: _menyimpan ? null : _simpan,
+                  icon: _menyimpan
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.save_outlined, size: 18),
+                  label: const Text('Simpan'),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 12)),
+                ),
+              ],
               children: [
                 AppFormSection(judul: 'Identitas Sales', children: [
                   Row(children: [
@@ -646,47 +687,6 @@ class _FormSalesState extends State<_FormSales> with JejakGalat {
                         'Satu akun aktif = satu profil sales. Kosongkan untuk melepas tautan.',
                   ),
                 ]),
-              ],
-              actions: [
-                // Paritas aksi "Riwayat Audit" legacy: SalesInventory sendiri
-                // entity ber-@Audited, jadi id-nya langsung dipakai.
-                if (_ubah)
-                  OutlinedButton.icon(
-                    onPressed: () => tampilkanRiwayatAudit(
-                        context,
-                        'sales',
-                        widget.data!['id'] as Object,
-                        '${widget.data!['nama']}'),
-                    icon: const Icon(Icons.history, size: 18),
-                    label: const Text('Riwayat Audit'),
-                  ),
-                OutlinedButton.icon(
-                  onPressed: _menyimpan
-                      ? null
-                      : () async {
-                          if (await _konfirmasiTutup() && context.mounted) {
-                            Navigator.of(context).pop(false);
-                          }
-                        },
-                  icon: const Icon(Icons.close, size: 18),
-                  label: const Text('Batal'),
-                ),
-                ElevatedButton.icon(
-                  onPressed: _menyimpan ? null : _simpan,
-                  icon: _menyimpan
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.save_outlined, size: 18),
-                  label: const Text('Simpan'),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 12)),
-                ),
               ],
             ),
           ),

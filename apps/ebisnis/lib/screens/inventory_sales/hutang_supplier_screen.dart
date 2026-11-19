@@ -513,9 +513,10 @@ class _TabPembayaranState extends State<_TabPembayaran> with JejakGalat {
   Widget build(BuildContext context) {
     final bolehBayar = Sesi.instance.bolehAksiIs('hutang', 'create');
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null)
+    if (_error != null) {
       return _PanelError(
           pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
+    }
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: bolehBayar
@@ -842,6 +843,28 @@ class _FormPembayaranHutangState extends State<_FormPembayaranHutang>
           icon: Icons.payments_outlined,
           errorText: _error,
           errorDetail: detailUntuk(_error),
+          actions: [
+            OutlinedButton.icon(
+              onPressed:
+                  _menyimpan ? null : () => Navigator.of(context).pop(false),
+              icon: const Icon(Icons.close, size: 18),
+              label: const Text('Batal'),
+            ),
+            ElevatedButton.icon(
+              onPressed: _menyimpan ? null : _simpan,
+              icon: _menyimpan
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.save_outlined, size: 18),
+              label: const Text('Simpan Pembayaran'),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0),
+            ),
+          ],
           children: [
             AppFormSection(judul: 'Supplier & Faktur', children: [
               OutlinedButton.icon(
@@ -961,28 +984,6 @@ class _FormPembayaranHutangState extends State<_FormPembayaranHutang>
                         fontSize: 15, fontWeight: FontWeight.w800)),
               ),
             ]),
-          ],
-          actions: [
-            OutlinedButton.icon(
-              onPressed:
-                  _menyimpan ? null : () => Navigator.of(context).pop(false),
-              icon: const Icon(Icons.close, size: 18),
-              label: const Text('Batal'),
-            ),
-            ElevatedButton.icon(
-              onPressed: _menyimpan ? null : _simpan,
-              icon: _menyimpan
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.save_outlined, size: 18),
-              label: const Text('Simpan Pembayaran'),
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0),
-            ),
           ],
         ),
       ),
@@ -1116,9 +1117,10 @@ class _TabAgingState extends State<_TabAging> with JejakGalat {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null)
+    if (_error != null) {
       return _PanelError(
           pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
+    }
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -1323,9 +1325,10 @@ class _TabFakturState extends State<_TabFaktur> with JejakGalat {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null)
+    if (_error != null) {
       return _PanelError(
           pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
+    }
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -1383,7 +1386,14 @@ class _TabFakturState extends State<_TabFaktur> with JejakGalat {
             }).toList(),
           ),
           const SizedBox(height: 8),
-          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+          // Pembatasan lebar frame responsif: gunakan Wrap agar tombol paginasi
+          // tidak memicu RenderFlex overflow pada viewport kasir/mobile sempit.
+          Wrap(
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
+              children: [
             TextButton(
                 onPressed: _halaman > 1
                     ? () {
@@ -1478,6 +1488,28 @@ class _FormTerminFakturState extends State<_FormTerminFaktur> with JejakGalat {
           icon: Icons.schedule_outlined,
           errorText: _error,
           errorDetail: detailUntuk(_error),
+          actions: [
+            OutlinedButton.icon(
+              onPressed:
+                  _menyimpan ? null : () => Navigator.of(context).pop(false),
+              icon: const Icon(Icons.close, size: 18),
+              label: const Text('Batal'),
+            ),
+            ElevatedButton.icon(
+              onPressed: _menyimpan ? null : _simpan,
+              icon: _menyimpan
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.save_outlined, size: 18),
+              label: const Text('Simpan'),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0),
+            ),
+          ],
           children: [
             AppFormSection(judul: 'Jenis Pembayaran', children: [
               DropdownButtonFormField<String>(
@@ -1509,28 +1541,6 @@ class _FormTerminFakturState extends State<_FormTerminFaktur> with JejakGalat {
               AppFormTextField(
                   label: 'Keterangan', controller: _keterangan, maxLines: 2),
             ]),
-          ],
-          actions: [
-            OutlinedButton.icon(
-              onPressed:
-                  _menyimpan ? null : () => Navigator.of(context).pop(false),
-              icon: const Icon(Icons.close, size: 18),
-              label: const Text('Batal'),
-            ),
-            ElevatedButton.icon(
-              onPressed: _menyimpan ? null : _simpan,
-              icon: _menyimpan
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.save_outlined, size: 18),
-              label: const Text('Simpan'),
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0),
-            ),
           ],
         ),
       ),
@@ -1591,9 +1601,10 @@ class _TabLaporanPembelianState extends State<_TabLaporanPembelian>
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null)
+    if (_error != null) {
       return _PanelError(
           pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
+    }
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(

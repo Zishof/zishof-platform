@@ -775,6 +775,28 @@ class _FormVersiHargaState extends State<_FormVersiHarga> with JejakGalat {
             icon: Icons.price_change_outlined,
             errorText: _error,
             errorDetail: detailUntuk(_error),
+            actions: [
+              OutlinedButton.icon(
+                onPressed:
+                    _menyimpan ? null : () => Navigator.of(context).pop(false),
+                icon: const Icon(Icons.close, size: 18),
+                label: const Text('Batal'),
+              ),
+              ElevatedButton.icon(
+                onPressed: _menyimpan ? null : _simpan,
+                icon: _menyimpan
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.save_outlined, size: 18),
+                label: const Text('Simpan Versi'),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0),
+              ),
+            ],
             children: [
               AppFormSection(judul: 'Versi Harga', children: [
                 OutlinedButton.icon(
@@ -822,28 +844,6 @@ class _FormVersiHargaState extends State<_FormVersiHarga> with JejakGalat {
                     controller: _keterangan,
                     maxLines: 2),
               ]),
-            ],
-            actions: [
-              OutlinedButton.icon(
-                onPressed:
-                    _menyimpan ? null : () => Navigator.of(context).pop(false),
-                icon: const Icon(Icons.close, size: 18),
-                label: const Text('Batal'),
-              ),
-              ElevatedButton.icon(
-                onPressed: _menyimpan ? null : _simpan,
-                icon: _menyimpan
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.save_outlined, size: 18),
-                label: const Text('Simpan Versi'),
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 0),
-              ),
             ],
           ),
         ),
