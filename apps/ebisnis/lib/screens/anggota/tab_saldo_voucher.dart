@@ -731,12 +731,14 @@ class _DialogPenyesuaianSaldoState extends State<_DialogPenyesuaianSaldo> {
   final _saldoFisik = TextEditingController();
   final _keterangan = TextEditingController();
   final _cariAnggota = TextEditingController();
+  final _cariRiwayat = TextEditingController();
 
   Object? _idAnggota;
   String _namaAnggota = '';
   double? _saldoSistem;
   bool _memuatSaldo = false;
   bool _menyimpan = false;
+  bool _mengeksporRiwayat = false;
   String? _pesan;
   List<Map<String, dynamic>> _riwayat = [];
 
@@ -754,18 +756,68 @@ class _DialogPenyesuaianSaldoState extends State<_DialogPenyesuaianSaldo> {
     _saldoFisik.dispose();
     _keterangan.dispose();
     _cariAnggota.dispose();
+    _cariRiwayat.dispose();
     super.dispose();
   }
 
   Future<void> _muatRiwayat() async {
     try {
-      final hasil = await ApiClient.instance
-          .aksi('penyesuaian_saldo_list', {'limit': 25});
+      final hasil = await ApiClient.instance.aksi('penyesuaian_saldo_list', {
+        'limit': 500,
+        'cari': _cariRiwayat.text.trim(),
+      });
       if (!mounted) return;
       setStateIfMounted(() => _riwayat =
           ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
     } catch (_) {
       // Riwayat hanya pelengkap; kegagalannya tidak boleh menghalangi penyesuaian.
+    }
+  }
+
+  DynamicReportData _dataLaporanRiwayat() => DynamicReportData(
+        title: 'Riwayat Penyesuaian & Cutoff Saldo Voucher',
+        subtitle: _cariRiwayat.text.trim().isEmpty
+            ? 'Menampilkan ${_riwayat.length} baris riwayat penyesuaian/cutoff terbaru'
+            : 'Filter: "${_cariRiwayat.text.trim()}" (${_riwayat.length} baris)',
+        columns: const [
+          DynamicReportColumn('waktu', 'Waktu'),
+          DynamicReportColumn('kodeMember', 'Kode Anggota'),
+          DynamicReportColumn('namaMember', 'Nama Anggota'),
+          DynamicReportColumn('saldoSistem', 'Saldo Sebelum (Sistem)',
+              numeric: true),
+          DynamicReportColumn('saldoFisik', 'Saldo Seharusnya (Sesudah)',
+              numeric: true),
+          DynamicReportColumn('selisih', 'Selisih', numeric: true),
+          DynamicReportColumn('keterangan', 'Alasan / Keterangan'),
+          DynamicReportColumn('oleh', 'Oleh'),
+        ],
+        rows: _riwayat,
+      );
+
+  Future<void> _eksporRiwayat(String format) async {
+    if (_riwayat.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Belum ada riwayat penyesuaian untuk diekspor.')));
+      return;
+    }
+    setStateIfMounted(() => _mengeksporRiwayat = true);
+    try {
+      final data = _dataLaporanRiwayat();
+      final model = DynamicReportModel.fromData(data);
+      const slug = 'riwayat-penyesuaian-cutoff-saldo-voucher';
+      if (format == 'pdf') {
+        await DynamicReportDesigner.exportPdf(data, model, '$slug.pdf');
+      } else {
+        await DynamicReportDesigner.exportExcel(
+            context, data, model, '$slug.xlsx');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal mengekspor riwayat: $e')));
+      }
+    } finally {
+      setStateIfMounted(() => _mengeksporRiwayat = false);
     }
   }
 
@@ -1151,8 +1203,40 @@ class _DialogPenyesuaianSaldoState extends State<_DialogPenyesuaianSaldo> {
               ),
             ]),
             const SizedBox(height: 12),
-            const Text('Riwayat penyesuaian terakhir',
-                style: TextStyle(fontWeight: FontWeight.w700)),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Riwayat penyesuaian & cutoff (${_riwayat.length} data)',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                SizedBox(
+                  width: 210,
+                  child: AppSearchField(
+                    controller: _cariRiwayat,
+                    hintText: 'Cari nama / cutoff...',
+                    debounce: const Duration(milliseconds: 250),
+                    onChanged: (_) => _muatRiwayat(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed:
+                      _mengeksporRiwayat ? null : () => _eksporRiwayat('excel'),
+                  icon: const Icon(Icons.table_view_outlined, size: 16),
+                  label: const Text('Excel'),
+                ),
+                const SizedBox(width: 6),
+                OutlinedButton.icon(
+                  onPressed:
+                      _mengeksporRiwayat ? null : () => _eksporRiwayat('pdf'),
+                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+                  label: const Text('PDF'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
             Expanded(
               child: _riwayat.isEmpty
                   ? const Center(child: Text('Belum ada penyesuaian saldo.'))
@@ -1163,17 +1247,21 @@ class _DialogPenyesuaianSaldoState extends State<_DialogPenyesuaianSaldo> {
                         final r = _riwayat[i];
                         final selisih =
                             ((r['selisih'] as num?) ?? 0).toDouble();
+                        final kode = '${r['kodeMember'] ?? ''}'.trim();
+                        final labelMember = kode.isNotEmpty
+                            ? '$kode - ${r['namaMember'] ?? '-'}'
+                            : '${r['namaMember'] ?? '-'}';
                         return ListTile(
                           dense: true,
                           title: Text(
-                              '${r['namaMember'] ?? '-'} — ${_fmtRp.format(selisih)}',
+                              '$labelMember — Saldo Sebelum: ${_fmtRp.format(r['saldoSistem'] ?? 0)} → ${_fmtRp.format(r['saldoFisik'] ?? 0)} (${_fmtRp.format(selisih)})',
                               style: TextStyle(
+                                  fontWeight: FontWeight.w600,
                                   color: selisih < 0
                                       ? AppColors.danger
                                       : AppColors.success)),
                           subtitle: Text(
-                              '${r['waktu'] ?? ''} • ${_fmtRp.format(r['saldoSistem'] ?? 0)} '
-                              '→ ${_fmtRp.format(r['saldoFisik'] ?? 0)} • ${r['keterangan'] ?? ''}',
+                              '${r['waktu'] ?? ''} • ${r['keterangan'] ?? ''} • Oleh: ${r['oleh'] ?? '-'}',
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(fontSize: 11)),
