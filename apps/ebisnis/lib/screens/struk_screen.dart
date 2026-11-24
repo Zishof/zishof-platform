@@ -135,6 +135,63 @@ class StrukScreen extends StatelessWidget {
   List<Map<String, dynamic>> get _pembayaranEfektif =>
       _normalisasiDaftarPembayaran(pembayaran);
 
+  /// Menentukan apakah transaksi struk ini adalah pembayaran **Tunai tunggal**
+  /// (uang fisik laci kasir yang mendukung kembalian).
+  ///
+  /// Pada pembayaran **Non-Tunai** (QRIS BSI, QRIS BMT, Transfer, Voucher,
+  /// Deposit, Kasbon) maupun pembayaran Split, tidak ada penyerahan uang tunai
+  /// berlebih yang memiliki uang kembalian. Apabila metode pembayaran bukan Tunai:
+  /// - Bila baris `Dibayar` ditampilkan, nilainya adalah `total` (pas sesuai
+  ///   tagihan non-tunai), dan baris `Kembali` tidak perlu ditampilkan (atau
+  ///   hanya ditampilkan pada transaksi Tunai) sehingga struk fisik saat
+  ///   checkout dan struk salinan di Riwayat Penjualan 100% identik dan bebas
+  ///   dari angka sisa input kasir maupun angka `0,-` yang membingungkan.
+  bool get _apakahMetodeTunaiTunggal {
+    final daftar = _pembayaranEfektif;
+    if (daftar.length > 1) return false;
+    final labelMetode = (daftar.length == 1
+            ? '${daftar.first['nama'] ?? ''}'
+            : metode)
+        .trim()
+        .toLowerCase();
+    if (labelMetode.isEmpty) return false;
+    return (labelMetode.contains('tunai') || labelMetode.contains('cash')) &&
+        !labelMetode.contains('non');
+  }
+
+  /// Nilai `Dibayar` efektif untuk ditampilkan pada struk fisik, PDF, dan
+  /// pratinjau layar.
+  ///
+  /// - Untuk metode **Tunai tunggal**: memakai `uangDiterima` bila positif,
+  ///   atau fallback ke `total` bila `uangDiterima` bernilai `0` / `null`.
+  /// - Untuk metode **Non-Tunai tunggal** (mis. QRIS BSI, Transfer, Voucher):
+  ///   `null` (cukup tampilkan `Grand Total` dan `Metode`, karena pembayaran
+  ///   non-tunai selalu pas sebesar `Grand Total` dan tidak mengenal uang
+  ///   tunai diterima maupun kembalian).
+  /// - Untuk metode **Split**: `null` (rincian per metode sudah dicetak di
+  ///   bawah `Metode: Split (N)`).
+  double? get _uangDiterimaTampil {
+    if (!_apakahMetodeTunaiTunggal) return null;
+    final diterima = uangDiterima;
+    if (diterima == null || diterima <= 0) {
+      return total > 0 ? total : null;
+    }
+    return diterima;
+  }
+
+  /// Nilai `Kembali` efektif untuk ditampilkan pada struk fisik, PDF, dan
+  /// pratinjau layar (hanya berlaku untuk pembayaran **Tunai tunggal**).
+  double? get _kembalianTampil {
+    if (!_apakahMetodeTunaiTunggal) return null;
+    final diterima = _uangDiterimaTampil;
+    if (diterima == null) return null;
+    if (kembalian != null && kembalian! >= 0 && (diterima - total - kembalian!).abs() < 1) {
+      return kembalian;
+    }
+    final selisih = diterima - total;
+    return selisih > 0 ? selisih : 0.0;
+  }
+
   static List<Map<String, dynamic>> pembayaranDariSumber(
     Map<String, dynamic> detail, [
     Map<String, dynamic>? row,
@@ -700,8 +757,12 @@ class StrukScreen extends StatelessWidget {
     if (_totalCashbackItem > 0) {
       pair('Cashback', '+${_formatUang(_totalCashbackItem)}');
     }
-    if (uangDiterima != null) pair('Dibayar', _formatUang(uangDiterima!));
-    if (kembalian != null) pair('Kembali', _formatUang(kembalian!));
+    if (_uangDiterimaTampil != null) {
+      pair('Dibayar', _formatUang(_uangDiterimaTampil!));
+    }
+    if (_kembalianTampil != null) {
+      pair('Kembali', _formatUang(_kembalianTampil!));
+    }
     final payments = _pembayaranEfektif;
     if (payments.isEmpty) {
       pair('Metode', metode);
@@ -786,8 +847,8 @@ class StrukScreen extends StatelessWidget {
             : daftarPembayaran.length + 1;
     tinggi += jumlahBarisPembayaran * 4.8;
 
-    if (uangDiterima != null) tinggi += 4.8;
-    if (kembalian != null) tinggi += 4.8;
+    if (_uangDiterimaTampil != null) tinggi += 4.8;
+    if (_kembalianTampil != null) tinggi += 4.8;
     if (saldo != null) tinggi += 4.8;
     if (!tersinkron) tinggi += 8;
     if (kode.trim().isNotEmpty) tinggi += 19;
@@ -1021,9 +1082,10 @@ class StrukScreen extends StatelessWidget {
         ),
         if (_totalCashbackItem > 0)
           _totalPdf('Cashback', '+${_formatUang(_totalCashbackItem)}'),
-        if (uangDiterima != null)
-          _totalPdf('Dibayar', _formatUang(uangDiterima!)),
-        if (kembalian != null) _totalPdf('Kembali', _formatUang(kembalian!)),
+        if (_uangDiterimaTampil != null)
+          _totalPdf('Dibayar', _formatUang(_uangDiterimaTampil!)),
+        if (_kembalianTampil != null)
+          _totalPdf('Kembali', _formatUang(_kembalianTampil!)),
         ..._pembayaranPdf(),
         if (saldo != null) _totalPdf('Saldo', _formatUang(saldo!)),
         _garisPdf(),
@@ -1393,11 +1455,14 @@ class StrukScreen extends StatelessWidget {
                         jumlahItem: _jumlahItem,
                         kasir: _labelKasir(),
                         pelanggan: _labelPelanggan(),
-                        uangDiterima: uangDiterima,
-                        kembalian: kembalian,
+                        uangDiterima: _uangDiterimaTampil,
+                        kembalian: _kembalianTampil,
                         saldo: saldo,
                         statusLabel: statusLabel,
                         jenisDokumen: jenisDokumen,
+                        nomorAntrian: nomorAntrian,
+                        catatanPesanan: catatanPesanan,
+                        jenisKonsumsi: jenisKonsumsi,
                         formatUang: _formatUang,
                         formatAngka: (v) => _formatAngka.format(v),
                         formatQty: _formatQty,
@@ -1775,6 +1840,9 @@ class _StrukPreview extends StatelessWidget {
   final double? saldo;
   final String? statusLabel;
   final String? jenisDokumen;
+  final String? nomorAntrian;
+  final String? catatanPesanan;
+  final String? jenisKonsumsi;
   final String Function(num nilai) formatUang;
   final String Function(num nilai) formatAngka;
   final String Function(num nilai) formatQty;
@@ -1800,6 +1868,9 @@ class _StrukPreview extends StatelessWidget {
     required this.saldo,
     required this.statusLabel,
     this.jenisDokumen,
+    this.nomorAntrian,
+    this.catatanPesanan,
+    this.jenisKonsumsi,
     required this.formatUang,
     required this.formatAngka,
     required this.formatQty,
@@ -1882,11 +1953,35 @@ class _StrukPreview extends StatelessWidget {
                 ),
               const _GarisStruk(),
               _InfoStruk(label: 'No', value: kode),
+              if (nomorAntrian != null && nomorAntrian!.trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Text(
+                    'ANTRIAN ${nomorAntrian!.trim()}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.black,
+                    ),
+                  ),
+                ),
               _InfoStruk(label: 'Tanggal', value: waktu),
               _InfoStruk(label: 'Kasir', value: kasir),
               _InfoStruk(label: 'Pelanggan', value: pelanggan),
               if (statusLabel != null && statusLabel!.trim().isNotEmpty)
                 _InfoStruk(label: 'Status', value: statusLabel!.trim()),
+              if (jenisKonsumsi != null &&
+                  jenisKonsumsi!.trim().isNotEmpty &&
+                  jenisKonsumsi != 'NORMAL')
+                _InfoStruk(
+                  label: 'Program',
+                  value: jenisKonsumsi == 'MANAGER_MEAL'
+                      ? 'Manager Meal'
+                      : 'Crew Meal',
+                ),
+              if (catatanPesanan != null && catatanPesanan!.trim().isNotEmpty)
+                _InfoStruk(label: 'Catatan', value: catatanPesanan!.trim()),
               const _GarisStruk(),
               ...item.map(
                 (i) => _ItemStruk(

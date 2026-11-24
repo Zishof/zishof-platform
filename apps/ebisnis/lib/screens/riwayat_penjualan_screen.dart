@@ -3496,10 +3496,17 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
     final saldo = (detail['saldo'] as num?)?.toDouble() ??
         (detail['sisaSaldo'] as num?)?.toDouble() ??
         (row['saldo'] as num?)?.toDouble();
-    final uangDiterima = (detail['bayarTunai'] as num?)?.toDouble() ??
+    final bayarTunaiRaw = (detail['bayarTunai'] as num?)?.toDouble() ??
         (row['bayarTunai'] as num?)?.toDouble();
-    final kembalian = (detail['kembalian'] as num?)?.toDouble() ??
+    final kembalianRaw = (detail['kembalian'] as num?)?.toDouble() ??
         (row['kembalian'] as num?)?.toDouble();
+    // Hanya teruskan uangDiterima & kembalian bila transaksi memang memiliki pembayaran tunai (> 0).
+    // Pada transaksi QRIS / Transfer / Non-Tunai murni, bayarTunai bernilai 0 sehingga tidak boleh
+    // ditampilkan sebagai "Dibayar: 0,- / Kembali: 0,-".
+    final double? uangDiterima =
+        (bayarTunaiRaw != null && bayarTunaiRaw > 0) ? bayarTunaiRaw : null;
+    final double? kembalian =
+        (uangDiterima != null) ? (kembalianRaw ?? 0.0) : null;
 
     await Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => StrukScreen(

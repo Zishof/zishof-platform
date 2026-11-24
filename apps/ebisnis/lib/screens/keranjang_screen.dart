@@ -493,11 +493,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   bool get _metodeTunai {
     final caraBayar = _caraBayarTerpilih;
     if (caraBayar == null) return false;
-    final nama = caraBayar.nama.toLowerCase();
-    return caraBayar.manual ||
-        nama.contains('tunai') ||
-        nama.contains('cash') ||
-        nama.contains('kas');
+    return caraBayar.adalahTunai;
   }
 
   bool get _splitAktif => _splitBayar.length >= 2;
@@ -757,6 +753,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   /// total (mis. saat menerima uang pas beda dari total, spt uang tunai fisik
   /// yang dibulatkan).
   void _sinkronkanUangDiterima() {
+    if (!_metodeTunai) {
+      _uangDiterimaManual = false;
+    }
     if (_uangDiterimaManual) return;
     final teks = _total > 0 ? _total.toStringAsFixed(0) : '0';
     if (_uangDiterimaController.text != teks) {
@@ -2540,9 +2539,16 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       final diskonFakturStruk = _diskonFaktur;
       final pajakStruk = _pajak;
       final pembayaranStruk = _pembayaranStruk();
-      final double? uangDiterimaStruk = _splitAktif ? null : _uangDiterima;
+      final bool metodeTunggalTunai =
+          !_splitAktif && (_caraBayarTerpilih?.adalahTunai ?? false);
+      // Baris "Dibayar" & "Kembali" pada struk hanya berlaku untuk pembayaran Tunai
+      // (uang fisik laci kasir). Untuk pembayaran Non-Tunai (QRIS, Transfer, Voucher,
+      // Kasbon) maupun Split, nilainya null sehingga struk fisik dan struk sistem
+      // di Riwayat Penjualan 100% identik tanpa angka sisa input Uang Diterima.
+      final double? uangDiterimaStruk =
+          metodeTunggalTunai ? _uangDiterima : null;
       final double? kembalianStruk =
-          _splitAktif ? null : (_kembalian < 0 ? 0.0 : _kembalian);
+          metodeTunggalTunai ? (_kembalian < 0 ? 0.0 : _kembalian) : null;
       final saldoStruk = _saldoDepositSetelahBayar(hasilServer);
       final nomorAntrianStruk = _nomorAntrianPercobaan;
       final catatanPesananStruk = _catatanPesananController.text.trim();
@@ -2557,6 +2563,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       LayarPelangganBroadcaster.instance.kirimSukses();
       setStateIfMounted(() {
         _langsungTerlayani = true;
+        _uangDiterimaManual = false;
+        _uangDiterimaController.text = '0';
         _splitBayar = [];
         _nilaiDiskonFaktur = 0;
         _tipeDiskonFaktur = 'NOMINAL';
@@ -2698,6 +2706,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       _pilihanCaraBayarPerluKonfirmasi = false;
       _caraBayarTerpilih = hasilUrut.first.caraBayar;
       _splitBayar = hasilUrut.length >= 2 ? hasilUrut : [];
+      _sinkronkanUangDiterima();
     });
   }
 
@@ -3735,81 +3744,83 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                     : 'Tambah Potongan Faktur'),
               ),
             ),
-            const SizedBox(height: 12),
-            Divider(height: 1, color: AppColors.borderOf(context)),
-            const SizedBox(height: 12),
-            InkWell(
-              onTap: _memproses ? null : _bukaDialogUangDiterima,
-              borderRadius: BorderRadius.circular(10),
-              child: InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Uang Diterima',
-                  border: _radiusInput,
-                  isDense: true,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _formatRupiah.format(_uangDiterima),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+            if (!_splitAktif && _metodeTunai) ...[
+              const SizedBox(height: 12),
+              Divider(height: 1, color: AppColors.borderOf(context)),
+              const SizedBox(height: 12),
+              InkWell(
+                onTap: _memproses ? null : _bukaDialogUangDiterima,
+                borderRadius: BorderRadius.circular(10),
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Uang Diterima',
+                    border: _radiusInput,
+                    isDense: true,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _formatRupiah.format(_uangDiterima),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Icon(
-                      Icons.payments_outlined,
-                      size: 18,
-                      color: AppColors.textSecondaryOf(context),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.payments_outlined,
+                        size: 18,
+                        color: AppColors.textSecondaryOf(context),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _memproses ? null : _bukaDialogUangDiterima,
-                icon: const Icon(Icons.edit_outlined, size: 18),
-                label: const Text('Input Uang Diterima'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _memproses ? null : _bukaDialogUangDiterima,
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text('Input Uang Diterima'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
                 ),
               ),
-            ),
-            if (_uangDiterima > 0)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Kembalian',
-                        style: TextStyle(fontWeight: FontWeight.w600)),
-                    Text(
-                      _formatRupiah.format(_kembalian.abs()),
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: _kembalian < 0
-                              ? AppColors.danger
-                              : AppColors.success),
-                    ),
-                  ],
+              if (_uangDiterima > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Kembalian',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      Text(
+                        _formatRupiah.format(_kembalian.abs()),
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: _kembalian < 0
+                                ? AppColors.danger
+                                : AppColors.success),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            if (_uangTunaiKurang)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: AppInfoBanner(
-                  icon: Icons.warning_amber_outlined,
-                  color: AppColors.danger,
-                  text:
-                      'Uang diterima kurang ${_formatRupiah.format((_total - _uangDiterima).abs())}.',
+              if (_uangTunaiKurang)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: AppInfoBanner(
+                    icon: Icons.warning_amber_outlined,
+                    color: AppColors.danger,
+                    text:
+                        'Uang diterima kurang ${_formatRupiah.format((_total - _uangDiterima).abs())}.',
+                  ),
                 ),
-              ),
+            ],
             const SizedBox(height: 14),
             CheckboxListTile(
               value: _langsungTerlayani,
