@@ -287,12 +287,14 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
   List<SlotBayar> _splitBayar = [];
   Anggota? _memberPemulihan;
   List<CaraBayar>? _metodeMember;
+  String _infoTipeMemberPemulihan = '';
   bool _memuatMember = false;
   bool _metodeMemberTerkunci = false;
+  bool _tampilkanSemuaMetodeSupervisor = false;
   int _versiMember = 0;
   List<Map<String, dynamic>> _daftarRakToko = [];
 
-  List<CaraBayar> get _metodeTersedia {
+  List<CaraBayar> get _metodeSesuaiTipeMember {
     if (_memberPemulihan == null) return Sesi.instance.caraBayar;
     if (_metodeMember != null && _metodeMember!.isNotEmpty) {
       final setIds = _metodeMember!.map((m) => m.id).toSet();
@@ -305,6 +307,31 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
       return gabungan;
     }
     return Sesi.instance.caraBayar;
+  }
+
+  List<CaraBayar> get _metodeTersedia {
+    if (_tampilkanSemuaMetodeSupervisor && Sesi.instance.caraBayar.isNotEmpty) {
+      final map = <int, CaraBayar>{};
+      for (final m in _metodeSesuaiTipeMember) {
+        map[m.id] = m;
+      }
+      for (final m in Sesi.instance.caraBayar) {
+        map.putIfAbsent(m.id, () => m);
+      }
+      return map.values.toList();
+    }
+    return _metodeSesuaiTipeMember;
+  }
+
+  String get _labelKonteksFilterMember {
+    final nama = _memberPemulihan?.nama.trim() ?? '';
+    final tipe = _infoTipeMemberPemulihan.trim();
+    if (nama.isNotEmpty && tipe.isNotEmpty) {
+      return 'Pelanggan "$nama" ($tipe)';
+    }
+    if (tipe.isNotEmpty) return tipe;
+    if (nama.isNotEmpty) return 'Pelanggan "$nama"';
+    return 'Tipe Member pelanggan ini';
   }
 
   Future<void> _pilihMemberPemulihan() async {
@@ -337,9 +364,15 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
           'pemulihan:metode:${jsonEncode(konteks)}', onData: (hasil) {
         if (!mounted || versi != _versiMember) return;
         final metode = metodePemulihanMember(hasil);
+        final tipeNama = '${hasil['tipeMemberNama'] ?? ''}'.trim();
+        final jenisNama = '${hasil['jenisMemberNama'] ?? ''}'.trim();
+        final infoTipe = tipeNama.isNotEmpty
+            ? 'Tipe Member: $tipeNama'
+            : (jenisNama.isNotEmpty ? 'Jenis Member: $jenisNama' : '');
         final lama = idSaatIni ?? _caraBayarId;
         setState(() {
           _metodeMember = metode;
+          _infoTipeMemberPemulihan = infoTipe;
           _metodeMemberTerkunci = hasil['caraBayarTerkunci'] == true;
           // Pilihan kasir yang masih sah dipertahankan; jangan jatuh ke null jika masih ada metode.
           _caraBayarId = metode.any((m) => m.id == lama)
@@ -445,9 +478,15 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
           'pemulihan:metode:${jsonEncode(konteks)}', onData: (hasil) {
         if (!mounted || versi != _versiMember) return;
         final metode = metodePemulihanMember(hasil);
+        final tipeNama = '${hasil['tipeMemberNama'] ?? ''}'.trim();
+        final jenisNama = '${hasil['jenisMemberNama'] ?? ''}'.trim();
+        final infoTipe = tipeNama.isNotEmpty
+            ? 'Tipe Member: $tipeNama'
+            : (jenisNama.isNotEmpty ? 'Jenis Member: $jenisNama' : '');
         final lama = _caraBayarId;
         setState(() {
           _metodeMember = metode;
+          _infoTipeMemberPemulihan = infoTipe;
           _metodeMemberTerkunci = hasil['caraBayarTerkunci'] == true;
           if (!widget.modeBaru && !_caraBayarDiubah && lama != null) {
             // Jaga metode pembayaran transaksi asli agar koreksi tidak terblokir
@@ -581,8 +620,8 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
           awal.skip(1).fold<double>(0, (jumlah, slot) => jumlah + slot.nominal);
       if (tambahan <= total) awal.first.nominal = total - tambahan;
     }
-    final daftarMetodeSplit = _metodeTersedia.isNotEmpty
-        ? _metodeTersedia
+    final daftarMetodeSplit = _metodeSesuaiTipeMember.isNotEmpty
+        ? _metodeSesuaiTipeMember
         : Sesi.instance.caraBayar;
     final hasil = await showModalBottomSheet<List<SlotBayar>>(
       context: context,
@@ -591,11 +630,20 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
         daftarMetode: daftarMetodeSplit,
         terpilihAwal: awal,
         total: total,
+        semuaMetodeToko: Sesi.instance.caraBayar,
+        infoFilterMember: _labelKonteksFilterMember,
+        izinkanTampilkanSemuaSupervisor: true,
       ),
     );
     if (hasil == null || hasil.isEmpty || !mounted) return;
     final hasilUrut = urutkanSlotSplitPaten(hasil);
+    final idDasar = daftarMetodeSplit.map((m) => m.id).toSet();
+    final memakaiMetodeSupervisor =
+        hasilUrut.any((s) => !idDasar.contains(s.caraBayar.id));
     setState(() {
+      if (memakaiMetodeSupervisor) {
+        _tampilkanSemuaMetodeSupervisor = true;
+      }
       _splitBayar = hasilUrut;
       _caraBayarId = _splitBayar.first.caraBayar.id;
       _caraBayarDiubah = true;
@@ -816,17 +864,28 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
 
     final caraBayarDiubahEfektif = _caraBayarDiubah ||
         (widget.caraBayarId != null && _caraBayarId != widget.caraBayarId);
-    final caraSaatIni = _metodeTersedia.where((m) => m.id == _caraBayarId);
+    final daftarValidasi = _tampilkanSemuaMetodeSupervisor
+        ? Sesi.instance.caraBayar
+        : _metodeTersedia;
+    final caraSaatIni = daftarValidasi.where((m) => m.id == _caraBayarId);
     final metodeWajibMember =
         caraSaatIni.isNotEmpty && caraSaatIni.first.wajibPilihMember;
     if (widget.modeBaru || caraBayarDiubahEfektif || metodeWajibMember) {
       if (widget.modeBaru || caraBayarDiubahEfektif) {
         final galat = validasiMemberPemulihan(
-            _metodeTersedia, _caraBayarId, _memberPemulihan?.id,
+            daftarValidasi, _caraBayarId, _memberPemulihan?.id,
             memuat: _memuatMember);
         if (galat != null) {
           setState(() => _pesan = galat);
           return;
+        }
+        for (final slot in _splitBayar) {
+          if (slot.caraBayar.wajibPilihMember &&
+              (_memberPemulihan == null || _memberPemulihan!.id <= 0)) {
+            setState(() => _pesan =
+                'Metode pembayaran ${slot.caraBayar.nama} wajib memilih member/pelanggan.');
+            return;
+          }
         }
       }
       // Hanya blokir dengan peringatan PIN/biometrik pada modeTambahBaru atau ketika
@@ -1073,28 +1132,66 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
                   ),
                 ),
               )
-            else
+            else ...[
               DropdownButtonFormField<int>(
-                value: _caraBayarId,
+                value: _metodeTersedia.any((c) => c.id == _caraBayarId)
+                    ? _caraBayarId
+                    : null,
                 decoration: InputDecoration(
                     labelText: 'Metode pembayaran *',
                     helperText: widget.modeBaru
                         ? null
                         : 'Split belum tersedia dari server. Hubungi admin untuk pembaruan server.',
                     helperMaxLines: 2,
-                    prefixIcon: Icon(Icons.payments_outlined)),
+                    prefixIcon: const Icon(Icons.payments_outlined)),
                 items: _metodeTersedia
                     .map((cara) => DropdownMenuItem<int>(
                         value: cara.id, child: Text(cara.nama)))
                     .toList(),
                 onChanged: _memuatMember ||
-                        (_memberPemulihan != null && _metodeMemberTerkunci)
+                        (!_tampilkanSemuaMetodeSupervisor &&
+                            _memberPemulihan != null &&
+                            _metodeMemberTerkunci)
                     ? null
                     : (value) => setState(() {
                           _caraBayarId = value;
                           _caraBayarDiubah = true;
                         }),
               ),
+              if (_memberPemulihan != null &&
+                  Sesi.instance.caraBayar.length >
+                      _metodeSesuaiTipeMember.length)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.filter_alt_outlined,
+                          size: 14, color: Color(0xFF0369A1)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          _tampilkanSemuaMetodeSupervisor
+                              ? 'Menampilkan seluruh ${Sesi.instance.caraBayar.length} metode aktif (Supervisor).'
+                              : 'Disaring sesuai $_labelKonteksFilterMember (${_metodeSesuaiTipeMember.length} dari ${Sesi.instance.caraBayar.length} metode).',
+                          style: const TextStyle(
+                              fontSize: 11, color: Color(0xFF0C4A6E)),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => setState(() =>
+                            _tampilkanSemuaMetodeSupervisor =
+                                !_tampilkanSemuaMetodeSupervisor),
+                        child: Text(
+                          _tampilkanSemuaMetodeSupervisor
+                              ? 'Saring Tipe Member'
+                              : 'Tampilkan Semua (${Sesi.instance.caraBayar.length})',
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
             const SizedBox(height: 8),
             Row(children: [
               Expanded(

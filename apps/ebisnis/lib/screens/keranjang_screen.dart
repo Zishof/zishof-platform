@@ -171,6 +171,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   bool _memuatCaraBayar = false;
   bool _izinCaraBayarMemberTidakDisetel = false;
   bool _caraBayarDikunciTipe = false;
+  String _infoTipeCaraBayarMember = '';
   bool _caraBayarDariCache = false;
   bool _konteksCaraBayarSiap = false;
   int? _konteksCaraBayarMemberId;
@@ -309,6 +310,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           _splitBayar = [];
           _izinCaraBayarMemberTidakDisetel = false;
           _caraBayarDikunciTipe = false;
+          _infoTipeCaraBayarMember = '';
           _konteksCaraBayarSiap = memberId == null;
           _caraBayarDariCache = _caraBayarTersedia.isNotEmpty;
         }
@@ -369,6 +371,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     final izinTidakDisetel = hasil['izinTidakDisetel'] == true;
     final caraBayarTerkunci = hasil['caraBayarTerkunci'] == true;
     final caraBayarDefaultId = (hasil['caraBayarDefaultId'] as num?)?.toInt();
+    final tipeMemberNama = '${hasil['tipeMemberNama'] ?? ''}'.trim();
+    final jenisMemberNama = '${hasil['jenisMemberNama'] ?? ''}'.trim();
+    final infoTipe = tipeMemberNama.isNotEmpty
+        ? 'Tipe Member: $tipeMemberNama'
+        : (jenisMemberNama.isNotEmpty ? 'Jenis Member: $jenisMemberNama' : '');
     final daftar = ((hasil['caraBayar'] as List?) ?? const [])
         .whereType<Map>()
         .map((e) => CaraBayar.fromJson(Map<String, dynamic>.from(e)))
@@ -408,6 +415,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       _caraBayarTerpilih = pilihan;
       _izinCaraBayarMemberTidakDisetel = memberId != null && izinTidakDisetel;
       _caraBayarDikunciTipe = memberId != null && caraBayarTerkunci;
+      _infoTipeCaraBayarMember = memberId != null ? infoTipe : '';
       _splitBayar = splitTersegar;
       if (_splitBayar.isNotEmpty) {
         _caraBayarTerpilih = _splitBayar.first.caraBayar;
@@ -2644,6 +2652,16 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         : (_caraBayarTerpilih != null
             ? [SlotBayar(_caraBayarTerpilih!, _total)]
             : <SlotBayar>[]);
+    final namaMemberLabel = _memberTerpilih?.nama.trim() ?? '';
+    final labelFilterMember = _memberTerpilih == null
+        ? null
+        : (_infoTipeCaraBayarMember.isNotEmpty && namaMemberLabel.isNotEmpty
+            ? 'Pelanggan "$namaMemberLabel" ($_infoTipeCaraBayarMember)'
+            : (_infoTipeCaraBayarMember.isNotEmpty
+                ? _infoTipeCaraBayarMember
+                : (namaMemberLabel.isNotEmpty
+                    ? 'Pelanggan "$namaMemberLabel"'
+                    : 'Tipe Member pelanggan ini')));
     final hasil = await showModalBottomSheet<List<SlotBayar>>(
       context: context,
       isScrollControlled: true,
@@ -2651,6 +2669,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         daftarMetode: _caraBayarTersedia,
         terpilihAwal: awal,
         total: _total,
+        semuaMetodeToko:
+            _memberTerpilih != null ? Sesi.instance.caraBayar : null,
+        infoFilterMember: labelFilterMember,
         // Tombol "Sinkronkan cara pembayaran" DI DALAM sheet (permintaan
         // lapangan): admin bisa mengubah izin metode member ketika sheet
         // sedang terbuka -- kasir tidak perlu menutup lalu membuka ulang.

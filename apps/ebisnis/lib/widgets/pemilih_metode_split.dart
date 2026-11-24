@@ -118,12 +118,31 @@ class PemilihMetodeSplit extends StatefulWidget {
   /// Muat ulang daftar metode dari server tanpa menutup sheet.
   final Future<List<CaraBayar>?> Function()? muatUlang;
 
+  /// Seluruh daftar metode pembayaran aktif di toko (sebelum disaring oleh
+  /// aturan Tipe/Jenis Member). Bila dikirim dan jumlahnya lebih banyak dari
+  /// [daftarMetode], modal menampilkan banner penjelasan mengapa hanya sebagian
+  /// metode yang tampil (mis. karena pembatasan Tipe Member pada Master Pelanggan).
+  final List<CaraBayar>? semuaMetodeToko;
+
+  /// Label konteks pelanggan/Tipe Member untuk ditampilkan pada banner info
+  /// penyaringan (mis. `"Customer Reward BMT (Tipe: Badan Otonom)"`).
+  final String? infoFilterMember;
+
+  /// Bila `true` (khusus dialog Koreksi/Edit Transaksi oleh Supervisor/Finance),
+  /// menampilkan saklar `"Tampilkan Semua Metode Aktif (Supervisor)"` sehingga
+  /// supervisor tetap dapat memilih metode pembayaran aktif lain di toko saat
+  /// mengoreksi transaksi meskipun metode tersebut belum dicentang pada Tipe Member.
+  final bool izinkanTampilkanSemuaSupervisor;
+
   const PemilihMetodeSplit({
     super.key,
     required this.daftarMetode,
     required this.terpilihAwal,
     required this.total,
     this.muatUlang,
+    this.semuaMetodeToko,
+    this.infoFilterMember,
+    this.izinkanTampilkanSemuaSupervisor = false,
   });
 
   @override
@@ -132,15 +151,51 @@ class PemilihMetodeSplit extends StatefulWidget {
 
 class _PemilihMetodeSplitState extends State<PemilihMetodeSplit> {
   late List<SlotBayar> _terpilih;
-  late List<CaraBayar> _metode;
+  late List<CaraBayar> _metodeDasar;
   final Map<int, TextEditingController> _controllers = {};
   bool _menyinkron = false;
+  bool _tampilkanSemuaSupervisor = false;
+
+  List<CaraBayar> get _metode {
+    if (_tampilkanSemuaSupervisor &&
+        widget.semuaMetodeToko != null &&
+        widget.semuaMetodeToko!.isNotEmpty) {
+      final map = <int, CaraBayar>{};
+      for (final m in _metodeDasar) {
+        map[m.id] = m;
+      }
+      for (final m in widget.semuaMetodeToko!) {
+        map.putIfAbsent(m.id, () => m);
+      }
+      final gabungan = map.values.toList()
+        ..sort((a, b) =>
+            a.nama.trim().toLowerCase().compareTo(b.nama.trim().toLowerCase()));
+      return gabungan;
+    }
+    return _metodeDasar;
+  }
+
+  Set<int> get _idMetodeDasar => _metodeDasar.map((m) => m.id).toSet();
+
+  bool get _adaMetodeDisaring {
+    final semua = widget.semuaMetodeToko;
+    if (semua == null || semua.isEmpty) return false;
+    final idDasar = _idMetodeDasar;
+    return semua.any((m) => !idDasar.contains(m.id));
+  }
 
   @override
   void initState() {
     super.initState();
-    _metode = List<CaraBayar>.of(widget.daftarMetode);
+    _metodeDasar = List<CaraBayar>.of(widget.daftarMetode);
     _terpilih = urutkanSlotSplitPaten(widget.terpilihAwal);
+    // Bila transaksi awal sudah memakai metode di luar daftar Tipe Member,
+    // otomatis aktifkan tampilan semua metode pada mode supervisor agar metode
+    // terpilih tetap terlihat di daftar.
+    if (widget.izinkanTampilkanSemuaSupervisor &&
+        _terpilih.any((s) => !_idMetodeDasar.contains(s.caraBayar.id))) {
+      _tampilkanSemuaSupervisor = true;
+    }
     _sinkronkanSemuaController();
   }
 
@@ -207,7 +262,7 @@ class _PemilihMetodeSplitState extends State<PemilihMetodeSplit> {
         return;
       }
       setState(() {
-        _metode = List<CaraBayar>.of(baru);
+        _metodeDasar = List<CaraBayar>.of(baru);
         _terpilih
             .removeWhere((s) => !_metode.any((c) => c.id == s.caraBayar.id));
         _urutkanPaten();
@@ -343,6 +398,77 @@ class _PemilihMetodeSplitState extends State<PemilihMetodeSplit> {
                   style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               ),
+              if (_adaMetodeDisaring)
+                Container(
+                  margin: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0369A1).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: const Color(0xFF0369A1).withValues(alpha: 0.25)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.filter_alt_outlined,
+                              size: 16, color: Color(0xFF0369A1)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _tampilkanSemuaSupervisor
+                                  ? 'Menampilkan seluruh ${_metode.length} metode pembayaran aktif (Mode Supervisor). Hanya ${_metodeDasar.length} metode yang dicentang pada aturan ${widget.infoFilterMember?.trim().isNotEmpty == true ? widget.infoFilterMember : "Tipe Member pelanggan ini"}.'
+                                  : 'Menampilkan ${_metodeDasar.length} dari ${widget.semuaMetodeToko!.length} metode pembayaran aktif sesuai pengaturan ${widget.infoFilterMember?.trim().isNotEmpty == true ? widget.infoFilterMember : "Tipe Member pelanggan ini"} (Master Data → Pelanggan → Tipe Member).',
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                color: Color(0xFF0C4A6E),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (widget.izinkanTampilkanSemuaSupervisor) ...[
+                        const SizedBox(height: 6),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: OutlinedButton.icon(
+                            key: const ValueKey(
+                                'toggle-semua-metode-supervisor'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _tampilkanSemuaSupervisor =
+                                    !_tampilkanSemuaSupervisor;
+                              });
+                            },
+                            icon: Icon(
+                              _tampilkanSemuaSupervisor
+                                  ? Icons.filter_list
+                                  : Icons.visibility_outlined,
+                              size: 14,
+                            ),
+                            label: Text(
+                              _tampilkanSemuaSupervisor
+                                  ? 'Saring Sesuai Tipe Member (${_metodeDasar.length})'
+                                  : 'Tampilkan Semua Metode Aktif (${widget.semuaMetodeToko!.length})',
+                              style: const TextStyle(
+                                  fontSize: 11, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               if (widget.muatUlang != null)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -362,6 +488,8 @@ class _PemilihMetodeSplitState extends State<PemilihMetodeSplit> {
                 ),
               ..._metode.map((cara) {
                 final aktif = _terpilih.any((s) => s.caraBayar.id == cara.id);
+                final diLuarTipeMember =
+                    _adaMetodeDisaring && !_idMetodeDasar.contains(cara.id);
                 return ListTile(
                   dense: true,
                   leading: Checkbox(
@@ -369,6 +497,13 @@ class _PemilihMetodeSplitState extends State<PemilihMetodeSplit> {
                     onChanged: (_) => _toggle(cara),
                   ),
                   title: Text(cara.nama),
+                  subtitle: diLuarTipeMember
+                      ? const Text(
+                          'Di luar daftar Tipe Member (Supervisor)',
+                          style: TextStyle(
+                              fontSize: 10.5, color: Color(0xFFB45309)),
+                        )
+                      : null,
                   trailing: cara.adalahTunai
                       ? Container(
                           padding: const EdgeInsets.symmetric(
