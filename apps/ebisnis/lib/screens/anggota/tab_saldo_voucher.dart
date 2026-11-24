@@ -11,10 +11,58 @@ import '../../widgets/safe_state.dart';
 
 double _angkaSaldoVoucher(dynamic nilai) => (nilai as num?)?.toDouble() ?? 0;
 
+/// Menentukan kelompok voucher anggota (`SANTRI`, `PEJUANG`, atau `LAINNYA`)
+/// berdasarkan field `kategoriVoucher`, `tipeNama`, `unit`, maupun format
+/// kode anggota.
+///
+/// Mendukung data server baru yang menyertakan `kategoriVoucher` dan `tipeNama`
+/// sekaligus fallback cerdas pada cache/server lama agar filter **Santri / Siswa**
+/// dan **Pejuang / Pegawai** tetap akurat di seluruh mode.
+String klasifikasiKategoriVoucher(Map<String, dynamic> baris) {
+  final katRaw = '${baris['kategoriVoucher'] ?? ''}'.trim().toUpperCase();
+  if (katRaw == 'SANTRI' || katRaw == 'PEJUANG') return katRaw;
+
+  final tipe = '${baris['tipeNama'] ?? ''}'.trim().toLowerCase();
+  if (tipe.contains('siswa') ||
+      tipe.contains('santri') ||
+      tipe.contains('mahasiswa')) {
+    return 'SANTRI';
+  }
+  if (tipe.contains('pegawai') ||
+      tipe.contains('pejuang') ||
+      tipe.contains('guru') ||
+      tipe.contains('dosen') ||
+      tipe.contains('karyawan')) {
+    return 'PEJUANG';
+  }
+
+  final unit = '${baris['unitAnggota'] ?? baris['unit'] ?? ''}'.trim().toLowerCase();
+  if (unit.contains('smp') ||
+      unit.contains('sma') ||
+      unit.contains('smk') ||
+      unit.contains('sd') ||
+      unit.contains('mts') ||
+      unit.contains('ma ') ||
+      unit.contains('santri') ||
+      unit.contains('kelas')) {
+    return 'SANTRI';
+  }
+  if (unit.contains('divisi') ||
+      unit.contains('pejuang') ||
+      unit.contains('pegawai') ||
+      unit.contains('guru') ||
+      unit.contains('yayasan')) {
+    return 'PEJUANG';
+  }
+  return katRaw.isNotEmpty ? katRaw : 'LAINNYA';
+}
+
 /// Mengubah baris mutasi menjadi satu saldo per anggota.
 ///
 /// Server baru menyertakan [saldoAwalResmi] dan [saldoAkhirResmi] yang memakai
-/// formula saldo kasir (termasuk voucher kedaluwarsa dan pembayaran split).
+/// formula saldo kasir (termasuk voucher kedaluwarsa dan pembayaran split),
+/// serta [tipeNama] dan [kategoriVoucher] untuk pemisahan saldo Santri/Siswa
+/// dan Pejuang/Pegawai.
 /// Fallback ke field lama dipertahankan agar aplikasi tetap kompatibel ketika
 /// backend belum diperbarui.
 @visibleForTesting
@@ -31,6 +79,9 @@ List<Map<String, dynamic>> rekapSaldoVoucherDariMutasi(
               'idAnggota': m['idAnggota'],
               'namaAnggota': '${m['namaAnggota'] ?? '-'}',
               'unit': '${m['unitAnggota'] ?? m['unit'] ?? ''}',
+              'tipeNama': '${m['tipeNama'] ?? ''}',
+              'jenisNama': '${m['jenisNama'] ?? ''}',
+              'kategoriVoucher': klasifikasiKategoriVoucher(m),
               'saldoAwal': saldoAwalResmi is num
                   ? saldoAwalResmi.toDouble()
                   : _angkaSaldoVoucher(m['saldoAwal']),
@@ -42,6 +93,18 @@ List<Map<String, dynamic>> rekapSaldoVoucherDariMutasi(
     if ('${entri['unit'] ?? ''}'.trim().isEmpty &&
         '${m['unitAnggota'] ?? m['unit'] ?? ''}'.trim().isNotEmpty) {
       entri['unit'] = '${m['unitAnggota'] ?? m['unit'] ?? ''}';
+    }
+    if ('${entri['tipeNama'] ?? ''}'.trim().isEmpty &&
+        '${m['tipeNama'] ?? ''}'.trim().isNotEmpty) {
+      entri['tipeNama'] = '${m['tipeNama']}'.trim();
+    }
+    if ('${entri['jenisNama'] ?? ''}'.trim().isEmpty &&
+        '${m['jenisNama'] ?? ''}'.trim().isNotEmpty) {
+      entri['jenisNama'] = '${m['jenisNama']}'.trim();
+    }
+    if ('${entri['kategoriVoucher'] ?? 'LAINNYA'}' == 'LAINNYA') {
+      final katBaru = klasifikasiKategoriVoucher(m);
+      if (katBaru != 'LAINNYA') entri['kategoriVoucher'] = katBaru;
     }
     entri['masuk'] =
         (entri['masuk'] as double) + _angkaSaldoVoucher(m['masuk']);
@@ -100,6 +163,10 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
   bool _memuat = true;
   String? _galat;
   String _cari = '';
+  /// Filter kategori/tipe member pada daftar Saldo Voucher:
+  /// `'SEMUA'`, `'SANTRI'` (Santri / Siswa), `'PEJUANG'` (Pejuang / Pegawai),
+  /// `'LAINNYA'`, atau `'TIPE:<nama>'` untuk salah satu Tipe Member spesifik.
+  String _filterKategori = 'SEMUA';
   bool _menyiapkanLaporan = false;
   bool _dataOffline = false;
   DateTime? _terakhirDiperbarui;
@@ -158,17 +225,83 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
     }
   }
 
+  /// Seluruh rekap anggota sebelum disaring filter kategori dan kata kunci pencarian.
+  List<Map<String, dynamic>> get _semuaSaldoPerAnggota =>
+      rekapSaldoVoucherDariMutasi(_mutasi);
+
+  /// Daftar nama Tipe Member unik yang muncul di data saat ini (di luar kosong/'-').
+  List<String> get _daftarTipeUnik {
+    final s = <String>{};
+    for (final r in _semuaSaldoPerAnggota) {
+      final t = '${r['tipeNama'] ?? ''}'.trim();
+      if (t.isNotEmpty && t != '-') s.add(t);
+    }
+    final list = s.toList()..sort();
+    return list;
+  }
+
+  bool _cocokFilterKategori(Map<String, dynamic> r, String filter) {
+    if (filter == 'SEMUA') return true;
+    final kat = '${r['kategoriVoucher'] ?? ''}'.trim().toUpperCase();
+    if (filter == 'SANTRI') return kat == 'SANTRI';
+    if (filter == 'PEJUANG') return kat == 'PEJUANG';
+    if (filter == 'LAINNYA') return kat != 'SANTRI' && kat != 'PEJUANG';
+    if (filter.startsWith('TIPE:')) {
+      final targetTipe = filter.substring(5).trim().toLowerCase();
+      return '${r['tipeNama'] ?? ''}'.trim().toLowerCase() == targetTipe;
+    }
+    return true;
+  }
+
+  String _labelFilterAktif(String filter) {
+    switch (filter) {
+      case 'SANTRI':
+        return 'Santri / Siswa';
+      case 'PEJUANG':
+        return 'Pejuang / Pegawai';
+      case 'LAINNYA':
+        return 'Lainnya';
+      case 'SEMUA':
+        return 'Semua Member';
+      default:
+        if (filter.startsWith('TIPE:')) {
+          return 'Tipe: ${filter.substring(5)}';
+        }
+        return 'Semua Member';
+    }
+  }
+
+  String _labelTipeTampil(Map<String, dynamic> r) {
+    final tipe = '${r['tipeNama'] ?? ''}'.trim();
+    final kat = '${r['kategoriVoucher'] ?? ''}'.trim().toUpperCase();
+    if (kat == 'SANTRI') {
+      return tipe.isNotEmpty && tipe.toLowerCase() != 'siswa'
+          ? 'Santri ($tipe)'
+          : 'Santri / Siswa';
+    }
+    if (kat == 'PEJUANG') {
+      return tipe.isNotEmpty && tipe.toLowerCase() != 'pegawai'
+          ? 'Pejuang ($tipe)'
+          : 'Pejuang / Pegawai';
+    }
+    return tipe.isNotEmpty ? tipe : 'Umum';
+  }
+
   /// Rekap per anggota: masuk/keluar dijumlahkan, saldo akhir diambil dari
   /// snapshot resmi server agar sama dengan saldo yang dipakai kasir.
   List<Map<String, dynamic>> get _saldoPerAnggota {
-    final daftar = rekapSaldoVoucherDariMutasi(_mutasi);
+    final daftar = _semuaSaldoPerAnggota
+        .where((r) => _cocokFilterKategori(r, _filterKategori))
+        .toList();
     final kunciCari = _cari.trim().toLowerCase();
     final hasil = kunciCari.isEmpty
         ? daftar
         : daftar
             .where((r) =>
                 '${r['namaAnggota']}'.toLowerCase().contains(kunciCari) ||
-                '${r['unit'] ?? ''}'.toLowerCase().contains(kunciCari))
+                '${r['unit'] ?? ''}'.toLowerCase().contains(kunciCari) ||
+                '${r['tipeNama'] ?? ''}'.toLowerCase().contains(kunciCari) ||
+                _labelTipeTampil(r).toLowerCase().contains(kunciCari))
             .toList();
     hasil.sort((a, b) =>
         (b['saldoAkhir'] as double).compareTo(a['saldoAkhir'] as double));
@@ -176,11 +309,15 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
   }
 
   DynamicReportData _dataLaporan() => DynamicReportData(
-        title: 'Saldo Voucher Anggota',
+        title: _filterKategori == 'SEMUA'
+            ? 'Saldo Voucher Anggota'
+            : 'Saldo Voucher Anggota — ${_labelFilterAktif(_filterKategori)}',
         subtitle:
-            'Periode ${_fmtTglTampil.format(_dari)} s.d. ${_fmtTglTampil.format(_sampai)}',
+            'Periode ${_fmtTglTampil.format(_dari)} s.d. ${_fmtTglTampil.format(_sampai)}'
+            '${_filterKategori == 'SEMUA' ? '' : ' • Kategori: ${_labelFilterAktif(_filterKategori)}'}',
         columns: const [
           DynamicReportColumn('namaAnggota', 'Anggota'),
+          DynamicReportColumn('tipeTampil', 'Tipe / Kategori'),
           DynamicReportColumn('unit', 'Unit'),
           DynamicReportColumn('saldoAwal', 'Saldo Awal', numeric: true),
           DynamicReportColumn('masuk', 'Masuk', numeric: true),
@@ -189,7 +326,12 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
           DynamicReportColumn('jumlahTransaksi', 'Jml Transaksi',
               numeric: true),
         ],
-        rows: _saldoPerAnggota,
+        rows: _saldoPerAnggota
+            .map((r) => <String, dynamic>{
+                  ...r,
+                  'tipeTampil': _labelTipeTampil(r),
+                })
+            .toList(),
       );
 
   Future<void> _aturAtauPreview({required bool preview}) async {
@@ -283,14 +425,90 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
     if (berubah == true) await _muat();
   }
 
+  Widget _chipFilterKategori({
+    required String kode,
+    required String label,
+    required int jumlah,
+    required double totalSaldo,
+    required IconData icon,
+    required Color warna,
+  }) {
+    final aktif = _filterKategori == kode;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => setStateIfMounted(() => _filterKategori = kode),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: aktif ? warna.withValues(alpha: 0.14) : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: aktif ? warna : Colors.grey.withValues(alpha: 0.35),
+            width: aktif ? 1.6 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 17, color: aktif ? warna : Colors.grey.shade700),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$label ($jumlah)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: aktif ? FontWeight.w800 : FontWeight.w600,
+                    color: aktif ? warna : null,
+                  ),
+                ),
+                Text(
+                  _fmtRp.format(totalSaldo),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: aktif ? warna : AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final semua = _semuaSaldoPerAnggota;
     final daftar = _saldoPerAnggota;
     final totalSaldo =
         daftar.fold<double>(0, (s, r) => s + (r['saldoAkhir'] as double));
+
+    final daftarSantri =
+        semua.where((r) => _cocokFilterKategori(r, 'SANTRI')).toList();
+    final daftarPejuang =
+        semua.where((r) => _cocokFilterKategori(r, 'PEJUANG')).toList();
+    final daftarLainnya =
+        semua.where((r) => _cocokFilterKategori(r, 'LAINNYA')).toList();
+
+    final totalSemua =
+        semua.fold<double>(0, (s, r) => s + (r['saldoAkhir'] as double));
+    final totalSantri =
+        daftarSantri.fold<double>(0, (s, r) => s + (r['saldoAkhir'] as double));
+    final totalPejuang = daftarPejuang.fold<double>(
+        0, (s, r) => s + (r['saldoAkhir'] as double));
+    final totalLainnya = daftarLainnya.fold<double>(
+        0, (s, r) => s + (r['saldoAkhir'] as double));
+
+    final tipeUnik = _daftarTipeUnik;
+
     return Column(children: [
       Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
         child: Wrap(spacing: 8, runSpacing: 8, children: [
           OutlinedButton.icon(
               onPressed: _memuat ? null : _pilihRentang,
@@ -298,11 +516,66 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
               label: Text(
                   '${_fmtTglTampil.format(_dari)} - ${_fmtTglTampil.format(_sampai)}')),
           SizedBox(
-            width: 240,
+            width: 220,
             child: AppSearchField(
-              hintText: 'Cari anggota',
+              hintText: 'Cari anggota / unit',
               debounce: Duration.zero,
               onChanged: (v) => setStateIfMounted(() => _cari = v),
+            ),
+          ),
+          SizedBox(
+            width: 205,
+            child: DropdownButtonFormField<String>(
+              // ignore: deprecated_member_use
+              value: _filterKategori.startsWith('TIPE:') &&
+                      !tipeUnik.contains(_filterKategori.substring(5))
+                  ? 'SEMUA'
+                  : _filterKategori,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Filter Santri / Pejuang',
+                isDense: true,
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                DropdownMenuItem(
+                  value: 'SEMUA',
+                  child: Text('Semua Member (${semua.length})',
+                      overflow: TextOverflow.ellipsis),
+                ),
+                DropdownMenuItem(
+                  value: 'SANTRI',
+                  child: Text('Santri / Siswa (${daftarSantri.length})',
+                      overflow: TextOverflow.ellipsis),
+                ),
+                DropdownMenuItem(
+                  value: 'PEJUANG',
+                  child: Text('Pejuang / Pegawai (${daftarPejuang.length})',
+                      overflow: TextOverflow.ellipsis),
+                ),
+                if (daftarLainnya.isNotEmpty)
+                  DropdownMenuItem(
+                    value: 'LAINNYA',
+                    child: Text('Lainnya (${daftarLainnya.length})',
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                for (final t in tipeUnik)
+                  if (t.toLowerCase() != 'siswa' &&
+                      t.toLowerCase() != 'pegawai')
+                    DropdownMenuItem(
+                      value: 'TIPE:$t',
+                      child: Text('Tipe: $t', overflow: TextOverflow.ellipsis),
+                    ),
+              ],
+              onChanged: _memuat
+                  ? null
+                  : (v) {
+                      if (v != null) {
+                        setStateIfMounted(() => _filterKategori = v);
+                      }
+                    },
             ),
           ),
           OutlinedButton.icon(
@@ -343,6 +616,52 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
               icon: const Icon(Icons.refresh)),
         ]),
       ),
+      if (!_memuat && _galat == null && semua.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _chipFilterKategori(
+                  kode: 'SEMUA',
+                  label: 'Semua Member',
+                  jumlah: semua.length,
+                  totalSaldo: totalSemua,
+                  icon: Icons.groups_outlined,
+                  warna: AppColors.primary,
+                ),
+                _chipFilterKategori(
+                  kode: 'SANTRI',
+                  label: 'Saldo Santri / Siswa',
+                  jumlah: daftarSantri.length,
+                  totalSaldo: totalSantri,
+                  icon: Icons.school_outlined,
+                  warna: Colors.teal.shade700,
+                ),
+                _chipFilterKategori(
+                  kode: 'PEJUANG',
+                  label: 'Saldo Pejuang / Pegawai',
+                  jumlah: daftarPejuang.length,
+                  totalSaldo: totalPejuang,
+                  icon: Icons.badge_outlined,
+                  warna: Colors.indigo.shade700,
+                ),
+                if (daftarLainnya.isNotEmpty)
+                  _chipFilterKategori(
+                    kode: 'LAINNYA',
+                    label: 'Lainnya',
+                    jumlah: daftarLainnya.length,
+                    totalSaldo: totalLainnya,
+                    icon: Icons.person_outline,
+                    warna: Colors.brown.shade700,
+                  ),
+              ],
+            ),
+          ),
+        ),
       if (!_memuat && _galat == null)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -351,7 +670,10 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
             runSpacing: 6,
             alignment: WrapAlignment.spaceBetween,
             children: [
-              Text('${daftar.length} anggota',
+              Text(
+                  _filterKategori == 'SEMUA'
+                      ? '${daftar.length} anggota'
+                      : '${daftar.length} anggota (${_labelFilterAktif(_filterKategori)})',
                   style: const TextStyle(fontWeight: FontWeight.w600)),
               Text(
                 _dataOffline
@@ -364,7 +686,10 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
                         : Colors.green.shade700,
                     fontWeight: FontWeight.w600),
               ),
-              Text('Total saldo akhir: ${_fmtRp.format(totalSaldo)}',
+              Text(
+                  _filterKategori == 'SEMUA'
+                      ? 'Total saldo akhir: ${_fmtRp.format(totalSaldo)}'
+                      : 'Total saldo ${_labelFilterAktif(_filterKategori)}: ${_fmtRp.format(totalSaldo)}',
                   style: TextStyle(
                       fontWeight: FontWeight.w800, color: AppColors.primary)),
             ],
@@ -379,7 +704,7 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  'Daftar ini hanya mencakup anggota yang memiliki mutasi pada rentang tanggal terpilih. Saldo akhir per anggota mengikuti hitungan resmi server, termasuk penyesuaian masa berlaku. Total tabel hanya menjumlahkan anggota yang tampil, bukan otomatis saldo seluruh anggota.',
+                  'Klik kartu "Saldo Santri / Siswa" atau "Saldo Pejuang / Pegawai" di atas untuk menyaring daftar & mengunduh laporan khusus kategori tersebut. Saldo akhir mengikuti hitungan resmi server.',
                   style: TextStyle(
                       fontSize: 11,
                       color: Colors.grey.shade600,
@@ -406,12 +731,13 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
                 : daftar.isEmpty
                     ? const Center(
                         child: Text(
-                            'Belum ada saldo voucher pada rentang tanggal ini.'))
+                            'Belum ada saldo voucher pada filter & rentang tanggal ini.'))
                     : AppDataTable(
-                        minWidth: 920,
+                        minWidth: 960,
                         emptyText: 'Tidak ada data pada rentang ini.',
                         columns: const [
                           AppTableColumn('Anggota', flex: 4),
+                          AppTableColumn('Kategori / Tipe', flex: 2),
                           AppTableColumn('Unit', flex: 2),
                           AppTableColumn('Saldo Awal',
                               flex: 2, align: TextAlign.right),
@@ -429,6 +755,8 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
                                   cells: [
                                     AppTableCell.text('${r['namaAnggota']}',
                                         flex: 4),
+                                    AppTableCell.text(_labelTipeTampil(r),
+                                        flex: 2),
                                     AppTableCell.text(
                                         '${r['unit'] ?? ''}'.trim().isEmpty
                                             ? '-'
