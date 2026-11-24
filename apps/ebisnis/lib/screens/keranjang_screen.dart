@@ -1169,7 +1169,55 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     return cara != null && pembayaranMemerlukanPin([cara]);
   }
 
+  /// Batas nominal belanja otomatis bila kasir memilih Mode Transaksi Santri:
+  /// - `JAJAN_HARIAN` -> Rp 20.000
+  /// - `DELIVERY` -> Rp 100.000
+  /// - `KEBUTUHAN` -> Rp 250.000
+  /// - `PRE_ORDER` -> 0 (Tidak dibatasi)
+  /// - `NORMAL` -> 0 (Mengikuti pengaturan Tipe Member)
+  double get _batasModeTransaksiSantri {
+    switch (_jenisKonsumsi) {
+      case 'JAJAN_HARIAN':
+        return 20000;
+      case 'DELIVERY':
+        return 100000;
+      case 'KEBUTUHAN':
+        return 250000;
+      default:
+        return 0;
+    }
+  }
+
+  String _ringkasanModeTransaksi(String kode) {
+    switch (kode) {
+      case 'JAJAN_HARIAN':
+        return 'Jajan Harian • Maks. Rp 20.000';
+      case 'DELIVERY':
+        return 'Delivery • Maks. Rp 100.000';
+      case 'KEBUTUHAN':
+        return 'Kebutuhan • Maks. Rp 250.000';
+      case 'PRE_ORDER':
+        return 'Pre-Order • Tidak Dibatasi';
+      case 'MANAGER_MEAL':
+        return 'Manager Meal • Maks. Rp 20.000';
+      case 'CREW_MEAL':
+        return 'Crew Meal • Diskon 10%';
+      case 'NORMAL':
+      default:
+        return 'Penjualan Normal';
+    }
+  }
+
+  bool get _modeTransaksiWajibMember =>
+      _jenisKonsumsi == 'JAJAN_HARIAN' ||
+      _jenisKonsumsi == 'DELIVERY' ||
+      _jenisKonsumsi == 'KEBUTUHAN' ||
+      _jenisKonsumsi == 'MANAGER_MEAL' ||
+      _jenisKonsumsi == 'CREW_MEAL';
+
   bool get _memberMemilikiLimitTransaksi {
+    if (_jenisKonsumsi == 'PRE_ORDER') return false;
+    if (_batasModeTransaksiSantri > 0) return true;
     final member = _memberTerpilih;
     return member != null &&
         (member.maksimalTransaksiHarian > 0 ||
@@ -1915,6 +1963,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       'nomor_antrian': _nomorAntrianPercobaan,
       'keterangan': _catatanPesananController.text.trim(),
       'jenis_konsumsi': _jenisKonsumsi,
+      'mode_transaksi': _jenisKonsumsi,
       'jenis_penjualan': widget.jenisPenjualan,
       if (_roomChargeStay != null) ...{
         'hotel_menginap_id': _roomChargeStay!['id'],
@@ -2219,9 +2268,12 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   }
 
   String? _galatIdentitasMemberSaatBayar() {
-    if (!_metodeTerpilihWajibMember && _jenisKonsumsi == 'NORMAL') return null;
+    if (!_metodeTerpilihWajibMember && !_modeTransaksiWajibMember) return null;
     final member = _memberTerpilih;
     if (member == null) {
+      if (_modeTransaksiWajibMember) {
+        return 'Mode "${_ringkasanModeTransaksi(_jenisKonsumsi)}" wajib memilih Member/Santri terlebih dahulu.';
+      }
       return 'Metode "${_namaMetodeWajibMember()}" wajib memilih Member/Pembeli sebelum Bayar.';
     }
     if (member.id <= 0 || member.nama.trim().isEmpty) {
@@ -2392,10 +2444,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       // metode umum yang dipilih sebelum member tersedia.
       if (!_bisaBayar) return;
     }
-    if (_jenisKonsumsi != 'NORMAL' && _memberTerpilih == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+    if (_modeTransaksiWajibMember && _memberTerpilih == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-              'Manager Meal dan Crew Meal wajib memilih member/PIC karyawan.')));
+              'Mode "${_ringkasanModeTransaksi(_jenisKonsumsi)}" wajib memilih Member/Santri terlebih dahulu.')));
       await _pilihMember();
       if (!mounted || _memberTerpilih == null) return;
     }
@@ -2403,6 +2455,14 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text(
               'Manager Meal maksimal Rp20.000. Kurangi item atau gunakan Penjualan Normal.')));
+      return;
+    }
+    final batasModeSantri = _batasModeTransaksiSantri;
+    if (batasModeSantri > 0 && _total > batasModeSantri + 0.5) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          backgroundColor: AppColors.danger,
+          content: Text(
+              'Mode "${_ringkasanModeTransaksi(_jenisKonsumsi)}" terkunci maksimal ${_formatRupiah.format(batasModeSantri)} (total keranjang saat ini ${_formatRupiah.format(_total)}). Kurangi barang atau pilih Mode Transaksi yang sesuai.')));
       return;
     }
     final galatMember = _galatIdentitasMemberSaatBayar();
@@ -3454,26 +3514,74 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
             _promoManualPicker(),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
+              // ignore: deprecated_member_use
               value: _jenisKonsumsi,
+              isExpanded: true,
               decoration: const InputDecoration(
-                labelText: 'Jenis Transaksi',
+                labelText: 'Jenis / Mode Transaksi',
                 border: _radiusInput,
                 isDense: true,
               ),
               items: const [
                 DropdownMenuItem(
-                    value: 'NORMAL', child: Text('Penjualan Normal')),
+                    value: 'NORMAL',
+                    child: Text('Penjualan Normal (Tidak Dibatasi)',
+                        overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(
+                    value: 'JAJAN_HARIAN',
+                    child: Text('Jajan Harian (Kunci Maks. Rp 20.000)',
+                        overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(
+                    value: 'DELIVERY',
+                    child: Text('Delivery (Kunci Maks. Rp 100.000)',
+                        overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(
+                    value: 'KEBUTUHAN',
+                    child: Text('Kebutuhan (Kunci Maks. Rp 250.000)',
+                        overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(
+                    value: 'PRE_ORDER',
+                    child: Text('Pre-Order (Tidak Dibatasi)',
+                        overflow: TextOverflow.ellipsis)),
                 DropdownMenuItem(
                     value: 'MANAGER_MEAL',
-                    child: Text('Manager Meal (maks. Rp20.000)')),
+                    child: Text('Manager Meal (Maks. Rp 20.000)',
+                        overflow: TextOverflow.ellipsis)),
                 DropdownMenuItem(
-                    value: 'CREW_MEAL', child: Text('Crew Meal (diskon 10%)')),
+                    value: 'CREW_MEAL',
+                    child: Text('Crew Meal (Diskon 10%)',
+                        overflow: TextOverflow.ellipsis)),
               ],
               onChanged: _memproses
                   ? null
                   : (nilai) => _pilihJenisKonsumsi(nilai ?? 'NORMAL'),
             ),
-            if (_jenisKonsumsi != 'NORMAL')
+            if (_batasModeTransaksiSantri > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: AppInfoBanner(
+                  icon: _total > _batasModeTransaksiSantri + 0.5
+                      ? Icons.lock_clock_outlined
+                      : Icons.verified_user_outlined,
+                  color: _total > _batasModeTransaksiSantri + 0.5
+                      ? AppColors.danger
+                      : AppColors.primary,
+                  text: _total > _batasModeTransaksiSantri + 0.5
+                      ? 'Mode ${_ringkasanModeTransaksi(_jenisKonsumsi)}: Total keranjang (${_formatRupiah.format(_total)}) melebihi batas maksimal ${_formatRupiah.format(_batasModeTransaksiSantri)}!'
+                      : 'Mode ${_ringkasanModeTransaksi(_jenisKonsumsi)} aktif. Sisa kuota transaksi ini: ${_formatRupiah.format((_batasModeTransaksiSantri - _total).clamp(0, _batasModeTransaksiSantri))}.',
+                ),
+              )
+            else if (_jenisKonsumsi == 'PRE_ORDER')
+              const Padding(
+                padding: EdgeInsets.only(top: 6),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                      'Mode Pre-Order aktif: transaksi ini tidak dibatasi limit harian/mingguan.',
+                      style: TextStyle(fontSize: 11, color: AppColors.success)),
+                ),
+              )
+            else if (_jenisKonsumsi != 'NORMAL')
               const Padding(
                 padding: EdgeInsets.only(top: 6),
                 child: Align(

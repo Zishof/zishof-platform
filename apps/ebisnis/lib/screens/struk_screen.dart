@@ -125,6 +125,28 @@ class StrukScreen extends StatelessWidget {
     this.jenisDokumen,
   });
 
+  /// Mengembalikan label ramah pengguna untuk kode mode/jenis transaksi
+  /// (`JAJAN_HARIAN`, `DELIVERY`, `KEBUTUHAN`, `PRE_ORDER`, `MANAGER_MEAL`, `CREW_MEAL`)
+  /// agar struk cetak, PDF, dan pratinjau menampilkan nama mode yang benar.
+  static String labelModeTransaksi(String? kode) {
+    switch ((kode ?? '').trim().toUpperCase()) {
+      case 'JAJAN_HARIAN':
+        return 'Jajan Harian (Maks. 20.000)';
+      case 'DELIVERY':
+        return 'Delivery (Maks. 100.000)';
+      case 'KEBUTUHAN':
+        return 'Kebutuhan (Maks. 250.000)';
+      case 'PRE_ORDER':
+        return 'Pre-Order';
+      case 'MANAGER_MEAL':
+        return 'Manager Meal';
+      case 'CREW_MEAL':
+        return 'Crew Meal';
+      default:
+        return (kode ?? '').trim();
+    }
+  }
+
   double get _subtotalItem => item.fold<double>(
         0,
         (sum, i) => sum + _subtotalBaris(i),
@@ -719,9 +741,10 @@ class StrukScreen extends StatelessWidget {
     if (statusLabel != null && statusLabel!.trim().isNotEmpty) {
       info('Status', statusLabel!);
     }
-    if (jenisKonsumsi != null && jenisKonsumsi != 'NORMAL') {
-      info('Program',
-          jenisKonsumsi == 'MANAGER_MEAL' ? 'Manager Meal' : 'Crew Meal');
+    if (jenisKonsumsi != null &&
+        jenisKonsumsi!.trim().isNotEmpty &&
+        jenisKonsumsi != 'NORMAL') {
+      info('Mode', labelModeTransaksi(jenisKonsumsi));
     }
     if (catatanPesanan != null && catatanPesanan!.trim().isNotEmpty) {
       info('Catatan', catatanPesanan!.trim());
@@ -1059,9 +1082,10 @@ class StrukScreen extends StatelessWidget {
         _infoPdf('Pelanggan', _labelPelanggan()),
         if (statusLabel != null && statusLabel!.trim().isNotEmpty)
           _infoPdf('Status', statusLabel!.trim()),
-        if (jenisKonsumsi != null && jenisKonsumsi != 'NORMAL')
-          _infoPdf('Program',
-              jenisKonsumsi == 'MANAGER_MEAL' ? 'Manager Meal' : 'Crew Meal'),
+        if (jenisKonsumsi != null &&
+            jenisKonsumsi!.trim().isNotEmpty &&
+            jenisKonsumsi != 'NORMAL')
+          _infoPdf('Mode', labelModeTransaksi(jenisKonsumsi)),
         if (catatanPesanan != null && catatanPesanan!.trim().isNotEmpty)
           _infoPdf('Catatan', catatanPesanan!.trim()),
         _garisPdf(),
@@ -1975,10 +1999,8 @@ class _StrukPreview extends StatelessWidget {
                   jenisKonsumsi!.trim().isNotEmpty &&
                   jenisKonsumsi != 'NORMAL')
                 _InfoStruk(
-                  label: 'Program',
-                  value: jenisKonsumsi == 'MANAGER_MEAL'
-                      ? 'Manager Meal'
-                      : 'Crew Meal',
+                  label: 'Mode',
+                  value: StrukScreen.labelModeTransaksi(jenisKonsumsi),
                 ),
               if (catatanPesanan != null && catatanPesanan!.trim().isNotEmpty)
                 _InfoStruk(label: 'Catatan', value: catatanPesanan!.trim()),
