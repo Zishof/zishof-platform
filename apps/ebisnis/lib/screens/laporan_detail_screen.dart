@@ -85,6 +85,14 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
             '': 'Ringkasan kategori',
             'member': 'Rincian setiap member'
           },
+        'pergerakan_stok_barang' => {
+            '': 'Semua Barang (Bergerak & Tidak Bergerak)',
+            'tidak_bergerak':
+                'Hanya Item Tidak Bergerak (Tidak Ada Mutasi di Periode Ini)',
+            'tidak_terjual':
+                'Hanya Item Tanpa Penjualan / Dead Stock (Stok Akhir > 0)',
+            'bergerak': 'Hanya Item yang Bergerak (Ada Transaksi di Periode Ini)'
+          },
         _ => {},
       };
   int? _satkerId;

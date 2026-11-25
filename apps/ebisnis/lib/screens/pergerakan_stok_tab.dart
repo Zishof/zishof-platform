@@ -614,8 +614,14 @@ class _TabPergerakanStokState extends State<TabPergerakanStok> {
                         DropdownMenuItem(
                             value: '', child: Text('Semua Status Barang')),
                         DropdownMenuItem(
+                            value: 'tidak_bergerak',
+                            child: Text('Item Tidak Bergerak (Tidak Ada Mutasi)')),
+                        DropdownMenuItem(
+                            value: 'tidak_terjual',
+                            child: Text('Item Tanpa Penjualan / Dead Stock (Stok > 0)')),
+                        DropdownMenuItem(
                             value: 'ADA_MUTASI',
-                            child: Text('Ada Mutasi / Loncat')),
+                            child: Text('Ada Mutasi / Bergerak')),
                         DropdownMenuItem(
                             value: 'DINOLKAN_SO',
                             child: Text('Dinolkan saat Opname (SO -> 0)')),
@@ -3280,14 +3286,25 @@ class StokAnalisisCerdasLokal {
         statusAudit = '$statusAudit · Kode Ganda';
       }
 
-      if (statusFilter == 'dinolkan_so' && statusKode != 'DINOLKAN_SO') {
+      final sf = statusFilter.toLowerCase();
+      final tidakBergerak = masuk == 0 &&
+          retur == 0 &&
+          penjualan == 0 &&
+          opMasuk == 0 &&
+          opKeluar == 0;
+      if (sf == 'tidak_bergerak' && !tidakBergerak) continue;
+      if (sf == 'tidak_terjual' && (penjualan > 0 || sisa <= 0)) continue;
+      if ((sf == 'ada_mutasi' || sf == 'loncat') && tidakBergerak) continue;
+      if (sf == 'dinolkan_so' && statusKode != 'DINOLKAN_SO') {
         continue;
       }
-      if (statusFilter == 'stok_minus' && sisa >= 0) continue;
-      if (statusFilter == 'koreksi_opname' && opMasuk == 0 && opKeluar == 0) {
+      if (sf == 'stok_minus' && sisa >= 0) continue;
+      if ((sf == 'koreksi_opname' || sf == 'ada_opname') &&
+          opMasuk == 0 &&
+          opKeluar == 0) {
         continue;
       }
-      if (statusFilter == 'kode_duplikat' && !isDup) continue;
+      if ((sf == 'kode_duplikat' || sf == 'kode_ganda') && !isDup) continue;
 
       totalAwal += awal;
       totalMasuk += masuk;

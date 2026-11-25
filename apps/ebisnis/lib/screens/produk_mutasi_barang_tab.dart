@@ -50,6 +50,7 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
   bool _mengekspor = false;
   String? _error;
   String _keyword = '';
+  String _filterGerak = '';
   DateTime? _waktuCacheMutasiPerTanggal;
   List<Map<String, dynamic>> _data = [];
   Map<String, dynamic> _summary = {};
@@ -75,6 +76,8 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
         'page_size': pageSize ?? _pageSize,
         if (widget.modePerTanggalLengkap) 'per_tanggal': true,
         if (_keyword.trim().isNotEmpty) 'keyword': _keyword.trim(),
+        if (!widget.modePerTanggalLengkap && _filterGerak.isNotEmpty)
+          'filter_gerak': _filterGerak,
       };
 
   /// Kunci salinan harian memuat cakupan pengguna, tenant, toko, tanggal,
@@ -219,7 +222,7 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
       await MasterOffline.daftarCacheDulu(
         'produk_mutasi_ringkasan',
         _payload(),
-        'master:mutasi_barang:${Sesi.instance.idTokoTerpilih ?? "semua"}:${_mutasiTanggal.format(_dari)}_${_mutasiTanggal.format(_sampai)}',
+        'master:mutasi_barang:${Sesi.instance.idTokoTerpilih ?? "semua"}:${_mutasiTanggal.format(_dari)}_${_mutasiTanggal.format(_sampai)}:${_filterGerak.isEmpty ? "semua" : _filterGerak}',
         // Baris ringkasan mutasi tidak ber-'id'; satu-satunya kolom identitas
         // yang dikirim server adalah kode barang (unik per produk). Baris yang
         // kebetulan tanpa kode tetap aman: MasterOffline memperlakukannya
@@ -405,9 +408,29 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
         _summary['nilaiAkhir'] ?? 0,
       ];
 
+  bool _cocokFilterGerak(Map<String, dynamic> r) {
+    if (widget.modePerTanggalLengkap || _filterGerak.isEmpty) return true;
+    final masuk = (r['masuk'] as num?)?.toDouble() ?? 0;
+    final keluar = (r['keluar'] as num?)?.toDouble() ?? 0;
+    final retur = (r['retur'] as num?)?.toDouble() ?? 0;
+    final penyesuaian = (r['penyesuaian'] as num?)?.toDouble() ?? 0;
+    final saldoAkhir = (r['saldoAkhir'] as num?)?.toDouble() ?? 0;
+    final diam = masuk == 0 && keluar == 0 && retur == 0 && penyesuaian == 0;
+    switch (_filterGerak) {
+      case 'tidak_bergerak':
+        return diam;
+      case 'tidak_terjual':
+        return keluar == 0 && saldoAkhir > 0;
+      case 'bergerak':
+        return !diam;
+      default:
+        return true;
+    }
+  }
+
   List<List<dynamic>> _susunBarisEkspor(List<Map<String, dynamic>> semua) {
     if (!widget.modePerTanggalLengkap) {
-      return [...semua.map(_baris), _barisTotal()];
+      return [...semua.where(_cocokFilterGerak).map(_baris), _barisTotal()];
     }
     final hasil = <List<dynamic>>[];
     String? tglAktif;
@@ -849,7 +872,7 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
 
   List<AppTableRowData> _bangunBarisTabel() {
     if (!widget.modePerTanggalLengkap) {
-      return _data.map(_barisDataProduk).toList();
+      return _data.where(_cocokFilterGerak).map(_barisDataProduk).toList();
     }
     final hasil = <AppTableRowData>[];
     String? tglAktif;
@@ -952,6 +975,42 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
               onPressed: () => _pilihTanggal(false),
               icon: const Icon(Icons.event_outlined, size: 17),
               label: Text('Sampai ${_mutasiTanggal.format(_sampai)}')),
+          if (!widget.modePerTanggalLengkap)
+            SizedBox(
+              width: 265,
+              child: DropdownButtonFormField<String>(
+                // ignore: deprecated_member_use
+                value: _filterGerak,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Filter Pergerakan Item',
+                  isDense: true,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                      value: '', child: Text('Semua Item (Bergerak & Diam)')),
+                  DropdownMenuItem(
+                      value: 'tidak_bergerak',
+                      child: Text('Item Tidak Bergerak (Tanpa Mutasi)')),
+                  DropdownMenuItem(
+                      value: 'tidak_terjual',
+                      child: Text('Item Tanpa Penjualan (Stok > 0)')),
+                  DropdownMenuItem(
+                      value: 'bergerak',
+                      child: Text('Hanya Item Bergerak (Ada Transaksi)')),
+                ],
+                onChanged: (val) {
+                  setStateIfMounted(() {
+                    _filterGerak = val ?? '';
+                    _halaman = 1;
+                  });
+                  _muat();
+                },
+              ),
+            ),
           AksiToolbarMenu(
             tooltip: 'Aksi pergerakan produk',
             aksi: [
