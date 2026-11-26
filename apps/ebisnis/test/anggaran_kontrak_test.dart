@@ -19,6 +19,7 @@ void main() {
       'anggaran_item_list',
       'anggaran_item_simpan',
       'anggaran_item_hapus',
+      'anggaran_item_pindah_satker',
       'anggaran_revisi_baru',
       'anggaran_realisasi_list',
       'anggaran_penggunaan_list',

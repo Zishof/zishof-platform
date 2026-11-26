@@ -53,6 +53,7 @@ class _AnggaranScreenState extends State<AnggaranScreen>
   // --- konteks / penyaring
   List<int> _tahunOpsi = [];
   List<Map<String, dynamic>> _satkerOpsi = [];
+  List<Map<String, dynamic>> _semuaSatkerOpsi = [];
   List<Map<String, dynamic>> _sumberDanaOpsi = [];
   List<Map<String, dynamic>> _revisiOpsi = [];
   int? _tahun;
@@ -112,8 +113,9 @@ class _AnggaranScreenState extends State<AnggaranScreen>
 
   Map<String, bool> _bacaHak(Map<String, dynamic> res) {
     final h = res['hak'];
-    if (h is! Map)
+    if (h is! Map) {
       return const {'create': true, 'update': true, 'delete': true};
+    }
     return {
       'create': h['create'] != false,
       'update': h['update'] != false,
@@ -156,6 +158,9 @@ class _AnggaranScreenState extends State<AnggaranScreen>
         _tahunOpsi = tahun;
         _satkerOpsi =
             ((res['satuanKerja'] as List?) ?? []).cast<Map<String, dynamic>>();
+        final semuaSk = ((res['semuaSatuanKerja'] as List?) ?? [])
+            .cast<Map<String, dynamic>>();
+        _semuaSatkerOpsi = semuaSk.isNotEmpty ? semuaSk : _satkerOpsi;
         _sumberDanaOpsi =
             ((res['sumberDana'] as List?) ?? []).cast<Map<String, dynamic>>();
         _akun = ((akun['data'] as List?) ?? []).cast<Map<String, dynamic>>();
@@ -741,6 +746,126 @@ class _AnggaranScreenState extends State<AnggaranScreen>
     );
   }
 
+  /// Dialog pemindahan item anggaran (beserta seluruh sub-item & riwayat realisasinya) ke
+  /// Satuan Kerja lain secara in-place lewat aksi server `anggaran_item_pindah_satker`.
+  Future<void> _formPindahSatker({Map<String, dynamic>? itemAwal}) async {
+    final daftarItem = _pohon(_item);
+    if (daftarItem.isEmpty) {
+      _pesan('Belum ada item anggaran pada penyaring ini.');
+      return;
+    }
+    int? selectedItemId = (itemAwal?['id'] as num?)?.toInt() ??
+        (daftarItem.first['id'] as num?)?.toInt();
+    final kandidatSatker = (_semuaSatkerOpsi.isNotEmpty
+            ? _semuaSatkerOpsi
+            : _satkerOpsi)
+        .where((s) => (s['id'] as num?)?.toInt() != _satkerId)
+        .toList();
+    if (kandidatSatker.isEmpty) {
+      _pesan('Tidak ada Satuan Kerja tujuan lain yang tersedia.');
+      return;
+    }
+    int? satkerTujuanId = (kandidatSatker.first['id'] as num?)?.toInt();
+    final itemAwalObj = daftarItem.firstWhere(
+        (e) => (e['id'] as num?)?.toInt() == selectedItemId,
+        orElse: () => daftarItem.first);
+    final kodeCtrl =
+        TextEditingController(text: '${itemAwalObj['kode'] ?? ''}');
+
+    Future<bool> simpanPindah() async {
+      if ((selectedItemId ?? 0) == 0 || (satkerTujuanId ?? 0) <= 0) {
+        throw Exception(
+            'Item anggaran dan Satuan Kerja tujuan wajib dipilih.');
+      }
+      final ok = await _kirimServer('anggaran_item_pindah_satker', {
+        'id': selectedItemId,
+        'satkerTujuanId': satkerTujuanId,
+        'kode': kodeCtrl.text.trim(),
+      });
+      if (ok) {
+        await _muatKonteks();
+      }
+      return ok;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setDialog) => AlertDialog(
+          title: const Text('Pindahkan ke Satuan Kerja Lain'),
+          content: SizedBox(
+            width: 560,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                DropdownButtonFormField<int>(
+                  value: selectedItemId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                      labelText: 'Item Anggaran *',
+                      border: OutlineInputBorder(),
+                      isDense: true),
+                  items: daftarItem
+                      .map((e) => DropdownMenuItem(
+                            value: (e['id'] as num?)?.toInt(),
+                            child: Text(
+                                '${e['kode'] ?? ''} - ${e['nama'] ?? ''} (${_uang.format((e['hargaTotal'] as num?)?.toDouble() ?? 0)})',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                          ))
+                      .toList(),
+                  onChanged: (v) {
+                    setDialog(() {
+                      selectedItemId = v;
+                      final cocok = daftarItem.firstWhere(
+                          (e) => (e['id'] as num?)?.toInt() == v,
+                          orElse: () => const <String, dynamic>{});
+                      if (cocok.isNotEmpty) {
+                        kodeCtrl.text = '${cocok['kode'] ?? ''}';
+                      }
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int>(
+                  value: satkerTujuanId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                      labelText: 'Satuan Kerja Tujuan *',
+                      border: OutlineInputBorder(),
+                      isDense: true),
+                  items: kandidatSatker
+                      .map((s) => DropdownMenuItem(
+                            value: (s['id'] as num?)?.toInt(),
+                            child: Text(
+                                '${s['kode'] ?? ''} - ${s['nama'] ?? ''}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                          ))
+                      .toList(),
+                  onChanged: (v) => setDialog(() => satkerTujuanId = v),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: kodeCtrl,
+                  decoration: const InputDecoration(
+                      labelText: 'Kode Item pada Satuan Kerja Tujuan',
+                      border: OutlineInputBorder(),
+                      isDense: true),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Sub-item turunan beserta seluruh riwayat realisasi dan dokumen pengadaan akan ikut berpindah secara utuh ke Satuan Kerja Tujuan.',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ]),
+            ),
+          ),
+          actions: [AppCrudDialogActions(onSubmit: simpanPindah)],
+        ),
+      ),
+    );
+  }
+
   Future<void> _buatRevisiBaru() async {
     if (!await _konfirmasi(
         'Buat revisi baru?',
@@ -1115,6 +1240,11 @@ class _AnggaranScreenState extends State<AnggaranScreen>
                   onPressed: _sibuk ? null : () => _formItem(),
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text('Tambah Item')),
+            if (_tab.index == 0 && _boleh('update'))
+              OutlinedButton.icon(
+                  onPressed: _sibuk ? null : () => _formPindahSatker(),
+                  icon: const Icon(Icons.drive_file_move_outlined, size: 18),
+                  label: const Text('Pindahkan Satuan Kerja')),
             if (_tab.index == 0 && _boleh('create'))
               OutlinedButton.icon(
                   onPressed: _sibuk ? null : _buatRevisiBaru,
@@ -1196,6 +1326,14 @@ class _AnggaranScreenState extends State<AnggaranScreen>
                 ? _sibuk
                     ? null
                     : () => _formItem(item: a)
+                : null),
+        AksiBaris(
+            ikon: Icons.drive_file_move_outlined,
+            label: 'Pindahkan ke Satuan Kerja',
+            onTap: _boleh('update')
+                ? _sibuk
+                    ? null
+                    : () => _formPindahSatker(itemAwal: a)
                 : null),
         AksiBaris(
             ikon: Icons.delete_outline,
