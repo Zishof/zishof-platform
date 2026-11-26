@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:core_auth/core_auth.dart';
 import 'package:core_device/core_device.dart';
 import 'package:core_hw/core_hw.dart';
 import 'package:flutter/foundation.dart';
@@ -2305,6 +2306,13 @@ class _FormAkunState extends State<_FormAkun> with JejakGalat {
             'supervisor': _supervisor,
             'password_baru': _password.text,
           });
+          final uidTarget = (widget.akun!['userid'] ?? '').toString().trim();
+          if (uidTarget.isNotEmpty &&
+              uidTarget.toLowerCase() ==
+                  Sesi.instance.userId.trim().toLowerCase()) {
+            await VerifikatorSandiLokal.instance
+                .simpan(uidTarget, _password.text);
+          }
         } else {
           // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster).
           await prosesSimpanMaster(context,
@@ -2389,13 +2397,20 @@ class _FormAkunState extends State<_FormAkun> with JejakGalat {
                   AppFormTextField(
                     label: ubah ? 'Password Baru' : 'Password',
                     helperText: ubah
-                        ? 'Kosongkan jika password tidak diubah.'
+                        ? 'Kosongkan jika password tidak diubah (minimal 6 karakter bila diisi).'
                         : 'Minimal 6 karakter.',
                     controller: _password,
                     obscureText: true,
-                    validator: (v) => (!ubah && (v == null || v.length < 6))
-                        ? 'Minimal 6 karakter'
-                        : null,
+                    validator: (v) {
+                      final teks = v ?? '';
+                      if (!ubah && teks.length < 6) {
+                        return 'Minimal 6 karakter';
+                      }
+                      if (ubah && teks.isNotEmpty && teks.length < 6) {
+                        return 'Minimal 6 karakter';
+                      }
+                      return null;
+                    },
                   ),
                   AppFormTextField(
                     label: 'Keterangan',

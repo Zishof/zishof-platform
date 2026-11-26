@@ -1,3 +1,4 @@
+import 'package:core_auth/core_auth.dart';
 import 'package:flutter/material.dart';
 import '../api_client.dart';
 import '../sesi.dart';
@@ -6,10 +7,11 @@ import '../widgets/app_error_info.dart';
 import '../widgets/safe_state.dart';
 
 /// Akun Saya (self-service ganti password) -- memanggil aksi server
-/// `akun_ganti_password` (KantinHelper.gantiPasswordSendiri) yang SUDAH ADA
-/// di Api_eBisnis tapi belum punya UI Flutter. Hanya berlaku utk akun kasir
-/// (Pedagang) -- server sendiri yang menolak akun admin murni (status "91"),
-/// jadi error server ditampilkan apa adanya, tidak ditebak/disaring di sini.
+/// `akun_ganti_password` (KantinHelper.gantiPasswordSendiri) pada `PosApi`.
+/// Berlaku untuk seluruh akun yang login ke aplikasi POS Desktop maupun
+/// POS Android (Kasir, Supervisor Toko, maupun Admin Toko/Manager), serta
+/// menyegarkan bukti kata sandi lokal ([VerifikatorSandiLokal]) agar pembuka
+/// kunci sesi luring ([LayarKunciScreen]) langsung memakai kata sandi baru.
 class AkunSayaScreen extends StatefulWidget {
   const AkunSayaScreen({super.key});
 
@@ -25,6 +27,7 @@ class _AkunSayaScreenState extends State<AkunSayaScreen> {
   bool _menyimpan = false;
   bool _lihatLama = false;
   bool _lihatBaru = false;
+  bool _lihatKonfirmasi = false;
 
   @override
   void dispose() {
@@ -36,13 +39,24 @@ class _AkunSayaScreenState extends State<AkunSayaScreen> {
 
   Future<void> _simpan() async {
     if (!_formKey.currentState!.validate()) return;
+    final sandiLama = _lamaController.text;
+    final sandiBaru = _baruController.text;
+    final konfirmasi = _konfirmasiController.text;
     setStateIfMounted(() => _menyimpan = true);
     try {
       await ApiClient.instance.aksi('akun_ganti_password', {
-        'password_lama': _lamaController.text,
-        'password_baru': _baruController.text,
-        'konfirmasi_password': _konfirmasiController.text,
+        'password_lama': sandiLama,
+        'password_baru': sandiBaru,
+        'konfirmasi_password': konfirmasi,
       });
+      // Segarkan bukti kata sandi lokal agar LayarKunciScreen (saat luring)
+      // langsung mengenali kata sandi baru yang baru saja disimpan di server.
+      final uidAktif = Sesi.instance.userId.trim().isNotEmpty
+          ? Sesi.instance.userId.trim()
+          : (await VerifikatorSandiLokal.instance.usernameTersimpan() ?? '');
+      if (uidAktif.isNotEmpty) {
+        await VerifikatorSandiLokal.instance.simpan(uidAktif, sandiBaru);
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Password berhasil diganti.')),
@@ -130,7 +144,14 @@ class _AkunSayaScreenState extends State<AkunSayaScreen> {
                       AppFormTextField(
                         label: 'Konfirmasi Password Baru',
                         controller: _konfirmasiController,
-                        obscureText: !_lihatBaru,
+                        obscureText: !_lihatKonfirmasi,
+                        suffixIcon: IconButton(
+                          icon: Icon(_lihatKonfirmasi
+                              ? Icons.visibility_off
+                              : Icons.visibility),
+                          onPressed: () => setStateIfMounted(
+                              () => _lihatKonfirmasi = !_lihatKonfirmasi),
+                        ),
                         validator: (v) => (v != _baruController.text)
                             ? 'Konfirmasi tidak cocok'
                             : null,
