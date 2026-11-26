@@ -657,6 +657,30 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
                         icon: const Icon(Icons.search, size: 17),
                         label: const Text('Cari'),
                       ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: () =>
+                            _unduhExcelRak(hanyaRakTerpilih: true),
+                        icon: const Icon(Icons.download_outlined, size: 17),
+                        label: const Text('Template Excel'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF047857),
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: () async {
+                          Navigator.pop(ctx, false);
+                          await _unggahExcelRak(
+                            hanyaKeRakTerpilih: true,
+                            pindahkanDariRakLain: pindahkanDariRakLain,
+                            jadikanRakUtama: jadikanRakUtama,
+                          );
+                        },
+                        icon: const Icon(Icons.upload_file_outlined, size: 17),
+                        label: const Text('Import lewat Excel'),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -1146,9 +1170,22 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
     }
   }
 
-  Future<void> _unggahExcelRak() async {
+  Future<void> _unggahExcelRak({
+    bool hanyaKeRakTerpilih = false,
+    bool pindahkanDariRakLain = false,
+    bool jadikanRakUtama = true,
+  }) async {
+    final targetRakId =
+        (hanyaKeRakTerpilih && _rakTerpilihId != null && _rakTerpilihId! > 0)
+            ? _rakTerpilihId
+            : null;
+    final labelTarget = targetRakId != null
+        ? 'Rak "${_rakTerpilihKode.isEmpty ? _rakTerpilihNama : '$_rakTerpilihKode — $_rakTerpilihNama'}"'
+        : 'Master Rak Produk';
+
     final picked = await FilePicker.platform.pickFiles(
-      dialogTitle: 'Pilih File Excel Pemetaan Rak Produk (.xlsx)',
+      dialogTitle:
+          'Pilih File Excel Produk untuk Dimasukkan ke $labelTarget (.xlsx)',
       type: FileType.custom,
       allowedExtensions: ['xlsx'],
       withData: true,
@@ -1162,15 +1199,20 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
     try {
       Map<String, dynamic>? res;
       await _jalankanDenganProgress(
-        judul: 'Mengunggah Excel Pemetaan Rak Produk',
+        judul: 'Mengimpor Excel Produk ke $labelTarget',
         tugas: (update) async {
-          update(0.25, 'Mengodekan berkas "${file.name}"...');
+          update(0.25, 'Membaca berkas "${file.name}"...');
           final b64 = base64Encode(bytes);
           update(0.55,
-              'Memproses pemetaan rak & produk di server (stok tetap dijaga lewat Stok Opname)...');
+              'Memproses pemetaan produk ke $labelTarget di server...');
           res = await ApiClient.instance.aksi('rak_upload_excel', {
             if (_tokoIdAktif != null && _tokoIdAktif! > 0)
               'toko_id': _tokoIdAktif,
+            if (targetRakId != null) 'rak_id': targetRakId,
+            'ganti_rak_lama':
+                targetRakId != null ? pindahkanDariRakLain : true,
+            if (targetRakId != null) 'jadikan_rak_utama': jadikanRakUtama,
+            'fileBase64': b64,
             'file_base64': b64,
           });
           update(0.85, 'Memuat ulang daftar rak & produk...');
@@ -1181,7 +1223,7 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-              '${res!['description'] ?? 'Pemetaan produk ke rak berhasil diimpor.'}'),
+              '${res!['description'] ?? 'Pemetaan produk ke rak berhasil diimpor dari Excel.'}'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -1726,6 +1768,18 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
                                     },
                                   ),
                                   AksiBaris(
+                                    ikon: Icons.upload_file_outlined,
+                                    label: 'Import Produk ke Rak Ini lewat Excel',
+                                    onTap: () {
+                                      setStateIfMounted(() {
+                                        _rakTerpilihId = id;
+                                        _rakTerpilihNama = nama;
+                                        _rakTerpilihKode = kode;
+                                      });
+                                      _unggahExcelRak(hanyaKeRakTerpilih: true);
+                                    },
+                                  ),
+                                  AksiBaris(
                                     ikon: Icons.delete_outline,
                                     label: 'Hapus Rak',
                                     merusak: true,
@@ -1758,13 +1812,20 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
       judul: judulRak,
       aksiJudul: Wrap(
         spacing: 8,
+        runSpacing: 6,
         children: [
-          if (_rakTerpilihId != null && _rakTerpilihId! > 0)
+          if (_rakTerpilihId != null && _rakTerpilihId! > 0) ...[
             OutlinedButton.icon(
               onPressed: () => _unduhExcelRak(hanyaRakTerpilih: true),
               icon: const Icon(Icons.download_outlined, size: 16),
-              label: const Text('Excel Rak Ini'),
+              label: const Text('Download Excel Rak Ini'),
             ),
+            FilledButton.tonalIcon(
+              onPressed: () => _unggahExcelRak(hanyaKeRakTerpilih: true),
+              icon: const Icon(Icons.upload_file_outlined, size: 16),
+              label: const Text('Import Excel ke Rak Ini'),
+            ),
+          ],
           FilledButton.tonalIcon(
             onPressed: _bukaStokOpname,
             icon: const Icon(Icons.fact_check_outlined, size: 16),
@@ -1829,6 +1890,13 @@ class _RakProdukScreenState extends State<RakProdukScreen> {
                         icon: const Icon(Icons.playlist_add_check_rounded,
                             size: 18),
                         label: const Text('Ambil Data Banyak'),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: () =>
+                            _unggahExcelRak(hanyaKeRakTerpilih: true),
+                        icon: const Icon(Icons.upload_file_outlined, size: 18),
+                        label: const Text('Import Excel ke Rak Ini'),
                       ),
                     ],
                   ),

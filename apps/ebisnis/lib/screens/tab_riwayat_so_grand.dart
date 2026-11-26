@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
+import '../widgets/aksi_baris_menu.dart';
 import '../widgets/app_components.dart';
 import '../widgets/safe_state.dart';
 import 'proses_stok_opname_dialog.dart';
@@ -114,6 +115,106 @@ class _TabRiwayatSoGrandState extends State<TabRiwayatSoGrand> {
         return AppColors.warning;
       default:
         return Colors.grey.shade600;
+    }
+  }
+
+  /// Membersihkan nilai teks dari artefak boolean PostgreSQL (`"f"`, `"t"`, `"false"`, `"true"`, `"null"`).
+  String _bersihkanTeks(dynamic val) {
+    if (val == null || val is bool) return '';
+    final s = '$val'.trim();
+    if (s.isEmpty) return '';
+    final low = s.toLowerCase();
+    if (low == 'f' ||
+        low == 't' ||
+        low == 'false' ||
+        low == 'true' ||
+        low == 'null' ||
+        s == '-') {
+      return '';
+    }
+    return s;
+  }
+
+  Future<void> _hapusRiwayatRak(Map<String, dynamic> r) async {
+    final rakIdRaw = (r['rakId'] as num?)?.toInt() ?? 0;
+    final rakNama = '${r['rakNama'] ?? 'Rak Belum Ditentukan'}';
+    final dokId = (r['dokumenId'] as num?)?.toInt();
+    final kodeDok = _bersihkanTeks(r['kodeDokumen']);
+    final statusRak = '${r['statusRak'] ?? 'BELUM_ENTRY'}'.toUpperCase();
+    if (statusRak == 'FINISH_DISETUJUI') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Dokumen SO Grand yang sudah Disetujui (Finish) telah terkunci permanen dan tidak dapat dihapus.'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+      return;
+    }
+
+    final konfirmasi = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus / Reset Entry SO Grand?'),
+        content: Text(
+          'Apakah Anda yakin ingin menghapus / mereset riwayat entry SO Grand pada rak "$rakNama"'
+          '${kodeDok.isEmpty ? '' : ' (Dokumen: $kodeDok)'}?\n\n'
+          'Seluruh angka stok fisik draft pada rak ini yang belum disetujui akan dikosongkan kembali.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            icon: const Icon(Icons.delete_outline, size: 18),
+            label: const Text('Hapus / Reset'),
+          ),
+        ],
+      ),
+    );
+    if (konfirmasi != true || !mounted) return;
+
+    try {
+      Map<String, dynamic> res;
+      try {
+        res = await ApiClient.instance.aksi('so_grand_hapus_rak', {
+          if (Sesi.instance.idTokoTerpilih != null)
+            'toko_id': Sesi.instance.idTokoTerpilih,
+          'tanggal_opname': _tanggalTeks,
+          'rak_id': rakIdRaw,
+          if (dokId != null && dokId > 0) 'dokumen_id': dokId,
+        });
+      } catch (_) {
+        if (dokId != null && dokId > 0) {
+          res = await ApiClient.instance.aksi('so_dokumen_hapus', {
+            if (Sesi.instance.idTokoTerpilih != null)
+              'toko_id': Sesi.instance.idTokoTerpilih,
+            'dokumen_id': dokId,
+          });
+        } else {
+          rethrow;
+        }
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              '${res['description'] ?? 'Riwayat entry SO Grand pada "$rakNama" berhasil dihapus/direset.'}'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      await _muatData();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal menghapus riwayat entry SO Grand: $e'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
     }
   }
 
@@ -333,11 +434,31 @@ class _TabRiwayatSoGrandState extends State<TabRiwayatSoGrand> {
               final labelStatus = '${r['labelStatusRak'] ?? statusRak}';
               final warna = _warnaStatusRak(statusRak);
               final dokId = (r['dokumenId'] as num?)?.toInt();
-              final kodeDok = '${r['kodeDokumen'] ?? ''}';
-              final nomorBa = '${r['nomorBeritaAcara'] ?? ''}';
+              final kodeDok = _bersihkanTeks(r['kodeDokumen']);
+              final nomorBa = _bersihkanTeks(r['nomorBeritaAcara']);
               final cetakSel = r['sudahCetakSelisih'] == true;
               final cetakBa = r['sudahCetakBeritaAcara'] == true;
               final terkunci = statusRak.toUpperCase() == 'FINISH_DISETUJUI';
+              String petugasTeks = _bersihkanTeks(r['petugas']);
+              if (petugasTeks.isEmpty) {
+                petugasTeks = _bersihkanTeks(r['penghitung']);
+              }
+              if (petugasTeks.isEmpty) {
+                petugasTeks = _bersihkanTeks(r['dibuatOleh']);
+              }
+              if (petugasTeks.isEmpty) {
+                petugasTeks = _bersihkanTeks(r['disetujuiOleh']);
+              }
+              if (petugasTeks.isEmpty && (sudahEntry > 0 || (dokId != null && dokId > 0))) {
+                petugasTeks = Sesi.instance.userId.trim();
+              }
+              String waktuTeks = _bersihkanTeks(r['waktuUpdateTerakhir']);
+              if (waktuTeks.isEmpty) {
+                waktuTeks = _bersihkanTeks(r['dibuatPada']);
+              }
+              if (waktuTeks.isEmpty && (sudahEntry > 0 || (dokId != null && dokId > 0))) {
+                waktuTeks = DateFormat('dd-MM-yyyy', 'id_ID').format(_tanggalOpname);
+              }
 
               return AppTableRowData(cells: [
                 AppTableCell(
@@ -413,56 +534,164 @@ class _TabRiwayatSoGrandState extends State<TabRiwayatSoGrand> {
                   maxLines: 3,
                   style: const TextStyle(fontSize: 11.5),
                 ),
-                AppTableCell.text(
-                  '${('${r['petugas'] ?? ''}').isEmpty ? '-' : r['petugas']}'
-                  '${('${r['waktuUpdateTerakhir'] ?? ''}').isEmpty ? '' : '\n${r['waktuUpdateTerakhir']}'}',
+                AppTableCell(
                   flex: 2,
-                  maxLines: 2,
-                  style: const TextStyle(fontSize: 11.5),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.person_outline,
+                            size: 14,
+                            color: petugasTeks.isEmpty
+                                ? Colors.grey
+                                : AppColors.primary,
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              petugasTeks.isEmpty ? 'Belum ada petugas' : petugasTeks,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: petugasTeks.isEmpty
+                                    ? FontWeight.normal
+                                    : FontWeight.w600,
+                                color: petugasTeks.isEmpty
+                                    ? AppColors.textSecondaryOf(context)
+                                    : AppColors.textPrimaryOf(context),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (waktuTeks.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.access_time,
+                                size: 13,
+                                color: AppColors.textSecondaryOf(context)),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                waktuTeks,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textSecondaryOf(context),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
                 AppTableCell(
                   flex: 3,
-                  child: Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
+                  child: Row(
                     children: [
-                      if (!terkunci)
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          onPressed: () {
-                            final targetRak = rakIdRaw <= 0 ? -1 : rakIdRaw;
-                            widget.onPilihRakUntukEntry
-                                ?.call(targetRak, rakNama);
-                          },
-                          icon: const Icon(Icons.edit_note, size: 16),
-                          label: Text(
-                              sudahEntry > 0 ? 'Lanjut Entry' : 'Mulai Entry'),
+                      Expanded(
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            if (!terkunci)
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                onPressed: () {
+                                  final targetRak =
+                                      rakIdRaw <= 0 ? -1 : rakIdRaw;
+                                  widget.onPilihRakUntukEntry
+                                      ?.call(targetRak, rakNama);
+                                },
+                                icon: const Icon(Icons.edit_note, size: 16),
+                                label: Text(sudahEntry > 0
+                                    ? 'Lanjut Entry'
+                                    : 'Mulai Entry'),
+                              ),
+                            if (dokId != null && dokId > 0)
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: terkunci
+                                      ? AppColors.info
+                                      : AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                onPressed: () async {
+                                  final berubah =
+                                      await ProsesStokOpnameDialog.buka(
+                                    context,
+                                    dokumenId: dokId,
+                                  );
+                                  if (berubah) await _muatData();
+                                },
+                                icon: Icon(
+                                  terkunci
+                                      ? Icons.description_outlined
+                                      : Icons.fact_check_outlined,
+                                  size: 15,
+                                ),
+                                label: Text(
+                                    terkunci ? 'Berita Acara' : 'Proses SO'),
+                              ),
+                          ],
                         ),
-                      if (dokId != null && dokId > 0)
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                terkunci ? AppColors.info : AppColors.primary,
-                            foregroundColor: Colors.white,
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          onPressed: () async {
-                            final berubah = await ProsesStokOpnameDialog.buka(
-                              context,
-                              dokumenId: dokId,
-                            );
-                            if (berubah) await _muatData();
-                          },
-                          icon: Icon(
-                            terkunci
-                                ? Icons.description_outlined
-                                : Icons.fact_check_outlined,
-                            size: 15,
-                          ),
-                          label: Text(terkunci ? 'Berita Acara' : 'Proses SO'),
-                        ),
+                      ),
+                      AksiBarisMenu(
+                        tooltip: 'Menu Aksi Rak SO Grand',
+                        aksi: [
+                          if (!terkunci)
+                            AksiBaris(
+                              ikon: Icons.edit_note,
+                              label: sudahEntry > 0
+                                  ? 'Lanjut Entry Fisik Rak Ini'
+                                  : 'Mulai Entry Fisik Rak Ini',
+                              onTap: () {
+                                final targetRak =
+                                    rakIdRaw <= 0 ? -1 : rakIdRaw;
+                                widget.onPilihRakUntukEntry
+                                    ?.call(targetRak, rakNama);
+                              },
+                            ),
+                          if (dokId != null && dokId > 0)
+                            AksiBaris(
+                              ikon: terkunci
+                                  ? Icons.description_outlined
+                                  : Icons.fact_check_outlined,
+                              label: terkunci
+                                  ? 'Lihat / Cetak Berita Acara SO'
+                                  : 'Proses SO & Bandingkan Selisih',
+                              onTap: () async {
+                                final berubah =
+                                    await ProsesStokOpnameDialog.buka(
+                                  context,
+                                  dokumenId: dokId,
+                                );
+                                if (berubah) await _muatData();
+                              },
+                            ),
+                          if (!terkunci &&
+                              (sudahEntry > 0 || (dokId != null && dokId > 0)))
+                            AksiBaris(
+                              ikon: Icons.delete_outline,
+                              label: 'Hapus / Reset Entry SO Grand',
+                              merusak: true,
+                              onTap: () => _hapusRiwayatRak(r),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
                 ),

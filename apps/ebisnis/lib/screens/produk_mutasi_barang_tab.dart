@@ -1098,24 +1098,569 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
       cells: [
         AppTableCell(
           width: 115,
-          child: Text(
-            _formatTanggalSingkat(tglIso),
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(4),
+            onTap: () => _tampilkanRincianProdukTanggal(
+              tglIso,
+              st,
+              labelKolom: 'Semua Pergerakan',
+              filterKolom: 'semua',
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Text(
+                _formatTanggalSingkat(tglIso),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                  decoration: TextDecoration.underline,
+                  decorationColor: AppColors.primary.withValues(alpha: 0.35),
+                ),
+              ),
+            ),
           ),
         ),
-        _angkaCell(st['saldoAwal'] ?? 0),
-        _angkaCell(st['nilaiAwal'] ?? 0, rupiah: true),
-        _angkaCell(st['masuk'] ?? 0),
-        _angkaCell(st['nilaiMasuk'] ?? 0, rupiah: true),
-        _angkaCell(st['keluar'] ?? 0),
-        _angkaCell(st['nilaiKeluar'] ?? 0, rupiah: true),
-        _angkaCell(st['retur'] ?? 0),
-        _angkaCell(st['nilaiRetur'] ?? 0, rupiah: true),
-        _angkaCell(st['penyesuaian'] ?? 0),
-        _angkaCell(st['nilaiPenyesuaian'] ?? 0, rupiah: true),
-        _angkaCell(st['saldoAkhir'] ?? 0),
-        _angkaCell(st['nilaiAkhir'] ?? 0, rupiah: true),
+        _angkaCell(
+          st['saldoAwal'] ?? 0,
+          onTap: () => _tampilkanRincianProdukTanggal(
+            tglIso,
+            st,
+            labelKolom: 'Saldo Awal',
+            filterKolom: 'semua',
+          ),
+        ),
+        _angkaCell(
+          st['nilaiAwal'] ?? 0,
+          rupiah: true,
+          onTap: () => _tampilkanRincianProdukTanggal(
+            tglIso,
+            st,
+            labelKolom: 'Nilai Awal',
+            filterKolom: 'semua',
+          ),
+        ),
+        _angkaCell(
+          st['masuk'] ?? 0,
+          onTap: () => _tampilkanRincianProdukTanggal(
+            tglIso,
+            st,
+            labelKolom: 'Barang Masuk',
+            filterKolom: 'masuk',
+          ),
+        ),
+        _angkaCell(
+          st['nilaiMasuk'] ?? 0,
+          rupiah: true,
+          onTap: () => _tampilkanRincianProdukTanggal(
+            tglIso,
+            st,
+            labelKolom: 'Nilai Masuk',
+            filterKolom: 'masuk',
+          ),
+        ),
+        _angkaCell(
+          st['keluar'] ?? 0,
+          onTap: () => _tampilkanRincianProdukTanggal(
+            tglIso,
+            st,
+            labelKolom: 'Barang Keluar',
+            filterKolom: 'keluar',
+          ),
+        ),
+        _angkaCell(
+          st['nilaiKeluar'] ?? 0,
+          rupiah: true,
+          onTap: () => _tampilkanRincianProdukTanggal(
+            tglIso,
+            st,
+            labelKolom: 'Nilai Keluar',
+            filterKolom: 'keluar',
+          ),
+        ),
+        _angkaCell(
+          st['retur'] ?? 0,
+          onTap: () => _tampilkanRincianProdukTanggal(
+            tglIso,
+            st,
+            labelKolom: 'Retur',
+            filterKolom: 'retur',
+          ),
+        ),
+        _angkaCell(
+          st['nilaiRetur'] ?? 0,
+          rupiah: true,
+          onTap: () => _tampilkanRincianProdukTanggal(
+            tglIso,
+            st,
+            labelKolom: 'Nilai Retur',
+            filterKolom: 'retur',
+          ),
+        ),
+        _angkaCell(
+          st['penyesuaian'] ?? 0,
+          onTap: () => _tampilkanRincianProdukTanggal(
+            tglIso,
+            st,
+            labelKolom: 'Koreksi SO (Ajusmen)',
+            filterKolom: 'penyesuaian',
+          ),
+        ),
+        _angkaCell(
+          st['nilaiPenyesuaian'] ?? 0,
+          rupiah: true,
+          onTap: () => _tampilkanRincianProdukTanggal(
+            tglIso,
+            st,
+            labelKolom: 'Nilai Ajusmen',
+            filterKolom: 'penyesuaian',
+          ),
+        ),
+        _angkaCell(
+          st['saldoAkhir'] ?? 0,
+          onTap: () => _tampilkanRincianProdukTanggal(
+            tglIso,
+            st,
+            labelKolom: 'Saldo Akhir',
+            filterKolom: 'semua',
+          ),
+        ),
+        _angkaCell(
+          st['nilaiAkhir'] ?? 0,
+          rupiah: true,
+          onTap: () => _tampilkanRincianProdukTanggal(
+            tglIso,
+            st,
+            labelKolom: 'Nilai Akhir',
+            filterKolom: 'semua',
+          ),
+        ),
       ],
+    );
+  }
+
+  /// Menampilkan dialog rincian daftar produk yang menyusun angka mutasi pada
+  /// satu tanggal (atau rentang periode penuh bila [tglIso] kosong / TOTAL).
+  /// Mendukung filter otomatis pada kolom yang diklik (`masuk`, `keluar`,
+  /// `retur`, `penyesuaian`, atau `semua`) serta tombol langsung untuk
+  /// membuka Kartu Stok / Buku Besar dan Analisis Cerdas per produk.
+  Future<void> _tampilkanRincianProdukTanggal(
+    String tglIso,
+    Map<String, dynamic> st, {
+    required String labelKolom,
+    required String filterKolom,
+  }) async {
+    final apakahTotal = tglIso.isEmpty;
+    final dariStr =
+        apakahTotal ? _mutasiTanggal.format(_dari) : tglIso;
+    final sampaiStr =
+        apakahTotal ? _mutasiTanggal.format(_sampai) : tglIso;
+    final labelTgl = apakahTotal
+        ? '${_mutasiTanggal.format(_dari)} s/d ${_mutasiTanggal.format(_sampai)}'
+        : _formatTanggalSingkat(tglIso);
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        String modeFilter = filterKolom;
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return AlertDialog(
+              title: Row(
+                children: [
+                  Icon(Icons.analytics_outlined, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Asal Angka & Rincian Produk: $labelTgl ($labelKolom)',
+                      style: const TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 980,
+                height: 560,
+                child: FutureBuilder<Map<String, dynamic>>(
+                  future: ApiClient.instance.aksi('produk_mutasi_per_tanggal', {
+                    'dari': dariStr,
+                    'sampai': sampaiStr,
+                    'page': 1,
+                    'page_size': 500,
+                    'keyword': _keyword,
+                    'per_tanggal': true,
+                  }),
+                  builder: (c, snap) {
+                    final daftarDariMemori = _data
+                        .where((x) =>
+                            apakahTotal ||
+                            '${x['tanggal'] ?? ''}'.trim() == tglIso)
+                        .toList();
+                    final semuaBaris = snap.hasData
+                        ? (((snap.data!['data'] as List?) ?? [])
+                            .map((e) => Map<String, dynamic>.from(e as Map))
+                            .toList())
+                        : daftarDariMemori;
+
+                    bool cocokFilter(Map<String, dynamic> r, String f) {
+                      final m = ((r['masuk'] as num?) ?? 0).toDouble();
+                      final k = ((r['keluar'] as num?) ?? 0).toDouble();
+                      final rt = ((r['retur'] as num?) ?? 0).toDouble();
+                      final p = ((r['penyesuaian'] as num?) ?? 0).toDouble();
+                      final np =
+                          ((r['nilaiPenyesuaian'] as num?) ?? 0).toDouble();
+                      switch (f) {
+                        case 'masuk':
+                          return m.abs() > 0.0001;
+                        case 'keluar':
+                          return k.abs() > 0.0001;
+                        case 'retur':
+                          return rt.abs() > 0.0001;
+                        case 'penyesuaian':
+                          return p.abs() > 0.0001 || np.abs() > 0.01;
+                        default:
+                          return m.abs() > 0.0001 ||
+                              k.abs() > 0.0001 ||
+                              rt.abs() > 0.0001 ||
+                              p.abs() > 0.0001 ||
+                              np.abs() > 0.01;
+                      }
+                    }
+
+                    final barisTampil = semuaBaris
+                        .where((r) => cocokFilter(r, modeFilter))
+                        .toList();
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          child: Wrap(
+                            spacing: 18,
+                            runSpacing: 6,
+                            children: [
+                              Text(
+                                'Saldo Awal: ${_mutasiAngka.format((st['saldoAwal'] as num?) ?? 0)} (${_mutasiRp.format((st['nilaiAwal'] as num?) ?? 0)})',
+                                style: const TextStyle(
+                                    fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                              Text(
+                                'Masuk: ${_mutasiAngka.format((st['masuk'] as num?) ?? 0)} (${_mutasiRp.format((st['nilaiMasuk'] as num?) ?? 0)})',
+                                style: const TextStyle(
+                                    fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                              Text(
+                                'Keluar: ${_mutasiAngka.format((st['keluar'] as num?) ?? 0)} (${_mutasiRp.format((st['nilaiKeluar'] as num?) ?? 0)})',
+                                style: const TextStyle(
+                                    fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                              Text(
+                                'Retur: ${_mutasiAngka.format((st['retur'] as num?) ?? 0)} (${_mutasiRp.format((st['nilaiRetur'] as num?) ?? 0)})',
+                                style: const TextStyle(
+                                    fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                              Text(
+                                'Koreksi SO (Ajusmen): ${_mutasiAngka.format((st['penyesuaian'] as num?) ?? 0)} (${_mutasiRp.format((st['nilaiPenyesuaian'] as num?) ?? 0)})',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                              Text(
+                                'Saldo Akhir: ${_mutasiAngka.format((st['saldoAkhir'] as num?) ?? 0)} (${_mutasiRp.format((st['nilaiAkhir'] as num?) ?? 0)})',
+                                style: const TextStyle(
+                                    fontSize: 12, fontWeight: FontWeight.w700),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            const Text(
+                              'Filter Transaksi Penyusun:',
+                              style: TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.w700),
+                            ),
+                            ChoiceChip(
+                              label: const Text('Semua Pergerakan'),
+                              selected: modeFilter == 'semua',
+                              onSelected: (_) =>
+                                  setModalState(() => modeFilter = 'semua'),
+                            ),
+                            ChoiceChip(
+                              label: const Text('Koreksi SO (Ajusmen)'),
+                              selected: modeFilter == 'penyesuaian',
+                              onSelected: (_) => setModalState(
+                                  () => modeFilter = 'penyesuaian'),
+                            ),
+                            ChoiceChip(
+                              label: const Text('Barang Masuk'),
+                              selected: modeFilter == 'masuk',
+                              onSelected: (_) =>
+                                  setModalState(() => modeFilter = 'masuk'),
+                            ),
+                            ChoiceChip(
+                              label: const Text('Barang Keluar'),
+                              selected: modeFilter == 'keluar',
+                              onSelected: (_) =>
+                                  setModalState(() => modeFilter = 'keluar'),
+                            ),
+                            ChoiceChip(
+                              label: const Text('Retur'),
+                              selected: modeFilter == 'retur',
+                              onSelected: (_) =>
+                                  setModalState(() => modeFilter = 'retur'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: snap.connectionState ==
+                                      ConnectionState.waiting &&
+                                  semuaBaris.isEmpty
+                              ? const Center(child: CircularProgressIndicator())
+                              : barisTampil.isEmpty
+                                  ? Center(
+                                      child: Text(
+                                        'Tidak ada produk pada kategori "$modeFilter" di tanggal $labelTgl.\nSilakan klik tab "Semua Pergerakan" di atas untuk melihat seluruh item yang bergerak pada tanggal ini.',
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(fontSize: 12.5),
+                                      ),
+                                    )
+                                  : SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child: SingleChildScrollView(
+                                        child: DataTable(
+                                          columnSpacing: 16,
+                                          headingRowHeight: 38,
+                                          dataRowMinHeight: 36,
+                                          dataRowMaxHeight: 44,
+                                          columns: const [
+                                            DataColumn(
+                                                label: Text('Tanggal',
+                                                    style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 12))),
+                                            DataColumn(
+                                                label: Text('Kode',
+                                                    style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 12))),
+                                            DataColumn(
+                                                label: Text('Nama Barang',
+                                                    style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 12))),
+                                            DataColumn(
+                                                numeric: true,
+                                                label: Text('Masuk',
+                                                    style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 12))),
+                                            DataColumn(
+                                                numeric: true,
+                                                label: Text('Keluar',
+                                                    style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 12))),
+                                            DataColumn(
+                                                numeric: true,
+                                                label: Text('Retur',
+                                                    style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 12))),
+                                            DataColumn(
+                                                numeric: true,
+                                                label: Text('Koreksi SO',
+                                                    style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 12))),
+                                            DataColumn(
+                                                numeric: true,
+                                                label: Text('Nilai Ajusmen',
+                                                    style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 12))),
+                                            DataColumn(
+                                                label: Text('Aksi Detail',
+                                                    style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 12))),
+                                          ],
+                                          rows: [
+                                            for (final r in barisTampil)
+                                              DataRow(
+                                                cells: [
+                                                  DataCell(Text(
+                                                      '${r['tanggal'] ?? tglIso}',
+                                                      style: const TextStyle(
+                                                          fontSize: 12))),
+                                                  DataCell(Text(
+                                                      '${r['kode'] ?? '-'}',
+                                                      style: const TextStyle(
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.w600))),
+                                                  DataCell(
+                                                    InkWell(
+                                                      onTap: () =>
+                                                          _bukaRincian(r),
+                                                      child: Text(
+                                                        '${r['nama'] ?? '-'}',
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                          color:
+                                                              AppColors.primary,
+                                                          decoration:
+                                                              TextDecoration
+                                                                  .underline,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  DataCell(Text(
+                                                      _mutasiAngka.format(
+                                                          (r['masuk'] as num?) ??
+                                                              0),
+                                                      style: const TextStyle(
+                                                          fontSize: 12))),
+                                                  DataCell(Text(
+                                                      _mutasiAngka.format(
+                                                          (r['keluar']
+                                                                  as num?) ??
+                                                              0),
+                                                      style: const TextStyle(
+                                                          fontSize: 12))),
+                                                  DataCell(Text(
+                                                      _mutasiAngka.format(
+                                                          (r['retur'] as num?) ??
+                                                              0),
+                                                      style: const TextStyle(
+                                                          fontSize: 12))),
+                                                  DataCell(Text(
+                                                      _mutasiAngka.format(
+                                                          (r['penyesuaian']
+                                                                  as num?) ??
+                                                              0),
+                                                      style: TextStyle(
+                                                          fontSize: 12,
+                                                          fontWeight: FontWeight
+                                                              .w700,
+                                                          color: (((r['penyesuaian']
+                                                                              as num?) ??
+                                                                          0) !=
+                                                                      0)
+                                                              ? AppColors
+                                                                  .primary
+                                                              : null))),
+                                                  DataCell(Text(
+                                                      _mutasiRp.format((r[
+                                                                  'nilaiPenyesuaian']
+                                                              as num?) ??
+                                                          0),
+                                                      style: TextStyle(
+                                                          fontSize: 12,
+                                                          fontWeight: FontWeight
+                                                              .w700,
+                                                          color: (((r['nilaiPenyesuaian']
+                                                                              as num?) ??
+                                                                          0) !=
+                                                                      0)
+                                                              ? AppColors
+                                                                  .primary
+                                                              : null))),
+                                                  DataCell(
+                                                    Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        TextButton.icon(
+                                                          onPressed: () =>
+                                                              _bukaRincian(r),
+                                                          icon: const Icon(
+                                                              Icons
+                                                                  .receipt_long_outlined,
+                                                              size: 15),
+                                                          label: const Text(
+                                                              'Kartu Stok',
+                                                              style: TextStyle(
+                                                                  fontSize:
+                                                                      11.5)),
+                                                        ),
+                                                        TextButton.icon(
+                                                          onPressed: () =>
+                                                              _bukaAnalisisCerdasProduk(
+                                                                  r),
+                                                          icon: const Icon(
+                                                              Icons
+                                                                  .auto_awesome_outlined,
+                                                              size: 15),
+                                                          label: const Text(
+                                                              'Kronologi',
+                                                              style: TextStyle(
+                                                                  fontSize:
+                                                                      11.5)),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            'Menampilkan ${barisTampil.length} produk penyusun (klik Nama Barang, "Kartu Stok", atau "Kronologi" untuk melihat bukti transaksi / penyesuaian SO).',
+                            style: const TextStyle(
+                                fontSize: 11.5, fontStyle: FontStyle.italic),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Tutup'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1160,25 +1705,140 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
         ? AppTableRowData(
             backgroundColor: AppColors.primary.withValues(alpha: 0.10),
             cells: [
-              const AppTableCell(
+              AppTableCell(
                 width: 115,
-                child: Text(
-                  'TOTAL / RESUME',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11.5),
+                child: InkWell(
+                  onTap: () => _tampilkanRincianProdukTanggal(
+                    '',
+                    _summary,
+                    labelKolom: 'TOTAL / RESUME',
+                    filterKolom: 'semua',
+                  ),
+                  child: Text(
+                    'TOTAL / RESUME',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11.5,
+                      color: AppColors.primary,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
                 ),
               ),
-              _angkaCell(_summary['saldoAwal'] ?? 0),
-              _angkaCell(_summary['nilaiAwal'] ?? 0, rupiah: true),
-              _angkaCell(_summary['masuk'] ?? 0),
-              _angkaCell(_summary['nilaiMasuk'] ?? 0, rupiah: true),
-              _angkaCell(_summary['keluar'] ?? 0),
-              _angkaCell(_summary['nilaiKeluar'] ?? 0, rupiah: true),
-              _angkaCell(_summary['retur'] ?? 0),
-              _angkaCell(_summary['nilaiRetur'] ?? 0, rupiah: true),
-              _angkaCell(_summary['penyesuaian'] ?? 0),
-              _angkaCell(_summary['nilaiPenyesuaian'] ?? 0, rupiah: true),
-              _angkaCell(_summary['saldoAkhir'] ?? 0),
-              _angkaCell(_summary['nilaiAkhir'] ?? 0, rupiah: true),
+              _angkaCell(
+                _summary['saldoAwal'] ?? 0,
+                onTap: () => _tampilkanRincianProdukTanggal(
+                  '',
+                  _summary,
+                  labelKolom: 'Saldo Awal',
+                  filterKolom: 'semua',
+                ),
+              ),
+              _angkaCell(
+                _summary['nilaiAwal'] ?? 0,
+                rupiah: true,
+                onTap: () => _tampilkanRincianProdukTanggal(
+                  '',
+                  _summary,
+                  labelKolom: 'Nilai Awal',
+                  filterKolom: 'semua',
+                ),
+              ),
+              _angkaCell(
+                _summary['masuk'] ?? 0,
+                onTap: () => _tampilkanRincianProdukTanggal(
+                  '',
+                  _summary,
+                  labelKolom: 'Barang Masuk',
+                  filterKolom: 'masuk',
+                ),
+              ),
+              _angkaCell(
+                _summary['nilaiMasuk'] ?? 0,
+                rupiah: true,
+                onTap: () => _tampilkanRincianProdukTanggal(
+                  '',
+                  _summary,
+                  labelKolom: 'Nilai Masuk',
+                  filterKolom: 'masuk',
+                ),
+              ),
+              _angkaCell(
+                _summary['keluar'] ?? 0,
+                onTap: () => _tampilkanRincianProdukTanggal(
+                  '',
+                  _summary,
+                  labelKolom: 'Barang Keluar',
+                  filterKolom: 'keluar',
+                ),
+              ),
+              _angkaCell(
+                _summary['nilaiKeluar'] ?? 0,
+                rupiah: true,
+                onTap: () => _tampilkanRincianProdukTanggal(
+                  '',
+                  _summary,
+                  labelKolom: 'Nilai Keluar',
+                  filterKolom: 'keluar',
+                ),
+              ),
+              _angkaCell(
+                _summary['retur'] ?? 0,
+                onTap: () => _tampilkanRincianProdukTanggal(
+                  '',
+                  _summary,
+                  labelKolom: 'Retur',
+                  filterKolom: 'retur',
+                ),
+              ),
+              _angkaCell(
+                _summary['nilaiRetur'] ?? 0,
+                rupiah: true,
+                onTap: () => _tampilkanRincianProdukTanggal(
+                  '',
+                  _summary,
+                  labelKolom: 'Nilai Retur',
+                  filterKolom: 'retur',
+                ),
+              ),
+              _angkaCell(
+                _summary['penyesuaian'] ?? 0,
+                onTap: () => _tampilkanRincianProdukTanggal(
+                  '',
+                  _summary,
+                  labelKolom: 'Koreksi SO (Ajusmen)',
+                  filterKolom: 'penyesuaian',
+                ),
+              ),
+              _angkaCell(
+                _summary['nilaiPenyesuaian'] ?? 0,
+                rupiah: true,
+                onTap: () => _tampilkanRincianProdukTanggal(
+                  '',
+                  _summary,
+                  labelKolom: 'Nilai Ajusmen',
+                  filterKolom: 'penyesuaian',
+                ),
+              ),
+              _angkaCell(
+                _summary['saldoAkhir'] ?? 0,
+                onTap: () => _tampilkanRincianProdukTanggal(
+                  '',
+                  _summary,
+                  labelKolom: 'Saldo Akhir',
+                  filterKolom: 'semua',
+                ),
+              ),
+              _angkaCell(
+                _summary['nilaiAkhir'] ?? 0,
+                rupiah: true,
+                onTap: () => _tampilkanRincianProdukTanggal(
+                  '',
+                  _summary,
+                  labelKolom: 'Nilai Akhir',
+                  filterKolom: 'semua',
+                ),
+              ),
             ],
           )
         : AppTableRowData(

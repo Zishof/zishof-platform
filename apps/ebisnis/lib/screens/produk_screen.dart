@@ -3261,6 +3261,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   int? _satuanPackId;
   late final TextEditingController _hargaPack;
   bool _menyimpan = false;
+  bool _ubahStokManual = false;
 
   /// Persetujuan sekali-pakai untuk gerbang harga modal >10x harga jual.
   ///
@@ -3396,8 +3397,13 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
     super.dispose();
   }
 
-  double _angka(String s) =>
-      double.tryParse(s.replaceAll(RegExp('[^0-9.]'), '')) ?? 0;
+  double _angka(String s) {
+    final bersih = s.trim().replaceAll(',', '.');
+    final negatif = bersih.startsWith('-');
+    final angkaSaja = bersih.replaceAll(RegExp('[^0-9.]'), '');
+    final nilai = double.tryParse(angkaSaja) ?? 0;
+    return negatif ? -nilai : nilai;
+  }
 
   double get _totalHpp => _bahanBaku.fold(
       0, (s, b) => s + _angka(b.qty.text) * _angka(b.harga.text));
@@ -4108,8 +4114,13 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'harga_beli':
               _bahanBaku.isNotEmpty ? _totalHpp : _angka(_hargaBeli.text),
           'harga_jual': _angka(_hargaJual.text),
-          if (!ubah || _angka(_stok.text) != widget.produk!.stok)
+          if (!ubah ||
+              (_ubahStokManual && _angka(_stok.text) != widget.produk!.stok))
             'stok': _angka(_stok.text),
+          if (ubah &&
+              _ubahStokManual &&
+              _angka(_stok.text) != widget.produk!.stok)
+            'ubah_stok_manual': true,
           'keterangan': _keterangan.text.trim(),
           'pemasok_nama': _pemasok.text.trim(),
           'satuan_id': _satuanId,
@@ -4165,7 +4176,9 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'hargaBeli':
               _bahanBaku.isNotEmpty ? _totalHpp : _angka(_hargaBeli.text),
           'hargaJual': _angka(_hargaJual.text),
-          'stok': _angka(_stok.text),
+          'stok': (!ubah || _ubahStokManual)
+              ? _angka(_stok.text)
+              : widget.produk!.stok,
           'keterangan': _keterangan.text.trim(),
           'satuanId': _satuanId,
           'satuanNama': _namaUom(_satuanId),
@@ -4232,7 +4245,9 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                   })
               .toList(),
           'hargaJual': _angka(_hargaJual.text),
-          'stok': _angka(_stok.text),
+          'stok': (!ubah || _ubahStokManual)
+              ? _angka(_stok.text)
+              : widget.produk!.stok,
           'kategoriId': _kategoriId,
           'kategoriNama': widget.produk?.kategoriNama ?? '',
           'rakUtamaId': _rakUtamaId,
@@ -4768,10 +4783,37 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                       ),
                     ],
                   ),
+                  if (ubah)
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: const Text(
+                        'Sesuaikan Stok Fisik Manual dari Form Ini',
+                        style: TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: const Text(
+                        'Secara bawaan kolom Stok dikunci saat mengubah Harga/Kategori/Satuan agar tidak tercipta jurnal Penyesuaian Stok (Opname) tanpa sengaja. Aktifkan hanya bila ingin mengoreksi stok fisik produk ini.',
+                        style: TextStyle(fontSize: 11.5),
+                      ),
+                      value: _ubahStokManual,
+                      onChanged: (v) => setStateIfMounted(() {
+                        _ubahStokManual = v;
+                        if (!v && widget.produk != null) {
+                          _stok.text = widget.produk!.stok.toString();
+                        }
+                      }),
+                    ),
                   AppFormTextField(
-                    label: 'Stok',
+                    label: ubah
+                        ? (_ubahStokManual
+                            ? 'Stok Fisik Baru (Akan Dicatat sebagai Penyesuaian Stok)'
+                            : 'Stok Saat Ini (Terkunci — Ubah lewat Stok Opname / Pengadaan)')
+                        : 'Stok Awal',
                     controller: _stok,
-                    keyboardType: TextInputType.number,
+                    enabled: !ubah || _ubahStokManual,
+                    keyboardType: const TextInputType.numberWithOptions(
+                        signed: true, decimal: true),
                   ),
                   AppFormTextField(
                     label: 'Keterangan',

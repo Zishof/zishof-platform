@@ -21,6 +21,7 @@ import '../widgets/jejak_galat.dart';
 import '../widgets/dialog_analisis_data.dart';
 import '../services/simpan_berkas_helper.dart';
 import 'pengadaan_cetak_util.dart';
+import 'pergerakan_stok_tab.dart';
 
 /// Jalankan+tampilkan SATU laporan dari katalog (spec §Laporan-Laporan) --
 /// form filter dibangun murni dari metadata katalog (`produk`/`pelanggan`/
@@ -1192,6 +1193,11 @@ class _TabelLaporanState extends State<_TabelLaporan> {
     if (idRincian == null) {
       if (!context.mounted) return;
 
+      if (widget.idLaporan == 'posisi_mutasi_per_tanggal') {
+        await _bukaRincianPosisiMutasiTanggal(context, kolom, baris, kolomKe, judul);
+        return;
+      }
+
       // Bila kolom yang diklik adalah Penyesuaian / Stok Opname atau laporan mutasi item/gudang,
       // jangan paksa memanggil transaksi penjualan kasir karena penyesuaian berasal dari
       // stok fisik opname, bukan nota kasir.
@@ -1443,6 +1449,429 @@ class _TabelLaporanState extends State<_TabelLaporan> {
               onPressed: () => Navigator.pop(c), child: const Text('Tutup'))
         ],
       ),
+    );
+  }
+
+  /// Konversi label tanggal seperti `24-Nov-2026` atau `2026-11-24` menjadi `yyyy-MM-dd`.
+  String _konversiKeIsoTanggal(String raw) {
+    final s = raw.trim();
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(s)) return s;
+    final m = RegExp(r'^(\d{1,2})-([A-Za-z]{3})-(\d{4})$').firstMatch(s);
+    if (m != null) {
+      final dd = m.group(1)!.padLeft(2, '0');
+      final monStr = m.group(2)!.toLowerCase();
+      final yyyy = m.group(3)!;
+      const bulanMap = {
+        'jan': '01',
+        'feb': '02',
+        'mar': '03',
+        'apr': '04',
+        'may': '05',
+        'mei': '05',
+        'jun': '06',
+        'jul': '07',
+        'aug': '08',
+        'agu': '08',
+        'sep': '09',
+        'oct': '10',
+        'okt': '10',
+        'nov': '11',
+        'nop': '11',
+        'dec': '12',
+        'des': '12',
+      };
+      final mm = bulanMap[monStr] ?? '01';
+      return '$yyyy-$mm-$dd';
+    }
+    return '';
+  }
+
+  /// Menampilkan rincian produk yang menyusun angka pada Laporan Posisi Mutasi per Tanggal
+  /// (baik saat mengklik Masuk, Keluar, Retur, maupun Koreksi SO / Nilai Ajusmen).
+  Future<void> _bukaRincianPosisiMutasiTanggal(
+    BuildContext context,
+    List<Map<String, dynamic>> kolom,
+    List<dynamic> baris,
+    int kolomKe,
+    String judul,
+  ) async {
+    final tglIso = _konversiKeIsoTanggal(judul);
+    final apakahTotal = tglIso.isEmpty;
+    final dariStr = apakahTotal
+        ? '${widget.payloadFilter['tglMulai'] ?? ''}'
+        : tglIso;
+    final sampaiStr = apakahTotal
+        ? '${widget.payloadFilter['tglSampai'] ?? ''}'
+        : tglIso;
+    final labelKolom =
+        (kolom.length > kolomKe ? '${kolom[kolomKe]['l'] ?? ''}' : '')
+            .toLowerCase();
+    String filterAwal = 'semua';
+    if (labelKolom.contains('ajusmen') ||
+        labelKolom.contains('koreksi') ||
+        labelKolom.contains('opname')) {
+      filterAwal = 'penyesuaian';
+    } else if (labelKolom.contains('masuk')) {
+      filterAwal = 'masuk';
+    } else if (labelKolom.contains('keluar')) {
+      filterAwal = 'keluar';
+    } else if (labelKolom.contains('retur')) {
+      filterAwal = 'retur';
+    }
+
+    final fmtAngka = NumberFormat('#,##0.##', 'id_ID');
+    final fmtRp =
+        NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        String modeFilter = filterAwal;
+        return StatefulBuilder(
+          builder: (c, setModalState) {
+            return AlertDialog(
+              title: Text('Asal Angka: $judul'),
+              content: SizedBox(
+                width: 960,
+                height: 560,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Wrap(
+                        spacing: 16,
+                        runSpacing: 6,
+                        children: [
+                          for (var i = 0; i < kolom.length; i++)
+                            if (i < baris.length)
+                              Text(
+                                '${kolom[i]['l'] ?? ''}: ${_fmtSel(baris[i], '${kolom[i]['t'] ?? 'text'}', '${kolom[i]['l'] ?? ''}')}',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: i == kolomKe
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                  color:
+                                      i == kolomKe ? AppColors.primary : null,
+                                ),
+                              ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        const Text(
+                          'Rincian Produk Penyusun:',
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w700),
+                        ),
+                        ChoiceChip(
+                          label: const Text('Semua Pergerakan'),
+                          selected: modeFilter == 'semua',
+                          onSelected: (_) =>
+                              setModalState(() => modeFilter = 'semua'),
+                        ),
+                        ChoiceChip(
+                          label: const Text('Koreksi SO (Ajusmen)'),
+                          selected: modeFilter == 'penyesuaian',
+                          onSelected: (_) =>
+                              setModalState(() => modeFilter = 'penyesuaian'),
+                        ),
+                        ChoiceChip(
+                          label: const Text('Barang Masuk'),
+                          selected: modeFilter == 'masuk',
+                          onSelected: (_) =>
+                              setModalState(() => modeFilter = 'masuk'),
+                        ),
+                        ChoiceChip(
+                          label: const Text('Barang Keluar'),
+                          selected: modeFilter == 'keluar',
+                          onSelected: (_) =>
+                              setModalState(() => modeFilter = 'keluar'),
+                        ),
+                        ChoiceChip(
+                          label: const Text('Retur'),
+                          selected: modeFilter == 'retur',
+                          onSelected: (_) =>
+                              setModalState(() => modeFilter = 'retur'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: FutureBuilder<Map<String, dynamic>>(
+                        future: ApiClient.instance
+                            .aksi('produk_mutasi_per_tanggal', {
+                          'dari': dariStr,
+                          'sampai': sampaiStr,
+                          'page': 1,
+                          'page_size': 500,
+                          'keyword':
+                              '${widget.payloadFilter['qProduk'] ?? ''}',
+                          'per_tanggal': true,
+                        }),
+                        builder: (context, snap) {
+                          if (snap.connectionState == ConnectionState.waiting) {
+                            return const Center(
+                                child: CircularProgressIndicator());
+                          }
+                          final semua = (((snap.data?['data']) as List?) ?? [])
+                              .map((e) => Map<String, dynamic>.from(e as Map))
+                              .toList();
+                          bool cocok(Map<String, dynamic> r, String f) {
+                            final m = ((r['masuk'] as num?) ?? 0).toDouble();
+                            final k = ((r['keluar'] as num?) ?? 0).toDouble();
+                            final rt = ((r['retur'] as num?) ?? 0).toDouble();
+                            final p =
+                                ((r['penyesuaian'] as num?) ?? 0).toDouble();
+                            final np = ((r['nilaiPenyesuaian'] as num?) ?? 0)
+                                .toDouble();
+                            switch (f) {
+                              case 'masuk':
+                                return m.abs() > 0.0001;
+                              case 'keluar':
+                                return k.abs() > 0.0001;
+                              case 'retur':
+                                return rt.abs() > 0.0001;
+                              case 'penyesuaian':
+                                return p.abs() > 0.0001 || np.abs() > 0.01;
+                              default:
+                                return m.abs() > 0.0001 ||
+                                    k.abs() > 0.0001 ||
+                                    rt.abs() > 0.0001 ||
+                                    p.abs() > 0.0001 ||
+                                    np.abs() > 0.01;
+                            }
+                          }
+
+                          final tampil =
+                              semua.where((r) => cocok(r, modeFilter)).toList();
+                          if (tampil.isEmpty) {
+                            return Center(
+                              child: Text(
+                                'Tidak ada produk pada filter "$modeFilter" untuk tanggal $judul.\nSilakan pilih "Semua Pergerakan" di atas.',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            );
+                          }
+                          final dtDari =
+                              DateTime.tryParse(dariStr) ?? DateTime.now();
+                          final dtSampai =
+                              DateTime.tryParse(sampaiStr) ?? dtDari;
+                          return SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: SingleChildScrollView(
+                              child: DataTable(
+                                columnSpacing: 16,
+                                headingRowHeight: 36,
+                                dataRowMinHeight: 34,
+                                dataRowMaxHeight: 42,
+                                columns: const [
+                                  DataColumn(
+                                      label: Text('Tanggal',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12))),
+                                  DataColumn(
+                                      label: Text('Kode',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12))),
+                                  DataColumn(
+                                      label: Text('Nama Barang',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12))),
+                                  DataColumn(
+                                      numeric: true,
+                                      label: Text('Masuk',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12))),
+                                  DataColumn(
+                                      numeric: true,
+                                      label: Text('Keluar',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12))),
+                                  DataColumn(
+                                      numeric: true,
+                                      label: Text('Retur',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12))),
+                                  DataColumn(
+                                      numeric: true,
+                                      label: Text('Koreksi SO',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12))),
+                                  DataColumn(
+                                      numeric: true,
+                                      label: Text('Nilai Ajusmen',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12))),
+                                  DataColumn(
+                                      label: Text('Aksi Detail',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12))),
+                                ],
+                                rows: [
+                                  for (final r in tampil)
+                                    DataRow(
+                                      cells: [
+                                        DataCell(Text(
+                                            '${r['tanggal'] ?? tglIso}',
+                                            style:
+                                                const TextStyle(fontSize: 12))),
+                                        DataCell(Text('${r['kode'] ?? '-'}',
+                                            style: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600))),
+                                        DataCell(Text('${r['nama'] ?? '-'}',
+                                            style: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700))),
+                                        DataCell(Text(
+                                            fmtAngka.format(
+                                                (r['masuk'] as num?) ?? 0),
+                                            style:
+                                                const TextStyle(fontSize: 12))),
+                                        DataCell(Text(
+                                            fmtAngka.format(
+                                                (r['keluar'] as num?) ?? 0),
+                                            style:
+                                                const TextStyle(fontSize: 12))),
+                                        DataCell(Text(
+                                            fmtAngka.format(
+                                                (r['retur'] as num?) ?? 0),
+                                            style:
+                                                const TextStyle(fontSize: 12))),
+                                        DataCell(Text(
+                                            fmtAngka.format(
+                                                (r['penyesuaian'] as num?) ??
+                                                    0),
+                                            style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                                color: (((r['penyesuaian']
+                                                                    as num?) ??
+                                                                0) !=
+                                                            0)
+                                                    ? AppColors.primary
+                                                    : null))),
+                                        DataCell(Text(
+                                            fmtRp.format((r['nilaiPenyesuaian']
+                                                    as num?) ??
+                                                0),
+                                            style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                                color: (((r['nilaiPenyesuaian']
+                                                                    as num?) ??
+                                                                0) !=
+                                                            0)
+                                                    ? AppColors.primary
+                                                    : null))),
+                                        DataCell(
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              TextButton.icon(
+                                                onPressed: () {
+                                                  final id =
+                                                      (r['id'] as num?)?.toInt();
+                                                  if (id == null || id <= 0) {
+                                                    return;
+                                                  }
+                                                  showDialog<void>(
+                                                    context: context,
+                                                    builder: (_) =>
+                                                        DialogDetailPergerakanStok(
+                                                      idProduk: id,
+                                                      namaProduk:
+                                                          '${r['nama'] ?? '-'}',
+                                                      kodeProduk:
+                                                          '${r['kode'] ?? ''}',
+                                                      kategori:
+                                                          '${r['kategori'] ?? '-'}',
+                                                      tglMulai: dtDari,
+                                                      tglSampai: dtSampai,
+                                                    ),
+                                                  );
+                                                },
+                                                icon: const Icon(
+                                                    Icons.receipt_long_outlined,
+                                                    size: 15),
+                                                label: const Text('Kartu Stok',
+                                                    style: TextStyle(
+                                                        fontSize: 11.5)),
+                                              ),
+                                              TextButton.icon(
+                                                onPressed: () {
+                                                  final id =
+                                                      (r['id'] as num?)?.toInt();
+                                                  if (id == null || id <= 0) {
+                                                    return;
+                                                  }
+                                                  showDialog<void>(
+                                                    context: context,
+                                                    builder: (_) =>
+                                                        DialogAnalisisCerdasStok(
+                                                      idProduk: id,
+                                                      namaProduk:
+                                                          '${r['nama'] ?? '-'}',
+                                                      kodeProduk:
+                                                          '${r['kode'] ?? ''}',
+                                                      tglMulai: dtDari,
+                                                      tglSampai: dtSampai,
+                                                    ),
+                                                  );
+                                                },
+                                                icon: const Icon(
+                                                    Icons.auto_awesome_outlined,
+                                                    size: 15),
+                                                label: const Text('Kronologi',
+                                                    style: TextStyle(
+                                                        fontSize: 11.5)),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Tutup'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

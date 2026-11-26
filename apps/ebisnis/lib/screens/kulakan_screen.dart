@@ -563,7 +563,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
       final idFakturEdit = _fakturIdDiedit;
       final kunciOutbox = sedangEdit
           ? 'kulakan_faktur:edit:$idFakturEdit'
-          : 'kulakan_faktur:baru:${DateTime.now().microsecondsSinceEpoch}';
+          : 'kulakan_faktur:baru:${Sesi.instance.idTokoTerpilih ?? Sesi.instance.tokoId ?? 0}:${nomorFaktur.toLowerCase()}';
       // LOKAL DULU: faktur ditulis ke antrean + snapshot riwayat sebelum menyentuh
       // jaringan, baru dikirim. Supplier yang baru dibuat offline dirujuk lewat id
       // sementara dan ditukar otomatis saat antreannya terkirim.

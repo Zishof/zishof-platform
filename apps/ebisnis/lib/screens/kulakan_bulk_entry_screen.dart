@@ -1008,7 +1008,8 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
       await prosesSimpanMaster(
         context,
         aksi: 'kulakan_faktur_simpan',
-        kunci: 'kulakan_faktur:bulk:${DateTime.now().microsecondsSinceEpoch}',
+        kunci:
+            'kulakan_faktur:bulk:${Sesi.instance.idTokoTerpilih ?? Sesi.instance.tokoId ?? 0}:${_faktur.text.trim().toLowerCase()}',
         cacheKey: 'master:kulakan_faktur',
         rowLokal: {
           'nomorFaktur': _faktur.text.trim(),
