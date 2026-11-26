@@ -252,6 +252,171 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
 
   void _filterBerubah() => setStateIfMounted(_hapusHasil);
 
+  /// Fallback kompatibilitas untuk laporan `posisi_mutasi_per_tanggal` apabila
+  /// server belum di-redeploy (`status == 'soon'`): menyusun 13 kolom Posisi
+  /// Mutasi per Tanggal (Saldo Awal, Nilai Awal, Masuk, Nilai Masuk, Keluar,
+  /// Nilai Keluar, Retur, Nilai Retur, Koreksi SO/Ajusmen, Nilai Ajusmen,
+  /// Saldo Akhir, Nilai Akhir) beserta baris TOTAL / RESUME KESELURUHAN dari
+  /// endpoint `produk_mutasi_ringkasan` dan `produk_mutasi_per_tanggal` yang
+  /// sudah aktif di server.
+  Future<Map<String, dynamic>> _bangunFallbackPosisiMutasiPerTanggal() async {
+    final mulai = _tglMulai ?? DateTime(DateTime.now().year, DateTime.now().month, 1);
+    final sampai = _tglSampai ?? DateTime.now();
+    final dariStr = _formatTgl.format(mulai);
+    final sampaiStr = _formatTgl.format(sampai);
+    final kw = _controllerProduk.text.trim();
+
+    final ringkasanRes = await ApiClient.instance.aksi(
+      'produk_mutasi_ringkasan',
+      <String, dynamic>{
+        'dari': dariStr,
+        'sampai': sampaiStr,
+        'page': 1,
+        'page_size': 1,
+        if (kw.isNotEmpty) 'keyword': kw,
+        if (_jenisProdukId > 0) 'kategori_id': _jenisProdukId,
+      },
+    );
+    final perTglRes = await ApiClient.instance.aksi(
+      'produk_mutasi_per_tanggal',
+      <String, dynamic>{
+        'dari': dariStr,
+        'sampai': sampaiStr,
+        'page': 1,
+        'page_size': 1,
+        if (kw.isNotEmpty) 'keyword': kw,
+        if (_jenisProdukId > 0) 'kategori_id': _jenisProdukId,
+      },
+    );
+
+    final sumPeriode =
+        (ringkasanRes['summary'] as Map?)?.cast<String, dynamic>() ?? {};
+    double runningQty = (sumPeriode['saldoAwal'] as num?)?.toDouble() ?? 0.0;
+    double runningNilai = (sumPeriode['nilaiAwal'] as num?)?.toDouble() ?? 0.0;
+    final awalQtyPeriode = runningQty;
+    final awalNilaiPeriode = runningNilai;
+
+    final byDate = <String, Map<String, dynamic>>{};
+    for (final item
+        in ((perTglRes['rekapHarian'] ?? perTglRes['summaryPerTanggal'])
+                    as List? ??
+                const [])
+            .whereType<Map>()) {
+      final m = Map<String, dynamic>.from(item);
+      final tgl = '${m['tanggal'] ?? ''}'.trim();
+      if (tgl.isNotEmpty) byDate[tgl] = m;
+    }
+
+    final baris = <List<dynamic>>[];
+    double totMasuk = 0,
+        totNilaiMasuk = 0,
+        totKeluar = 0,
+        totNilaiKeluar = 0,
+        totRetur = 0,
+        totNilaiRetur = 0,
+        totAdj = 0,
+        totNilaiAdj = 0;
+
+    final fmtTglLabel = DateFormat('dd-MMM-yyyy', 'id_ID');
+    var cur = DateTime(mulai.year, mulai.month, mulai.day);
+    final end = DateTime(sampai.year, sampai.month, sampai.day);
+    while (!cur.isAfter(end)) {
+      final tglIso = _formatTgl.format(cur);
+      final d = byDate[tglIso] ?? const <String, dynamic>{};
+      final msk = (d['masuk'] as num?)?.toDouble() ?? 0.0;
+      final nMsk = (d['nilaiMasuk'] as num?)?.toDouble() ?? 0.0;
+      final klr = (d['keluar'] as num?)?.toDouble() ?? 0.0;
+      final nKlr = (d['nilaiKeluar'] as num?)?.toDouble() ?? 0.0;
+      final rtr = (d['retur'] as num?)?.toDouble() ?? 0.0;
+      final nRtr = (d['nilaiRetur'] as num?)?.toDouble() ?? 0.0;
+      final adj = (d['penyesuaian'] as num?)?.toDouble() ?? 0.0;
+      final nAdj = (d['nilaiPenyesuaian'] as num?)?.toDouble() ?? 0.0;
+
+      final sAwal = runningQty;
+      final nAwal = runningNilai;
+      final sAkhir = sAwal + msk - klr + rtr + adj;
+      final nAkhir = nAwal + nMsk - nKlr + nRtr + nAdj;
+      runningQty = sAkhir;
+      runningNilai = nAkhir;
+
+      totMasuk += msk;
+      totNilaiMasuk += nMsk;
+      totKeluar += klr;
+      totNilaiKeluar += nKlr;
+      totRetur += rtr;
+      totNilaiRetur += nRtr;
+      totAdj += adj;
+      totNilaiAdj += nAdj;
+
+      baris.add(<dynamic>[
+        fmtTglLabel.format(cur),
+        sAwal,
+        nAwal,
+        msk,
+        nMsk,
+        klr,
+        nKlr,
+        rtr,
+        nRtr,
+        adj,
+        nAdj,
+        sAkhir,
+        nAkhir,
+      ]);
+      cur = cur.add(const Duration(days: 1));
+    }
+
+    if (baris.isNotEmpty) {
+      baris.add(<dynamic>[
+        'TOTAL / RESUME KESELURUHAN',
+        awalQtyPeriode,
+        awalNilaiPeriode,
+        totMasuk,
+        totNilaiMasuk,
+        totKeluar,
+        totNilaiKeluar,
+        totRetur,
+        totNilaiRetur,
+        totAdj,
+        totNilaiAdj,
+        runningQty,
+        runningNilai,
+      ]);
+    }
+
+    return <String, dynamic>{
+      'status': '00',
+      'judul': 'Laporan Posisi Mutasi per Tanggal',
+      'catatan':
+          'Rekap posisi dan pergerakan inventory per tanggal secara Kuantitas (Qty) maupun Rupiah (HPP): '
+              'Saldo Akhir = Saldo Awal + Masuk - Keluar + Retur + Koreksi SO (Ajusmen). '
+              'Pada baris TOTAL / RESUME KESELURUHAN, Saldo Awal adalah posisi awal periode, '
+              'Masuk/Keluar/Retur/Koreksi SO adalah total akumulasi pergerakan selama periode, '
+              'dan Saldo Akhir adalah posisi akhir periode.',
+      'grup': -1,
+      'grandTotal': false,
+      'kopKustomDidukung': true,
+      'kopNama': _controllerKop.text.trim(),
+      'periode':
+          'Dari ${DateFormat('dd MMM yyyy', 'id_ID').format(mulai)} s/d ${DateFormat('dd MMM yyyy', 'id_ID').format(sampai)}',
+      'kolom': const <Map<String, String>>[
+        {'l': 'Tanggal', 't': 'text'},
+        {'l': 'Saldo Awal', 't': 'num'},
+        {'l': 'Nilai Awal', 't': 'num'},
+        {'l': 'Masuk', 't': 'num'},
+        {'l': 'Nilai Masuk', 't': 'num'},
+        {'l': 'Keluar', 't': 'num'},
+        {'l': 'Nilai Keluar', 't': 'num'},
+        {'l': 'Retur', 't': 'num'},
+        {'l': 'Nilai Retur', 't': 'num'},
+        {'l': 'Koreksi SO (Ajusmen)', 't': 'num'},
+        {'l': 'Nilai Ajusmen', 't': 'num'},
+        {'l': 'Saldo Akhir', 't': 'num'},
+        {'l': 'Nilai Akhir', 't': 'num'},
+      ],
+      'baris': baris,
+    };
+  }
   /// Menyaring baris konsumen/member yang nilai transaksi belanjanya Rp 0 pada
   /// laporan Penjualan per Kategori & Member ketika opsi [_tampilkanMemberNol]
   /// tidak dicentang, sehingga aplikasi desktop langsung menyembunyikan baris
@@ -322,7 +487,20 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
       }
     }
     try {
-      final hasil = await ApiClient.instance.aksi('laporan_jalankan', payload);
+      Map<String, dynamic> hasil;
+      try {
+        hasil = await ApiClient.instance.aksi('laporan_jalankan', payload);
+      } on ApiException catch (e) {
+        if (widget.item['id'] == 'posisi_mutasi_per_tanggal' && !e.offline) {
+          hasil = await _bangunFallbackPosisiMutasiPerTanggal();
+        } else {
+          rethrow;
+        }
+      }
+      if (widget.item['id'] == 'posisi_mutasi_per_tanggal' &&
+          hasil['status'] == 'soon') {
+        hasil = await _bangunFallbackPosisiMutasiPerTanggal();
+      }
       if (!mounted || versi != _versiPermintaan) return;
       if ((_modeLaporan.isNotEmpty && hasil['modeLaporan'] != _modeLaporan) ||
           (_controllerKop.text.trim().isNotEmpty &&
@@ -375,25 +553,95 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
     }
   }
 
+  Future<Uint8List> _bangunPdfLokalDariHasil(Map<String, dynamic> hasil) async {
+    final kolom = ((hasil['kolom'] as List?) ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    final baris = ((hasil['baris'] as List?) ?? [])
+        .map((e) => List<dynamic>.from(e as List))
+        .toList();
+    final headers = kolom.map((k) => '${k['l'] ?? ''}').toList();
+    final fmtAngka = NumberFormat.decimalPattern('id_ID');
+    final dataTabel = baris.map((row) {
+      return List.generate(kolom.length, (i) {
+        final v = i < row.length ? row[i] : null;
+        if (v == null) return '';
+        if (kolom[i]['t'] == 'num' && v is num) {
+          return fmtAngka.format(v);
+        }
+        return '$v';
+      });
+    }).toList();
+
+    final doc = pw.Document();
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        margin: const pw.EdgeInsets.all(24),
+        header: (_) => pw.Column(
+          children: [
+            if (_controllerKop.text.trim().isNotEmpty)
+              pw.Text(_controllerKop.text.trim(),
+                  style: const pw.TextStyle(fontSize: 10)),
+            pw.Text('${hasil['judul'] ?? widget.item['judul'] ?? 'Laporan'}',
+                style:
+                    pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+            if ('${hasil['periode'] ?? ''}'.isNotEmpty)
+              pw.Text('${hasil['periode']}',
+                  style: const pw.TextStyle(fontSize: 9)),
+            pw.SizedBox(height: 10),
+          ],
+        ),
+        build: (_) => [
+          pw.TableHelper.fromTextArray(
+            headers: headers,
+            data: dataTabel,
+            headerStyle:
+                pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+            cellStyle: const pw.TextStyle(fontSize: 7),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.blue100),
+            cellAlignment: pw.Alignment.centerRight,
+            cellAlignments: const {0: pw.Alignment.centerLeft},
+          ),
+        ],
+      ),
+    );
+    return doc.save();
+  }
+
   Future<void> _cetakPdf() async {
     setStateIfMounted(() => _memprosesPdf = true);
     try {
-      final hasil =
-          await ApiClient.instance.aksi('laporan_pdf', _buatPayload());
-      if ((_modeLaporan.isNotEmpty && hasil['modeLaporan'] != _modeLaporan) ||
-          (_controllerKop.text.trim().isNotEmpty &&
-              hasil['kopKustomDidukung'] != true)) {
-        if (mounted) {
-          setStateIfMounted(() => _pesanError =
-              'Server belum mendukung bentuk/kop PDF yang dipilih. Hubungi admin untuk pembaruan server.');
+      Uint8List? bytes;
+      try {
+        final hasil =
+            await ApiClient.instance.aksi('laporan_pdf', _buatPayload());
+        if ((_modeLaporan.isNotEmpty && hasil['modeLaporan'] != _modeLaporan) ||
+            (_controllerKop.text.trim().isNotEmpty &&
+                hasil['kopKustomDidukung'] != true)) {
+          if (mounted) {
+            setStateIfMounted(() => _pesanError =
+                'Server belum mendukung bentuk/kop PDF yang dipilih. Hubungi admin untuk pembaruan server.');
+          }
+          return;
         }
-        return;
+        final b64 = hasil['pdfBase64'] as String?;
+        if (b64 != null && b64.isNotEmpty) {
+          bytes = base64Decode(b64);
+        }
+      } catch (_) {
+        if (_hasil != null) {
+          bytes = await _bangunPdfLokalDariHasil(_hasil!);
+        } else {
+          rethrow;
+        }
       }
-      final b64 = hasil['pdfBase64'] as String?;
-      if (b64 == null || b64.isEmpty) {
+      if (bytes == null && _hasil != null) {
+        bytes = await _bangunPdfLokalDariHasil(_hasil!);
+      }
+      if (bytes == null || bytes.isEmpty) {
         throw Exception('Server tidak mengembalikan berkas PDF.');
       }
-      final bytes = base64Decode(b64);
       if (!mounted) return;
       final judulFile =
           (widget.item['judul'] as String? ?? widget.item['id']).toString().trim();
@@ -1817,7 +2065,22 @@ class _TabelLaporanState extends State<_TabelLaporan> {
 
   bool _isHitungKolom(String label) {
     final l = label.trim().toLowerCase();
-    return l.startsWith('jml') || l.startsWith('jumlah');
+    return l.startsWith('jml') ||
+        l.startsWith('jumlah') ||
+        l.startsWith('kuantitas') ||
+        l == 'saldo awal' ||
+        l == 'masuk' ||
+        l == 'keluar' ||
+        l == 'retur' ||
+        l.startsWith('koreksi so') ||
+        l == 'ajusmen so' ||
+        l == 'saldo akhir' ||
+        l == 'nilai awal' ||
+        l == 'nilai masuk' ||
+        l == 'nilai keluar' ||
+        l == 'nilai retur' ||
+        l == 'nilai ajusmen' ||
+        l == 'nilai akhir';
   }
 
   /// Proporsi kolom generik untuk seluruh laporan katalog. Kolom uraian/nama

@@ -97,6 +97,43 @@ class _LaporanScreenState extends State<LaporanScreen> with JejakGalat {
     super.dispose();
   }
 
+  /// Menyisipkan item katalog baru secara lokal apabila server belum di-redeploy
+  /// agar pengguna aplikasi desktop langsung melihat laporan baru di katalog.
+  List<Map<String, dynamic>> _pastikanLaporanBaruTersedia(
+      List<Map<String, dynamic>> daftarKat) {
+    const itemPosisi = <String, dynamic>{
+      'id': 'posisi_mutasi_per_tanggal',
+      'judul': 'Laporan Posisi Mutasi per Tanggal (Qty & Rupiah)',
+      'ket':
+          'Rekap posisi & pergerakan inventory per tanggal secara Qty maupun Rupiah (Saldo Awal, Nilai Awal, Masuk, Nilai Masuk, Keluar, Nilai Keluar, Retur, Nilai Retur, Koreksi SO/Ajusmen, Nilai Ajusmen, Saldo Akhir, Nilai Akhir) beserta Resume Total Keseluruhan.',
+      'produk': true,
+      'kategoriProduk': true,
+    };
+    const targetKat = {
+      'Persediaan',
+      'Gudang',
+      'Pergudangan — Kartu & Mutasi',
+    };
+    return daftarKat.map((kat) {
+      final namaKat = '${kat['kat'] ?? ''}'.trim();
+      if (!targetKat.contains(namaKat)) return kat;
+      final itemsRaw = ((kat['items'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      if (itemsRaw.any((it) => '${it['id'] ?? ''}' == 'posisi_mutasi_per_tanggal')) {
+        return kat;
+      }
+      return <String, dynamic>{
+        ...kat,
+        'items': <Map<String, dynamic>>[
+          Map<String, dynamic>.from(itemPosisi),
+          ...itemsRaw,
+        ],
+      };
+    }).toList();
+  }
+
   Future<void> _muat() async {
     setStateIfMounted(() {
       _memuat = true;
@@ -121,7 +158,8 @@ class _LaporanScreenState extends State<LaporanScreen> with JejakGalat {
         onData: (hasil) {
           if (!mounted) return;
           setStateIfMounted(() {
-            _kategori = _diff.terapkan(hasil, fieldData: 'kategori');
+            _kategori = _pastikanLaporanBaruTersedia(
+                _diff.terapkan(hasil, fieldData: 'kategori'));
             // 'pendukung' hanya ikut pada respons SERVER (emisi lokal cuma
             // memuat daftar kategori) -- jangan dikosongkan oleh emisi lokal.
             if (_diff.dariServer) {

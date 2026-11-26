@@ -51,10 +51,18 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
   String? _error;
   String _keyword = '';
   String _filterGerak = '';
+  /// Mode tampilan pada tab "Mutasi Barang per Tanggal":
+  /// - `'ringkasan_tanggal'` (default): 1 baris per tanggal (13 kolom: Tanggal, Saldo Awal,
+  ///   Nilai Awal, Masuk, Nilai Masuk, Keluar, Nilai Keluar, Retur, Nilai Retur,
+  ///   Koreksi SO (Ajusmen), Nilai Ajusmen, Saldo Akhir, Nilai Akhir) + baris
+  ///   TOTAL / RESUME KESELURUHAN di bagian bawah (sesuai permintaan Back Office Toko).
+  /// - `'rincian_produk'`: rincian produk yang bergerak per tanggal beserta subtotal grup tanggal.
+  String _modeTampilanPerTanggal = 'ringkasan_tanggal';
   DateTime? _waktuCacheMutasiPerTanggal;
   List<Map<String, dynamic>> _data = [];
   Map<String, dynamic> _summary = {};
   Map<String, Map<String, dynamic>> _summaryPerTanggalMap = {};
+  List<Map<String, dynamic>> _rekapHarianList = [];
 
   /// Diff emisi "lokal dulu" -- menggerakkan animasi kilau baris yang
   /// baru/berubah di server.
@@ -140,19 +148,168 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
     }
   }
 
+  String _formatTanggalSingkat(String tglIso) {
+    try {
+      final dt = DateTime.parse(tglIso);
+      return DateFormat('dd-MMM-yyyy', 'id_ID').format(dt);
+    } catch (_) {
+      return tglIso.isEmpty ? '-' : tglIso;
+    }
+  }
+
+  bool get _apakahModeResumeTanggal =>
+      widget.modePerTanggalLengkap &&
+      _modeTampilanPerTanggal == 'ringkasan_tanggal';
+
   void _terapkanSummaryPerTanggal(Map<String, dynamic> hasil) {
     final map = <String, Map<String, dynamic>>{};
-    final rawList = hasil['summaryPerTanggal'];
+    final listHarian = <Map<String, dynamic>>[];
+    final rawList = hasil['rekapHarian'] ?? hasil['summaryPerTanggal'];
     if (rawList is List) {
       for (final item in rawList.whereType<Map>()) {
         final m = Map<String, dynamic>.from(item);
         final tgl = '${m['tanggal'] ?? ''}'.trim();
         if (tgl.isNotEmpty) {
           map[tgl] = m;
+          listHarian.add(m);
         }
       }
     }
+    listHarian.sort(
+        (a, b) => '${a['tanggal'] ?? ''}'.compareTo('${b['tanggal'] ?? ''}'));
     _summaryPerTanggalMap = map;
+    _rekapHarianList = listHarian;
+  }
+
+  /// Fallback kompatibilitas apabila server belum di-redeploy (respons belum
+  /// menyertakan `rekapHarian` / `totalProdukToko`): mengambil posisi saldo
+  /// awal periode dari `produk_mutasi_ringkasan` (page_size 1 sudah memuat
+  /// `summary.saldoAwal` & `summary.nilaiAwal` seluruh produk toko!), lalu
+  /// menyusun deret tanggal `[_dari.._sampai]` dengan saldo berjalan yang
+  /// akurat (Saldo Akhir hari ke-t = Saldo Awal hari ke-t+1).
+  Future<Map<String, dynamic>> _lengkapiRekapHarianBilaPerlu(
+      Map<String, dynamic> hasil) async {
+    final rawRekap = hasil['rekapHarian'];
+    if (rawRekap is List && rawRekap.isNotEmpty) {
+      return hasil;
+    }
+    try {
+      final ringkasanRes = await ApiClient.instance.aksi(
+        'produk_mutasi_ringkasan',
+        {
+          'dari': _mutasiTanggal.format(_dari),
+          'sampai': _mutasiTanggal.format(_sampai),
+          'page': 1,
+          'page_size': 1,
+          if (_keyword.trim().isNotEmpty) 'keyword': _keyword.trim(),
+        },
+      );
+      final sumPeriode =
+          (ringkasanRes['summary'] as Map?)?.cast<String, dynamic>() ?? {};
+      final totalProduk = (ringkasanRes['total'] as num?)?.toInt() ?? 0;
+      double runningQty = (sumPeriode['saldoAwal'] as num?)?.toDouble() ?? 0.0;
+      double runningNilai =
+          (sumPeriode['nilaiAwal'] as num?)?.toDouble() ?? 0.0;
+
+      final byDate = <String, Map<String, dynamic>>{};
+      for (final item
+          in ((hasil['summaryPerTanggal'] as List?) ?? const [])
+              .whereType<Map>()) {
+        final m = Map<String, dynamic>.from(item);
+        final tgl = '${m['tanggal'] ?? ''}'.trim();
+        if (tgl.isNotEmpty) byDate[tgl] = m;
+      }
+
+      final rekap = <Map<String, dynamic>>[];
+      double totMasuk = 0,
+          totNilaiMasuk = 0,
+          totKeluar = 0,
+          totNilaiKeluar = 0,
+          totRetur = 0,
+          totNilaiRetur = 0,
+          totAdj = 0,
+          totNilaiAdj = 0;
+      final awalQtyPeriode = runningQty;
+      final awalNilaiPeriode = runningNilai;
+
+      var cur = DateTime(_dari.year, _dari.month, _dari.day);
+      final end = DateTime(_sampai.year, _sampai.month, _sampai.day);
+      while (!cur.isAfter(end)) {
+        final tglIso = _mutasiTanggal.format(cur);
+        final d = byDate[tglIso] ?? const <String, dynamic>{};
+        final msk = (d['masuk'] as num?)?.toDouble() ?? 0.0;
+        final nMsk = (d['nilaiMasuk'] as num?)?.toDouble() ?? 0.0;
+        final klr = (d['keluar'] as num?)?.toDouble() ?? 0.0;
+        final nKlr = (d['nilaiKeluar'] as num?)?.toDouble() ?? 0.0;
+        final rtr = (d['retur'] as num?)?.toDouble() ?? 0.0;
+        final nRtr = (d['nilaiRetur'] as num?)?.toDouble() ?? 0.0;
+        final adj = (d['penyesuaian'] as num?)?.toDouble() ?? 0.0;
+        final nAdj = (d['nilaiPenyesuaian'] as num?)?.toDouble() ?? 0.0;
+        final jmlGerak = (d['jumlahProduk'] as num?)?.toInt() ?? 0;
+
+        final sAwal = runningQty;
+        final nAwal = runningNilai;
+        final sAkhir = sAwal + msk - klr + rtr + adj;
+        final nAkhir = nAwal + nMsk - nKlr + nRtr + nAdj;
+        runningQty = sAkhir;
+        runningNilai = nAkhir;
+
+        totMasuk += msk;
+        totNilaiMasuk += nMsk;
+        totKeluar += klr;
+        totNilaiKeluar += nKlr;
+        totRetur += rtr;
+        totNilaiRetur += nRtr;
+        totAdj += adj;
+        totNilaiAdj += nAdj;
+
+        final rowHarian = <String, dynamic>{
+          'tanggal': tglIso,
+          'jumlahProduk': jmlGerak,
+          'totalProdukToko': totalProduk,
+          'saldoAwal': sAwal,
+          'nilaiAwal': nAwal,
+          'masuk': msk,
+          'nilaiMasuk': nMsk,
+          'keluar': klr,
+          'nilaiKeluar': nKlr,
+          'retur': rtr,
+          'nilaiRetur': nRtr,
+          'penyesuaian': adj,
+          'nilaiPenyesuaian': nAdj,
+          'saldoAkhir': sAkhir,
+          'nilaiAkhir': nAkhir,
+        };
+        rekap.add(rowHarian);
+        byDate[tglIso] = rowHarian;
+        cur = cur.add(const Duration(days: 1));
+      }
+
+      return <String, dynamic>{
+        ...hasil,
+        'summaryPerTanggal': rekap,
+        'rekapHarian': rekap,
+        'summary': <String, dynamic>{
+          ...(hasil['summary'] as Map? ?? const {}),
+          'saldoAwal': awalQtyPeriode,
+          'nilaiAwal': awalNilaiPeriode,
+          'masuk': totMasuk,
+          'nilaiMasuk': totNilaiMasuk,
+          'keluar': totKeluar,
+          'nilaiKeluar': totNilaiKeluar,
+          'retur': totRetur,
+          'nilaiRetur': totNilaiRetur,
+          'penyesuaian': totAdj,
+          'nilaiPenyesuaian': totNilaiAdj,
+          'saldoAkhir': runningQty,
+          'nilaiAkhir': runningNilai,
+          'totalProdukToko': totalProduk,
+          'jumlahHari': rekap.length,
+        },
+      };
+    } catch (_) {
+      return hasil;
+    }
   }
 
   Future<void> _muat() async {
@@ -190,7 +347,8 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
         try {
           final hasilServer = await ApiClient.instance
               .aksi('produk_mutasi_per_tanggal', _payload());
-          final hasil = _validasiHasilMutasiPerTanggal(hasilServer);
+          final hasilValid = _validasiHasilMutasiPerTanggal(hasilServer);
+          final hasil = await _lengkapiRekapHarianBilaPerlu(hasilValid);
           try {
             await CoreDb.instance.simpanCacheReferensi(
               _cacheKeyMutasiPerTanggal,
@@ -325,6 +483,22 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
     'Nilai Akhir',
   ];
 
+  static const _headersPosisiPerTanggal = [
+    'Tanggal',
+    'Saldo Awal',
+    'Nilai Awal',
+    'Masuk',
+    'Nilai Masuk',
+    'Keluar',
+    'Nilai Keluar',
+    'Retur',
+    'Nilai Retur',
+    'Koreksi SO (Ajusmen)',
+    'Nilai Ajusmen',
+    'Saldo Akhir',
+    'Nilai Akhir',
+  ];
+
   static const _headersPerTanggal = [
     'Tanggal',
     'Kategori Barang',
@@ -345,8 +519,41 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
     'Nilai Akhir',
   ];
 
-  List<String> get _headers =>
-      widget.modePerTanggalLengkap ? _headersPerTanggal : _headersRingkasan;
+  List<String> get _headers => _apakahModeResumeTanggal
+      ? _headersPosisiPerTanggal
+      : (widget.modePerTanggalLengkap ? _headersPerTanggal : _headersRingkasan);
+
+  List<dynamic> _barisPosisiTanggal(Map<String, dynamic> st) => [
+        _formatTanggalSingkat('${st['tanggal'] ?? ''}'),
+        st['saldoAwal'] ?? 0,
+        st['nilaiAwal'] ?? 0,
+        st['masuk'] ?? 0,
+        st['nilaiMasuk'] ?? 0,
+        st['keluar'] ?? 0,
+        st['nilaiKeluar'] ?? 0,
+        st['retur'] ?? 0,
+        st['nilaiRetur'] ?? 0,
+        st['penyesuaian'] ?? 0,
+        st['nilaiPenyesuaian'] ?? 0,
+        st['saldoAkhir'] ?? 0,
+        st['nilaiAkhir'] ?? 0,
+      ];
+
+  List<dynamic> _barisTotalPosisiTanggal() => [
+        'TOTAL / RESUME KESELURUHAN',
+        _summary['saldoAwal'] ?? 0,
+        _summary['nilaiAwal'] ?? 0,
+        _summary['masuk'] ?? 0,
+        _summary['nilaiMasuk'] ?? 0,
+        _summary['keluar'] ?? 0,
+        _summary['nilaiKeluar'] ?? 0,
+        _summary['retur'] ?? 0,
+        _summary['nilaiRetur'] ?? 0,
+        _summary['penyesuaian'] ?? 0,
+        _summary['nilaiPenyesuaian'] ?? 0,
+        _summary['saldoAkhir'] ?? 0,
+        _summary['nilaiAkhir'] ?? 0,
+      ];
 
   List<dynamic> _baris(Map<String, dynamic> r) => [
         if (widget.modePerTanggalLengkap) r['tanggal'] ?? '',
@@ -429,6 +636,12 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
   }
 
   List<List<dynamic>> _susunBarisEkspor(List<Map<String, dynamic>> semua) {
+    if (_apakahModeResumeTanggal) {
+      return [
+        ..._rekapHarianList.map(_barisPosisiTanggal),
+        _barisTotalPosisiTanggal(),
+      ];
+    }
     if (!widget.modePerTanggalLengkap) {
       return [...semua.where(_cocokFilterGerak).map(_baris), _barisTotal()];
     }
@@ -457,17 +670,22 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
   Future<void> _unduhExcel() async {
     setStateIfMounted(() => _mengekspor = true);
     try {
-      final semua = await _ambilSemua();
+      final semua =
+          _apakahModeResumeTanggal ? const <Map<String, dynamic>>[] : await _ambilSemua();
       final bytes = buildSimpleXlsx(
-        sheetName: widget.modePerTanggalLengkap
-            ? 'Mutasi per Tanggal'
-            : 'Mutasi Barang',
+        sheetName: _apakahModeResumeTanggal
+            ? 'Posisi Mutasi per Tanggal'
+            : (widget.modePerTanggalLengkap
+                ? 'Mutasi per Tanggal'
+                : 'Mutasi Barang'),
         headers: _headers,
         rows: _susunBarisEkspor(semua),
       );
-      final prefix = widget.modePerTanggalLengkap
-          ? 'Mutasi_Barang_per_Tanggal'
-          : 'Mutasi_Barang';
+      final prefix = _apakahModeResumeTanggal
+          ? 'Laporan_Posisi_Mutasi_per_Tanggal'
+          : (widget.modePerTanggalLengkap
+              ? 'Mutasi_Barang_per_Tanggal'
+              : 'Mutasi_Barang');
       final nama =
           '${prefix}_${_mutasiTanggal.format(_dari)}_sd_${_mutasiTanggal.format(_sampai)}.xlsx';
       final path = await SimpanBerkasHelper.simpanBytes(
@@ -490,21 +708,25 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
   Future<void> _cetakPdf() async {
     setStateIfMounted(() => _mengekspor = true);
     try {
-      final semua = await _ambilSemua();
-      final startNumIdx = widget.modePerTanggalLengkap ? 5 : 4;
+      final semua =
+          _apakahModeResumeTanggal ? const <Map<String, dynamic>>[] : await _ambilSemua();
+      final startNumIdx =
+          _apakahModeResumeTanggal ? 1 : (widget.modePerTanggalLengkap ? 5 : 4);
       final doc = pw.Document();
       doc.addPage(pw.MultiPage(
         pageFormat: PdfPageFormat.a3.landscape,
         margin: const pw.EdgeInsets.all(24),
         header: (_) => pw.Column(children: [
           pw.Text(
-              widget.modePerTanggalLengkap
-                  ? 'Mutasi Barang per Tanggal (Dikelompokkan per Tanggal)'
-                  : 'Ringkasan Mutasi Gudang',
+              _apakahModeResumeTanggal
+                  ? 'LAPORAN POSISI MUTASI PER TANGGAL (QTY & RUPIAH)'
+                  : (widget.modePerTanggalLengkap
+                      ? 'Mutasi Barang per Tanggal (Dikelompokkan per Tanggal)'
+                      : 'Ringkasan Mutasi Gudang'),
               style:
                   pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
           pw.Text(
-              '${_mutasiTanggal.format(_dari)} s/d ${_mutasiTanggal.format(_sampai)}'),
+              'PERIODE : ${_mutasiTanggal.format(_dari)} s/d ${_mutasiTanggal.format(_sampai)}'),
           pw.SizedBox(height: 10),
         ]),
         build: (_) => [
@@ -870,7 +1092,37 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
     );
   }
 
+  AppTableRowData _barisDataPosisiTanggal(Map<String, dynamic> st) {
+    final tglIso = '${st['tanggal'] ?? ''}'.trim();
+    return AppTableRowData(
+      cells: [
+        AppTableCell(
+          width: 115,
+          child: Text(
+            _formatTanggalSingkat(tglIso),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+        ),
+        _angkaCell(st['saldoAwal'] ?? 0),
+        _angkaCell(st['nilaiAwal'] ?? 0, rupiah: true),
+        _angkaCell(st['masuk'] ?? 0),
+        _angkaCell(st['nilaiMasuk'] ?? 0, rupiah: true),
+        _angkaCell(st['keluar'] ?? 0),
+        _angkaCell(st['nilaiKeluar'] ?? 0, rupiah: true),
+        _angkaCell(st['retur'] ?? 0),
+        _angkaCell(st['nilaiRetur'] ?? 0, rupiah: true),
+        _angkaCell(st['penyesuaian'] ?? 0),
+        _angkaCell(st['nilaiPenyesuaian'] ?? 0, rupiah: true),
+        _angkaCell(st['saldoAkhir'] ?? 0),
+        _angkaCell(st['nilaiAkhir'] ?? 0, rupiah: true),
+      ],
+    );
+  }
+
   List<AppTableRowData> _bangunBarisTabel() {
+    if (_apakahModeResumeTanggal) {
+      return _rekapHarianList.map(_barisDataPosisiTanggal).toList();
+    }
     if (!widget.modePerTanggalLengkap) {
       return _data.where(_cocokFilterGerak).map(_barisDataProduk).toList();
     }
@@ -900,68 +1152,99 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
 
   @override
   Widget build(BuildContext context) {
-    final totalHalaman = (_total / _pageSize).ceil().clamp(1, 999999);
+    final totalHalaman = _apakahModeResumeTanggal
+        ? 1
+        : (_total / _pageSize).ceil().clamp(1, 999999);
     final rows = _bangunBarisTabel();
-    final totalRow = AppTableRowData(
-        backgroundColor: AppColors.primary.withValues(alpha: 0.06),
-        cells: [
-          if (widget.modePerTanggalLengkap)
-            const AppTableCell(
-                width: 105,
-                child: Text('TOTAL',
-                    style: TextStyle(fontWeight: FontWeight.bold))),
-          AppTableCell(
-              width: 130,
-              child: Text(
-                  widget.modePerTanggalLengkap ? 'SEMUA TANGGAL' : 'TOTAL',
-                  style: const TextStyle(fontWeight: FontWeight.bold))),
-          const AppTableCell(width: 95, child: SizedBox.shrink()),
-          const AppTableCell(width: 110, child: SizedBox.shrink()),
-          const AppTableCell(width: 220, child: SizedBox.shrink()),
-          _angkaCell(_summary['saldoAwal'],
-              onTap: () => _tampilkanRincianKolomTotal(
-                  'Saldo Awal', 'saldoAwal', 'nilaiAwal')),
-          _angkaCell(_summary['nilaiAwal'],
-              rupiah: true,
-              onTap: () => _tampilkanRincianKolomTotal(
-                  'Saldo Awal', 'saldoAwal', 'nilaiAwal')),
-          _angkaCell(_summary['masuk'],
-              onTap: () => _tampilkanRincianKolomTotal(
-                  'Barang Masuk', 'masuk', 'nilaiMasuk')),
-          _angkaCell(_summary['nilaiMasuk'],
-              rupiah: true,
-              onTap: () => _tampilkanRincianKolomTotal(
-                  'Barang Masuk', 'masuk', 'nilaiMasuk')),
-          _angkaCell(_summary['keluar'],
-              onTap: () => _tampilkanRincianKolomTotal(
-                  'Barang Keluar', 'keluar', 'nilaiKeluar')),
-          _angkaCell(_summary['nilaiKeluar'],
-              rupiah: true,
-              onTap: () => _tampilkanRincianKolomTotal(
-                  'Barang Keluar', 'keluar', 'nilaiKeluar')),
-          _angkaCell(_summary['retur'] ?? 0,
-              onTap: () =>
-                  _tampilkanRincianKolomTotal('Retur', 'retur', 'nilaiRetur')),
-          _angkaCell(_summary['nilaiRetur'] ?? 0,
-              rupiah: true,
-              onTap: () =>
-                  _tampilkanRincianKolomTotal('Retur', 'retur', 'nilaiRetur')),
-          _angkaCell(_summary['penyesuaian'] ?? 0,
-              onTap: () => _tampilkanRincianKolomTotal(
-                  'Koreksi SO (Ajusmen)', 'penyesuaian', 'nilaiPenyesuaian')),
-          _angkaCell(_summary['nilaiPenyesuaian'] ?? 0,
-              rupiah: true,
-              onTap: () => _tampilkanRincianKolomTotal(
-                  'Koreksi SO (Ajusmen)', 'penyesuaian', 'nilaiPenyesuaian')),
-          _angkaCell(_summary['saldoAkhir'],
-              onTap: () => _tampilkanRincianKolomTotal(
-                  'Saldo Akhir', 'saldoAkhir', 'nilaiAkhir')),
-          _angkaCell(_summary['nilaiAkhir'],
-              rupiah: true,
-              onTap: () => _tampilkanRincianKolomTotal(
-                  'Saldo Akhir', 'saldoAkhir', 'nilaiAkhir')),
-          const AppTableCell(width: 64, child: SizedBox.shrink()),
-        ]);
+    final totalRow = _apakahModeResumeTanggal
+        ? AppTableRowData(
+            backgroundColor: AppColors.primary.withValues(alpha: 0.10),
+            cells: [
+              const AppTableCell(
+                width: 115,
+                child: Text(
+                  'TOTAL / RESUME',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11.5),
+                ),
+              ),
+              _angkaCell(_summary['saldoAwal'] ?? 0),
+              _angkaCell(_summary['nilaiAwal'] ?? 0, rupiah: true),
+              _angkaCell(_summary['masuk'] ?? 0),
+              _angkaCell(_summary['nilaiMasuk'] ?? 0, rupiah: true),
+              _angkaCell(_summary['keluar'] ?? 0),
+              _angkaCell(_summary['nilaiKeluar'] ?? 0, rupiah: true),
+              _angkaCell(_summary['retur'] ?? 0),
+              _angkaCell(_summary['nilaiRetur'] ?? 0, rupiah: true),
+              _angkaCell(_summary['penyesuaian'] ?? 0),
+              _angkaCell(_summary['nilaiPenyesuaian'] ?? 0, rupiah: true),
+              _angkaCell(_summary['saldoAkhir'] ?? 0),
+              _angkaCell(_summary['nilaiAkhir'] ?? 0, rupiah: true),
+            ],
+          )
+        : AppTableRowData(
+            backgroundColor: AppColors.primary.withValues(alpha: 0.06),
+            cells: [
+              if (widget.modePerTanggalLengkap)
+                const AppTableCell(
+                    width: 105,
+                    child: Text('TOTAL',
+                        style: TextStyle(fontWeight: FontWeight.bold))),
+              AppTableCell(
+                  width: 130,
+                  child: Text(
+                      widget.modePerTanggalLengkap ? 'SEMUA TANGGAL' : 'TOTAL',
+                      style: const TextStyle(fontWeight: FontWeight.bold))),
+              const AppTableCell(width: 95, child: SizedBox.shrink()),
+              const AppTableCell(width: 110, child: SizedBox.shrink()),
+              const AppTableCell(width: 220, child: SizedBox.shrink()),
+              _angkaCell(_summary['saldoAwal'],
+                  onTap: () => _tampilkanRincianKolomTotal(
+                      'Saldo Awal', 'saldoAwal', 'nilaiAwal')),
+              _angkaCell(_summary['nilaiAwal'],
+                  rupiah: true,
+                  onTap: () => _tampilkanRincianKolomTotal(
+                      'Saldo Awal', 'saldoAwal', 'nilaiAwal')),
+              _angkaCell(_summary['masuk'],
+                  onTap: () => _tampilkanRincianKolomTotal(
+                      'Barang Masuk', 'masuk', 'nilaiMasuk')),
+              _angkaCell(_summary['nilaiMasuk'],
+                  rupiah: true,
+                  onTap: () => _tampilkanRincianKolomTotal(
+                      'Barang Masuk', 'masuk', 'nilaiMasuk')),
+              _angkaCell(_summary['keluar'],
+                  onTap: () => _tampilkanRincianKolomTotal(
+                      'Barang Keluar', 'keluar', 'nilaiKeluar')),
+              _angkaCell(_summary['nilaiKeluar'],
+                  rupiah: true,
+                  onTap: () => _tampilkanRincianKolomTotal(
+                      'Barang Keluar', 'keluar', 'nilaiKeluar')),
+              _angkaCell(_summary['retur'] ?? 0,
+                  onTap: () => _tampilkanRincianKolomTotal(
+                      'Retur', 'retur', 'nilaiRetur')),
+              _angkaCell(_summary['nilaiRetur'] ?? 0,
+                  rupiah: true,
+                  onTap: () => _tampilkanRincianKolomTotal(
+                      'Retur', 'retur', 'nilaiRetur')),
+              _angkaCell(_summary['penyesuaian'] ?? 0,
+                  onTap: () => _tampilkanRincianKolomTotal(
+                      'Koreksi SO (Ajusmen)',
+                      'penyesuaian',
+                      'nilaiPenyesuaian')),
+              _angkaCell(_summary['nilaiPenyesuaian'] ?? 0,
+                  rupiah: true,
+                  onTap: () => _tampilkanRincianKolomTotal(
+                      'Koreksi SO (Ajusmen)',
+                      'penyesuaian',
+                      'nilaiPenyesuaian')),
+              _angkaCell(_summary['saldoAkhir'],
+                  onTap: () => _tampilkanRincianKolomTotal(
+                      'Saldo Akhir', 'saldoAkhir', 'nilaiAkhir')),
+              _angkaCell(_summary['nilaiAkhir'],
+                  rupiah: true,
+                  onTap: () => _tampilkanRincianKolomTotal(
+                      'Saldo Akhir', 'saldoAkhir', 'nilaiAkhir')),
+              const AppTableCell(width: 64, child: SizedBox.shrink()),
+            ]);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
@@ -975,6 +1258,38 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
               onPressed: () => _pilihTanggal(false),
               icon: const Icon(Icons.event_outlined, size: 17),
               label: Text('Sampai ${_mutasiTanggal.format(_sampai)}')),
+          if (widget.modePerTanggalLengkap)
+            SizedBox(
+              width: 315,
+              child: DropdownButtonFormField<String>(
+                // ignore: deprecated_member_use
+                value: _modeTampilanPerTanggal,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Bentuk Tampilan Mutasi per Tanggal',
+                  isDense: true,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'ringkasan_tanggal',
+                    child: Text(
+                        'Laporan Posisi Mutasi per Tanggal (1 Baris / Hari)'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'rincian_produk',
+                    child: Text('Rincian Produk Bergerak per Tanggal'),
+                  ),
+                ],
+                onChanged: (val) {
+                  setStateIfMounted(() {
+                    _modeTampilanPerTanggal = val ?? 'ringkasan_tanggal';
+                  });
+                },
+              ),
+            ),
           if (!widget.modePerTanggalLengkap)
             SizedBox(
               width: 265,
@@ -1077,56 +1392,97 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
                           onPressed: _muat, child: const Text('Coba Lagi')),
                     ]))
                   : AppDataTable(
-                      minWidth: widget.modePerTanggalLengkap ? 2049 : 1944,
+                      minWidth: _apakahModeResumeTanggal
+                          ? 1375
+                          : (widget.modePerTanggalLengkap ? 2049 : 1944),
                       horizontalScroll: true,
                       emptyText: 'Belum ada data mutasi barang.',
-                      columns: [
-                        if (widget.modePerTanggalLengkap)
-                          const AppTableColumn('Tanggal', width: 105),
-                        const AppTableColumn('Kategori Barang', width: 130),
-                        const AppTableColumn('Kode Barang', width: 95),
-                        const AppTableColumn('UPC/Barcode', width: 110),
-                        const AppTableColumn('Nama Barang & Jasa', width: 220),
-                        const AppTableColumn('Saldo Awal',
-                            width: 105, align: TextAlign.right),
-                        const AppTableColumn('Nilai Awal',
-                            width: 105, align: TextAlign.right),
-                        const AppTableColumn('Masuk',
-                            width: 105, align: TextAlign.right),
-                        const AppTableColumn('Nilai Masuk',
-                            width: 105, align: TextAlign.right),
-                        const AppTableColumn('Keluar',
-                            width: 105, align: TextAlign.right),
-                        const AppTableColumn('Nilai Keluar',
-                            width: 105, align: TextAlign.right),
-                        const AppTableColumn('Retur',
-                            width: 105, align: TextAlign.right),
-                        const AppTableColumn('Nilai Retur',
-                            width: 105, align: TextAlign.right),
-                        const AppTableColumn('Ajusmen SO',
-                            width: 105, align: TextAlign.right),
-                        const AppTableColumn('Nilai Ajusmen',
-                            width: 105, align: TextAlign.right),
-                        const AppTableColumn('Saldo Akhir',
-                            width: 105, align: TextAlign.right),
-                        const AppTableColumn('Nilai Akhir',
-                            width: 105, align: TextAlign.right),
-                        const AppTableColumn('Aksi',
-                            width: 64, align: TextAlign.center),
+                      columns: _apakahModeResumeTanggal
+                          ? const [
+                              AppTableColumn('Tanggal', width: 115),
+                              AppTableColumn('Saldo Awal',
+                                  width: 105, align: TextAlign.right),
+                              AppTableColumn('Nilai Awal',
+                                  width: 105, align: TextAlign.right),
+                              AppTableColumn('Masuk',
+                                  width: 105, align: TextAlign.right),
+                              AppTableColumn('Nilai Masuk',
+                                  width: 105, align: TextAlign.right),
+                              AppTableColumn('Keluar',
+                                  width: 105, align: TextAlign.right),
+                              AppTableColumn('Nilai Keluar',
+                                  width: 105, align: TextAlign.right),
+                              AppTableColumn('Retur',
+                                  width: 105, align: TextAlign.right),
+                              AppTableColumn('Nilai Retur',
+                                  width: 105, align: TextAlign.right),
+                              AppTableColumn('Koreksi SO (Ajusmen)',
+                                  width: 105, align: TextAlign.right),
+                              AppTableColumn('Nilai Ajusmen',
+                                  width: 105, align: TextAlign.right),
+                              AppTableColumn('Saldo Akhir',
+                                  width: 105, align: TextAlign.right),
+                              AppTableColumn('Nilai Akhir',
+                                  width: 105, align: TextAlign.right),
+                            ]
+                          : [
+                              if (widget.modePerTanggalLengkap)
+                                const AppTableColumn('Tanggal', width: 105),
+                              const AppTableColumn('Kategori Barang',
+                                  width: 130),
+                              const AppTableColumn('Kode Barang', width: 95),
+                              const AppTableColumn('UPC/Barcode', width: 110),
+                              const AppTableColumn('Nama Barang & Jasa',
+                                  width: 220),
+                              const AppTableColumn('Saldo Awal',
+                                  width: 105, align: TextAlign.right),
+                              const AppTableColumn('Nilai Awal',
+                                  width: 105, align: TextAlign.right),
+                              const AppTableColumn('Masuk',
+                                  width: 105, align: TextAlign.right),
+                              const AppTableColumn('Nilai Masuk',
+                                  width: 105, align: TextAlign.right),
+                              const AppTableColumn('Keluar',
+                                  width: 105, align: TextAlign.right),
+                              const AppTableColumn('Nilai Keluar',
+                                  width: 105, align: TextAlign.right),
+                              const AppTableColumn('Retur',
+                                  width: 105, align: TextAlign.right),
+                              const AppTableColumn('Nilai Retur',
+                                  width: 105, align: TextAlign.right),
+                              const AppTableColumn('Ajusmen SO',
+                                  width: 105, align: TextAlign.right),
+                              const AppTableColumn('Nilai Ajusmen',
+                                  width: 105, align: TextAlign.right),
+                              const AppTableColumn('Saldo Akhir',
+                                  width: 105, align: TextAlign.right),
+                              const AppTableColumn('Nilai Akhir',
+                                  width: 105, align: TextAlign.right),
+                              const AppTableColumn('Aksi',
+                                  width: 64, align: TextAlign.center),
+                            ],
+                      rows: [
+                        ...rows,
+                        if ((_apakahModeResumeTanggal &&
+                                _rekapHarianList.isNotEmpty) ||
+                            (!_apakahModeResumeTanggal && _data.isNotEmpty))
+                          totalRow
                       ],
-                      rows: [...rows, if (_data.isNotEmpty) totalRow],
                       pagination: AppTablePagination(
-                        halaman: _halaman,
+                        halaman: _apakahModeResumeTanggal ? 1 : _halaman,
                         totalHalaman: totalHalaman,
-                        totalData: _total,
-                        labelData: 'produk',
-                        onSebelumnya: _halaman > 1
+                        totalData: _apakahModeResumeTanggal
+                            ? _rekapHarianList.length
+                            : _total,
+                        labelData: _apakahModeResumeTanggal ? 'hari' : 'produk',
+                        onSebelumnya: !_apakahModeResumeTanggal && _halaman > 1
                             ? () {
                                 _halaman--;
                                 _muat();
                               }
                             : null,
-                        onBerikutnya: _halaman < totalHalaman
+                        onBerikutnya: !_apakahModeResumeTanggal &&
+                                _halaman < totalHalaman
                             ? () {
                                 _halaman++;
                                 _muat();
