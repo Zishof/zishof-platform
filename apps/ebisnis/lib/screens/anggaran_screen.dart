@@ -72,6 +72,12 @@ class _AnggaranScreenState extends State<AnggaranScreen>
   List<Map<String, dynamic>> _penggunaan = [];
   double _totalPenggunaanAktif = 0;
   List<Map<String, dynamic>> _akun = [];
+  Map<String, dynamic> _otomatisRealisasi = const {
+    'aktif': true,
+    'intervalJam': 5,
+    'intervalJamTeks': '5',
+    'ringkasanStatus': 'Aktif (setiap 5 jam)',
+  };
 
   Map<String, bool> _hak = const {
     'create': true,
@@ -164,6 +170,10 @@ class _AnggaranScreenState extends State<AnggaranScreen>
         _sumberDanaOpsi =
             ((res['sumberDana'] as List?) ?? []).cast<Map<String, dynamic>>();
         _akun = ((akun['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        if (res['otomatisRealisasi'] is Map) {
+          _otomatisRealisasi =
+              Map<String, dynamic>.from(res['otomatisRealisasi'] as Map);
+        }
         _hak = _bacaHak(res);
         _tahun ??= tahun.isEmpty ? null : tahun.first;
         _satkerId ??= _satkerOpsi.isEmpty
@@ -241,6 +251,10 @@ class _AnggaranScreenState extends State<AnggaranScreen>
           _realisasiBulan = _bacaBulan(res['realisasiBulan']);
           _totalPagu = (res['totalPagu'] as num?)?.toDouble() ?? 0;
           _totalRealisasi = (res['totalRealisasi'] as num?)?.toDouble() ?? 0;
+          if (res['otomatisRealisasi'] is Map) {
+            _otomatisRealisasi =
+                Map<String, dynamic>.from(res['otomatisRealisasi'] as Map);
+          }
           _hak = _bacaHak(res);
         });
       } else {
@@ -882,6 +896,77 @@ class _AnggaranScreenState extends State<AnggaranScreen>
     if (berhasil) await _muatRevisi();
   }
 
+  Future<void> _refreshRealisasiManual() async {
+    final ok = await _kirimServer('anggaran_realisasi_refresh', {
+      'tahun': _tahun ?? 0,
+      'satkerId': _satkerId ?? 0,
+    });
+    if (ok) await _muatTabAktif();
+  }
+
+  Future<void> _formOtomatisRealisasi() async {
+    bool aktif = _otomatisRealisasi['aktif'] != false;
+    final jamCtrl = TextEditingController(
+        text: '${_otomatisRealisasi['intervalJamTeks'] ?? '5'}');
+
+    Future<bool> simpanPengaturan() async {
+      final jam = double.tryParse(jamCtrl.text.trim().replaceAll(',', '.')) ?? 0;
+      if (jam <= 0) {
+        throw Exception('Interval jam harus lebih besar dari 0 (misal: 5).');
+      }
+      final ok = await _kirimServer('anggaran_realisasi_konfigurasi_otomatis', {
+        'aktif': aktif,
+        'intervalJam': jamCtrl.text.trim(),
+      });
+      if (ok) await _muatTabAktif();
+      return ok;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setDialog) => AlertDialog(
+          title: const Text(
+              'Pengaturan Perhitungan Otomatis Realisasi (Background)'),
+          content: SizedBox(
+            width: 520,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text(
+                    'Aktifkan perhitungan ulang otomatis di background (ON)'),
+                value: aktif,
+                onChanged: (v) => setDialog(() => aktif = v),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: jamCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Interval Perhitungan Ulang Otomatis (Jam)',
+                  helperText:
+                      'Default: 5 jam sekali. Perubahan langsung berlaku otomatis.',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Status: ${_otomatisRealisasi['ringkasanStatus'] ?? '-'}',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ]),
+          ),
+          actions: [AppCrudDialogActions(onSubmit: simpanPengaturan)],
+        ),
+      ),
+    );
+  }
+
   // ==================================================================== ekspor
   // Isi berkas SELALU mengikuti tab yang sedang aktif beserta penyaringnya, sehingga
   // yang tercetak sama persis dengan yang sedang dilihat pengguna.
@@ -1250,6 +1335,18 @@ class _AnggaranScreenState extends State<AnggaranScreen>
                   onPressed: _sibuk ? null : _buatRevisiBaru,
                   icon: const Icon(Icons.difference_outlined, size: 18),
                   label: const Text('Buat Revisi Baru')),
+            if (_tab.index == 1)
+              FilledButton.icon(
+                  onPressed: _sibuk ? null : _refreshRealisasiManual,
+                  icon: const Icon(Icons.sync, size: 18),
+                  label: const Text('Refresh Realisasi')),
+            if (_tab.index == 1 && _boleh('update'))
+              OutlinedButton.icon(
+                  onPressed: _sibuk ? null : _formOtomatisRealisasi,
+                  icon: const Icon(Icons.schedule, size: 18),
+                  label: Text(_otomatisRealisasi['aktif'] == false
+                      ? 'Otomatis: OFF'
+                      : 'Otomatis: ON (${_otomatisRealisasi['intervalJamTeks'] ?? '5'} Jam)')),
             if (_tab.index == 2 && _boleh('create'))
               FilledButton.icon(
                   onPressed: _sibuk ? null : () => _formPenggunaan(),
