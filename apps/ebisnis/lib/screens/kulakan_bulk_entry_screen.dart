@@ -1537,7 +1537,7 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
                             const SizedBox(width: 8),
                             SizedBox(
                                 width: 112,
-                                child: Sesi.instance.bolehUbahHarga
+                                child: Sesi.instance.bolehUbahHargaKulakan
                                     ? _field(row.hargaBeli,
                                         keyboardType: const TextInputType
                                             .numberWithOptions(decimal: true))
@@ -1858,7 +1858,7 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
               ]),
             ],
           ),
-          if (!Sesi.instance.bolehUbahHarga)
+          if (!Sesi.instance.bolehUbahHargaKulakan)
             Container(
               width: double.infinity,
               margin: const EdgeInsets.only(top: 12),

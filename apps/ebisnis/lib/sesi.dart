@@ -170,6 +170,24 @@ class Sesi {
   /// dari kasir biasa (server TETAP menegakkan gerbang sungguhan di tiap aksi,
   /// ini hanya UI, lihat JavaDoc bolehSupervisorAtauAdmin di PosApi.java).
   bool get bolehKelola => isAdmin || supervisorPedagang;
+
+  /// Boleh mencatat / menyunting Faktur Kulakan (Harga Beli) dan mengubah harga
+  /// beli saat Entri Faktur. Admin global, Supervisor toko, pemegang hak akses
+  /// CRUD `kulakan` (`create`/`update`), atau pemegang `bolehUbahHarga` berhak
+  /// penuh melakukan Entri Faktur dan mengisi Harga Beli Satuan.
+  bool get bolehEntriKulakan =>
+      bolehKelola ||
+      bolehAksiPos('kulakan', 'create') ||
+      bolehAksiPos('kulakan', 'update');
+
+  bool get bolehUbahHargaKulakan =>
+      bolehUbahHarga ||
+      bolehKelola ||
+      bolehAksiPos('harga', 'update') ||
+      bolehAksiPos('harga', 'create') ||
+      bolehAksiPos('kulakan', 'create') ||
+      bolehAksiPos('kulakan', 'update');
+
   bool get bolehDataSample => isAdmin && tokoDemo && dataSampleEbisnis;
 
   /// Daftar shortcut menu utama & laporan vital yang telah difilter sesuai hak

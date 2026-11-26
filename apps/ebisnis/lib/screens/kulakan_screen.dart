@@ -252,7 +252,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
         _produkDitemukan = hasil;
         _qtyController.clear();
         _hargaController.clear();
-        if (!Sesi.instance.bolehUbahHarga) {
+        if (!Sesi.instance.bolehUbahHargaKulakan) {
           // Akun ini tidak boleh mengubah harga, jadi kolomnya tampil sbg
           // label. Nilainya diisikan otomatis dari harga penerimaan terakhir
           // (jatuh ke harga beli master bila belum pernah diterima) supaya
@@ -428,7 +428,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                 ),
               ),
               const SizedBox(height: 12),
-              if (Sesi.instance.bolehUbahHarga)
+              if (Sesi.instance.bolehUbahHargaKulakan)
                 TextField(
                   controller: hargaCtrl,
                   keyboardType:
@@ -468,7 +468,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
 
     if (simpan == true && mounted) {
       final qBaru = parseDesimal(qtyCtrl.text) ?? lama.qty;
-      final hBaru = Sesi.instance.bolehUbahHarga
+      final hBaru = Sesi.instance.bolehUbahHargaKulakan
           ? (parseDesimal(hargaCtrl.text) ?? lama.harga)
           : lama.harga;
       if (qBaru <= 0) {
@@ -846,7 +846,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                         Expanded(
                           // Tanpa hak ubah harga: nilainya ditampilkan sbg
                           // label, bukan kolom isian yang di-disable.
-                          child: Sesi.instance.bolehUbahHarga
+                          child: Sesi.instance.bolehUbahHargaKulakan
                               ? TextField(
                                   controller: _hargaController,
                                   keyboardType:
@@ -1857,7 +1857,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          if (Sesi.instance.bolehKelola) ...[
+          if (Sesi.instance.bolehEntriKulakan) ...[
             Align(
               alignment: Alignment.centerRight,
               child: Wrap(
