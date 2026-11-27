@@ -1178,7 +1178,7 @@ class MasterOffline {
   }
 
   /// Terapkan efek server yang harus langsung terlihat oleh pembaca SQLite.
-  /// Khusus Stok Opname, respons server adalah sumber stok akhir otoritatif.
+  /// Khusus Stok Opname dan Kulakan, respons server adalah sumber stok akhir otoritatif.
   static Future<void> _terapkanEfekRespons(String aksi,
       Map<String, dynamic> body, Map<String, dynamic> hasil) async {
     if (aksi == 'kulakan_faktur_simpan') {
@@ -1187,6 +1187,46 @@ class MasterOffline {
           '${body['nomor_faktur'] ?? hasil['nomorFaktur'] ?? ''}'
               .trim()
               .toLowerCase();
+      var stokDiperbarui = false;
+      final daftarStokAkhir = hasil['stokProdukAkhir'];
+      if (daftarStokAkhir is List) {
+        for (final item in daftarStokAkhir) {
+          if (item is! Map) continue;
+          final pid = item['produkId'];
+          final stokAkhir = item['stokAkhir'];
+          if (pid is num && stokAkhir is num) {
+            await CoreDb.instance
+                .produkCachePerbaruiStok(pid.toInt(), stokAkhir);
+            stokDiperbarui = true;
+          }
+        }
+      }
+      if (!stokDiperbarui) {
+        // Fallback apabila terhubung ke server versi sebelumnya yang belum
+        // menyertakan stokProdukAkhir: tambahkan qty ke stok lokal produk_cache
+        // secara optimistis agar layar Produk & Kasir langsung melihat stok baru.
+        final items = body['items'];
+        if (items is List) {
+          for (final item in items) {
+            if (item is! Map) continue;
+            final pid = item['produk_id'] ?? item['produkId'];
+            final qty = item['qty'];
+            if (pid is num && pid.toInt() > 0 && qty is num && qty > 0) {
+              try {
+                final cocok = await CoreDb.instance
+                    .produkCacheResolveByIds(<int>[pid.toInt()]);
+                if (cocok.isNotEmpty) {
+                  final stokLama =
+                      (cocok.first['stok'] as num?)?.toDouble() ?? 0.0;
+                  await CoreDb.instance.produkCachePerbaruiStok(
+                      pid.toInt(), stokLama + qty.toDouble());
+                  stokDiperbarui = true;
+                }
+              } catch (_) {}
+            }
+          }
+        }
+      }
       if (fakturId != null || nomorFaktur.isNotEmpty) {
         final tersimpan = await CoreDb.instance
             .ambilCacheReferensi('master:kulakan_faktur');
@@ -1219,11 +1259,11 @@ class MasterOffline {
             if (berubah) {
               await CoreDb.instance.simpanCacheReferensi(
                   'master:kulakan_faktur', jsonEncode(daftar));
-              revisiBaris.value++;
             }
           } catch (_) {}
         }
       }
+      revisiBaris.value++;
       return;
     }
     if (aksi != 'so_simpan' && aksi != 'so_batalkan') return;
