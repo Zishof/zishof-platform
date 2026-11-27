@@ -167,11 +167,12 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
 
   /// Kunci satu baris utk [KilauBaris]. Riwayat faktur kulakan TIDAK punya
   /// kolom 'id' -- identitasnya `fakturId` (dipakai juga oleh
-  /// `kulakan_faktur_detail`). MasterOffline menyusun kunci diff-nya sbg
-  /// `namaKolom=nilai` (lihat MasterOffline._kunciDiff) sehingga format di
-  /// sini WAJIB sama, kalau tidak kilau tidak pernah cocok.
+  /// `kulakan_faktur_detail`), atau `_kunci` bila barisnya adalah draf lokal
+  /// yang masih mengantre di outbox_master. MasterOffline menyusun kunci
+  /// diff-nya sbg `namaKolom=nilai` (lihat MasterOffline.kunciBaris) sehingga
+  /// format di sini WAJIB memakai MasterOffline.kunciBaris(f, 'fakturId').
   String _kunciKilau(Map<String, dynamic> f) =>
-      'fakturId=${f['fakturId'] ?? ''}';
+      MasterOffline.kunciBaris(f, 'fakturId');
 
   void _setStateEntri(VoidCallback fn) {
     setStateIfMounted(fn);
@@ -576,9 +577,15 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
           if (sedangEdit) 'id': idFakturEdit,
           if (sedangEdit) 'fakturId': idFakturEdit,
           'nomorFaktur': nomorFaktur,
-          'tanggalFaktur': _tanggalFaktur.toIso8601String(),
+          'tanggalFaktur': DateFormat('yyyy-MM-dd HH:mm').format(_tanggalFaktur),
+          'namaSupplier': '${_supplierTerpilih?['nama'] ?? ''}',
           'supplierNama': '${_supplierTerpilih?['nama'] ?? ''}',
           'jumlahItem': _itemsFaktur.length,
+          'totalHitung': _totalHitung,
+          if (_totalManual != null) 'totalFakturManual': _totalManual,
+          'totalFakturFinal': _totalManual ?? _totalHitung,
+          'diskon': _diskonPreview > 0 ? _diskonPreview : 0,
+          'keterangan': _keteranganController.text.trim(),
         },
         body: {
           if (sedangEdit) 'faktur_id': idFakturEdit,
@@ -1170,6 +1177,13 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
   }
 
   Future<void> _lihatDetailFaktur(Map<String, dynamic> f) async {
+    if (f['fakturId'] == null) {
+      await _bukaRingkasanDetailTerbatas(
+        f,
+        'Faktur ini sudah tersimpan aman di antrean perangkat lokal dan sedang menunggu sinkronisasi ke server pusat. Tekan tombol "Sinkronkan" di pojok kanan atas untuk mengirimkannya sekarang.',
+      );
+      return;
+    }
     Map<String, dynamic>? detail;
     try {
       detail = await ApiClient.instance
@@ -1973,14 +1987,19 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                 final supplier =
                     (f['namaSupplier'] as String?)?.isNotEmpty == true
                         ? '${f['namaSupplier']}'
-                        : '-';
+                        : (f['supplierNama'] as String?)?.isNotEmpty == true
+                            ? '${f['supplierNama']}'
+                            : '-';
                 final diskon = (f['diskon'] as num?) ?? 0;
                 final totalFinal = diskon > 0
                     ? ((f['totalHitung'] as num? ?? 0) - diskon)
-                    : (f['totalHitung'] ?? 0);
+                    : (f['totalFakturFinal'] ?? f['totalHitung'] ?? 0);
                 final ket = '${f['keterangan'] ?? ''}'.trim();
-                final bolehHapus = Sesi.instance.bolehKelola ||
-                    Sesi.instance.bolehAksiPos('kulakan', 'delete');
+                final sedangAntreLokal =
+                    f['fakturId'] == null && f['_kunci'] != null;
+                final bolehHapus = !sedangAntreLokal &&
+                    (Sesi.instance.bolehKelola ||
+                        Sesi.instance.bolehAksiPos('kulakan', 'delete'));
                 return AppTableRowData(cells: [
                   AppTableCell(
                     flex: 2,
@@ -1992,11 +2011,40 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('${f['nomorFaktur']}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 13)),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text('${f['nomorFaktur']}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13)),
+                              ),
+                              if (sedangAntreLokal) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.shade100,
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                        color: Colors.amber.shade700,
+                                        width: 0.8),
+                                  ),
+                                  child: Text(
+                                    'Menunggu Sinkron',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.amber.shade900,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                           if (ket.isNotEmpty)
                             Text(ket,
                                 maxLines: 1,

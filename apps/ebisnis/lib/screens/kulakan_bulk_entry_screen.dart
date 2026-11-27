@@ -1005,7 +1005,7 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
       // ditulis ke perangkat lalu dikirim, sehingga entri massal tidak hilang
       // ketika sinyal putus di tengah pekerjaan. Aman diantre karena id balasan
       // server TIDAK dipakai di sini -- layarnya hanya menutup diri.
-      await prosesSimpanMaster(
+      final hasil = await prosesSimpanMaster(
         context,
         aksi: 'kulakan_faktur_simpan',
         kunci:
@@ -1013,9 +1013,17 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
         cacheKey: 'master:kulakan_faktur',
         rowLokal: {
           'nomorFaktur': _faktur.text.trim(),
-          'tanggalFaktur': _tanggalFaktur.toIso8601String(),
+          'tanggalFaktur': DateFormat('yyyy-MM-dd HH:mm').format(_tanggalFaktur),
+          'namaSupplier': '${_supplier?['nama'] ?? ''}',
           'supplierNama': '${_supplier?['nama'] ?? ''}',
           'jumlahItem': items.length,
+          'totalHitung': _totalBaris,
+          if (_totalFaktur != null) 'totalFakturManual': _totalFaktur,
+          'totalFakturFinal': _totalFaktur ?? _totalBaris,
+          'diskon': (_totalFaktur != null && _totalBaris > _totalFaktur!)
+              ? (_totalBaris - _totalFaktur!)
+              : 0,
+          'keterangan': _keterangan.text.trim(),
         },
         body: {
           'nomor_faktur': _faktur.text.trim(),
@@ -1027,9 +1035,11 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
         },
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content:
-              Text('Bulk entry faktur tersimpan (${items.length} item).')));
+      final pesan = hasil['offline'] == true
+          ? 'Faktur ${_faktur.text.trim()} tersimpan di antrean perangkat (${items.length} item) dan akan dikirim otomatis saat sinkronisasi. Stok baru bertambah setelah terkirim.'
+          : 'Bulk entry faktur ${_faktur.text.trim()} berhasil tersimpan (${items.length} item).';
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(pesan)));
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;

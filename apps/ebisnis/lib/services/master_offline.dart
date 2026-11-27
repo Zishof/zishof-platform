@@ -828,19 +828,47 @@ class MasterOffline {
         await CoreDb.instance
             .simpanCacheReferensi(cacheKey, jsonEncode(gabungan));
         // Yang ditampilkan pun memakai versi lokal utk baris terlindungi.
+        // Selain itu, pada halaman pertama (tanpa filter kata kunci, atau saat
+        // draf lokal cocok dengan kata kunci), baris lokal yang masih
+        // ANTRE/GAGAL di outbox_master dan belum ada di respons server WAJIB
+        // ditampilkan di paling atas daftar agar pengguna tidak mengira data
+        // yang baru disimpan hilang ketika daftar berhalaman (mis. Riwayat
+        // Faktur Kulakan) menyegarkan halaman 1 dari server.
+        final halamanPermintaan =
+            _angkaPaginasi(body, const ['page', 'halaman']) ?? 1;
+        final offsetPermintaan =
+            _angkaPaginasi(body, const ['offset', 'mulai']) ?? 0;
+        final diHalamanPertama =
+            halamanPermintaan <= 1 && offsetPermintaan <= 0;
+        final kataKunciKecil = kataKunci.toLowerCase();
+        final drafBelumDiServer = <dynamic>[
+          if (diHalamanPertama)
+            for (final k in kunciDilindungi)
+              if (!kunciServer.contains(k) &&
+                  barisLama[k] != null &&
+                  (kataKunciKecil.isEmpty ||
+                      jsonEncode(barisLama[k])
+                          .toLowerCase()
+                          .contains(kataKunciKecil)))
+                barisLama[k],
+        ];
         final tampil = [
+          ...drafBelumDiServer,
           for (final e in data)
             kunciDilindungi.contains(_kunciDiff(e, kolomKunci) ?? '')
                 ? barisLama[_kunciDiff(e, kolomKunci)]
                 : e,
         ];
+        final totalTampil = totalServer != null
+            ? totalServer + drafBelumDiServer.length
+            : null;
         onData(_hasilDaftar(tampil,
             dariServer: true,
             idBaru: idBaru,
             idBerubah: idBerubah,
             jumlahHapus: jumlahHapus,
             fieldData: fieldData,
-            total: totalServer,
+            total: totalTampil,
             responsAsli: hasil));
       } else {
         onData({...hasil, 'dariServer': true});
@@ -1147,6 +1175,51 @@ class MasterOffline {
   /// Khusus Stok Opname, respons server adalah sumber stok akhir otoritatif.
   static Future<void> _terapkanEfekRespons(String aksi,
       Map<String, dynamic> body, Map<String, dynamic> hasil) async {
+    if (aksi == 'kulakan_faktur_simpan') {
+      final fakturId = hasil['fakturId'] ?? hasil['id'];
+      final nomorFaktur =
+          '${body['nomor_faktur'] ?? hasil['nomorFaktur'] ?? ''}'
+              .trim()
+              .toLowerCase();
+      if (fakturId != null || nomorFaktur.isNotEmpty) {
+        final tersimpan = await CoreDb.instance
+            .ambilCacheReferensi('master:kulakan_faktur');
+        if (tersimpan != null) {
+          try {
+            final daftar =
+                List<dynamic>.from(jsonDecode(tersimpan) as List);
+            var berubah = false;
+            for (var i = 0; i < daftar.length; i++) {
+              final e = daftar[i];
+              if (e is! Map) continue;
+              final noLokal = '${e['nomorFaktur'] ?? ''}'.trim().toLowerCase();
+              if (e['fakturId'] == null &&
+                  noLokal.isNotEmpty &&
+                  noLokal == nomorFaktur) {
+                daftar[i] = {
+                  ...e,
+                  if (fakturId != null) 'fakturId': fakturId,
+                  if (fakturId != null) 'id': fakturId,
+                  if (hasil['totalHitung'] != null)
+                    'totalHitung': hasil['totalHitung'],
+                  if (hasil['diskon'] != null) 'diskon': hasil['diskon'],
+                  if (hasil['totalFakturFinal'] != null)
+                    'totalFakturFinal': hasil['totalFakturFinal'],
+                  '_offline': false,
+                };
+                berubah = true;
+              }
+            }
+            if (berubah) {
+              await CoreDb.instance.simpanCacheReferensi(
+                  'master:kulakan_faktur', jsonEncode(daftar));
+              revisiBaris.value++;
+            }
+          } catch (_) {}
+        }
+      }
+      return;
+    }
     if (aksi != 'so_simpan' && aksi != 'so_batalkan') return;
     final produkMentah = hasil['produkId'] ?? body['produk_id'];
     final stokMentah = hasil['stokAkhir'];
