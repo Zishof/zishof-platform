@@ -315,7 +315,7 @@ class SinkronisasiTabelService {
       case 'outbox_master':
         final jumlah = await MasterOffline.flush();
         pembatalan?.pastikanLanjut();
-        return '$jumlah perubahan data master berhasil dikirim.';
+        return await _formatHasilOutboxMaster(jumlah);
       case 'outbox_is':
         final jumlah = await OutboxIs.flush();
         pembatalan?.pastikanLanjut();
@@ -376,7 +376,11 @@ class SinkronisasiTabelService {
         pembatalan?.pastikanLanjut();
         if (hasilMaster) {
           final jumlah = await (tungguMaster ?? Future<int>.value(0));
-          hasil = '$jumlah perubahan data master berhasil dikirim.';
+          hasil = await _formatHasilOutboxMaster(jumlah);
+          if (MasterOffline.status.value.antrean > 0 ||
+              MasterOffline.status.value.gagal > 0) {
+            gagal = true;
+          }
         } else {
           hasil = await sinkronkan(
             nama,
@@ -644,5 +648,32 @@ class SinkronisasiTabelService {
       return 'Server belum dapat dihubungi. Periksa internet/alamat server, lalu tekan Periksa Ulang; data lokal tetap aman.';
     }
     return 'Pemeriksaan ditolak/gagal: $e. Buka Log Error untuk detail, perbaiki penyebabnya, lalu tekan Periksa Ulang.';
+  }
+
+  /// Menyusun laporan jujur untuk hasil flush `outbox_master`: bila masih ada
+  /// baris `PENDING` atau `GAGAL` yang tertahan di antrean perangkat (mis.
+  /// karena server belum diperbarui atau ada validasi bisnis), sebutkan jumlah
+  /// yang masih tertahan beserta daftar aksi/kuncinya agar pengguna mengetahui
+  /// bahwa datanya masih tersimpan aman di antrean perangkat.
+  Future<String> _formatHasilOutboxMaster(int terkirim) async {
+    final pending = await CoreDb.instance.outboxMasterPending();
+    final gagal = await CoreDb.instance.outboxMasterGagal(batas: 100);
+    if (pending.isEmpty && gagal.isEmpty) {
+      return '$terkirim perubahan data master berhasil dikirim.';
+    }
+    final rincian = <String>[];
+    for (final r in pending.take(5)) {
+      final kunci = '${r['kunci'] ?? r['aksi'] ?? ''}'.trim();
+      if (kunci.isNotEmpty) rincian.add(kunci);
+    }
+    final labelRincian =
+        rincian.isEmpty ? '' : ' (${rincian.join(', ')})';
+    if (pending.isNotEmpty && gagal.isNotEmpty) {
+      return '$terkirim perubahan data master berhasil dikirim; ${pending.length} masih menunggu di antrean perangkat$labelRincian dan ${gagal.length} perlu koreksi (data lokal tetap aman).';
+    }
+    if (pending.isNotEmpty) {
+      return '$terkirim perubahan data master berhasil dikirim; ${pending.length} masih tersimpan aman di antrean perangkat$labelRincian menunggu server siap.';
+    }
+    return '$terkirim perubahan data master berhasil dikirim; ${gagal.length} perubahan perlu diperiksa di Riwayat Sinkronisasi.';
   }
 }

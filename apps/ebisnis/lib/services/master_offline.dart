@@ -1097,6 +1097,11 @@ class MasterOffline {
     return hasil;
   }
 
+  static int _terkirimPadaFlushTerakhir = 0;
+
+  /// Jumlah item yang berhasil dikirim pada putaran [flush] terakhir.
+  static int get terkirimPadaFlushTerakhir => _terkirimPadaFlushTerakhir;
+
   /// Kirim ulang seluruh antrean PENDING. Aman dipanggil kapan pun; berhenti
   /// pada kegagalan jaringan pertama (masih offline). Return jumlah terkirim.
   static Future<int> flush() async {
@@ -1152,6 +1157,7 @@ class MasterOffline {
         }
       }
     } finally {
+      _terkirimPadaFlushTerakhir = terkirim;
       _sedangFlush = false;
       if (terkirim > 0) {
         // Pemetaan id sementara yang sudah lama selesai tidak dirujuk siapa pun lagi;

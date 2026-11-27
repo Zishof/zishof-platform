@@ -153,6 +153,9 @@ class _DialogSinkronisasiVersiState extends State<_DialogSinkronisasiVersi> {
             final teks = pesan.toLowerCase();
             return teks.contains('belum dapat dihubungi') ||
                 teks.contains('ditolak/gagal') ||
+                teks.contains('masih menunggu di antrean') ||
+                teks.contains('masih tersimpan aman di antrean') ||
+                teks.contains('perlu koreksi') ||
                 teks.contains('belum memiliki adapter');
           }) ??
           false);

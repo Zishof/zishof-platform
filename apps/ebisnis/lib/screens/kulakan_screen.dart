@@ -179,14 +179,33 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
     _refreshHalamanEntri?.call();
   }
 
+  FaseSinkron? _faseSinkronTerakhir;
+
   @override
   void initState() {
     super.initState();
+    _faseSinkronTerakhir = MasterOffline.status.value.fase;
+    MasterOffline.status.addListener(_saatStatusSinkronBerubah);
     _muatRiwayat();
+  }
+
+  void _saatStatusSinkronBerubah() {
+    final faseBaru = MasterOffline.status.value.fase;
+    final berubahKeTersinkron =
+        faseBaru == FaseSinkron.baruTersinkron &&
+            _faseSinkronTerakhir != FaseSinkron.baruTersinkron;
+    final antreanBerkurang = _faseSinkronTerakhir == FaseSinkron.mengirim &&
+        faseBaru != FaseSinkron.mengirim &&
+        MasterOffline.terkirimPadaFlushTerakhir > 0;
+    _faseSinkronTerakhir = faseBaru;
+    if ((berubahKeTersinkron || antreanBerkurang) && mounted) {
+      _muatRiwayat();
+    }
   }
 
   @override
   void dispose() {
+    MasterOffline.status.removeListener(_saatStatusSinkronBerubah);
     _fakturController.dispose();
     _totalManualController.dispose();
     _keteranganController.dispose();
